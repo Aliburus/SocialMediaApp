@@ -79,8 +79,25 @@ export const getProfile = async (userId: string) => {
   return res.data;
 };
 
-// Story'leri getir
-export const getStories = async () => {
-  const res = await api.get("/users/stories");
+// Story'leri getir (kullanıcıya göre izlenmişlik için userId parametresi alır)
+export const getStories = async (userId?: string) => {
+  const url = userId ? `/users/stories?userId=${userId}` : "/users/stories";
+  const res = await api.get(url);
+  return res.data;
+};
+
+// Postu kaydet/kaldır (toggle)
+export const savePost = async (userId: string, postId: string) => {
+  console.log("[api/savePost] POST", api.defaults.baseURL + "/users/save", {
+    userId,
+    postId,
+  });
+  const res = await api.post("/users/save", { userId, postId });
+  return res.data;
+};
+
+// Kullanıcının kaydedilen postlarını getir
+export const getSavedPosts = async (userId: string) => {
+  const res = await api.get(`/users/saved/${userId}`);
   return res.data;
 };

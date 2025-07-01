@@ -13,6 +13,7 @@ export interface User {
 
 export interface Post {
   id: string;
+  _id?: string;
   user: User;
   image: string;
   caption: string;
@@ -21,6 +22,7 @@ export interface Post {
   timestamp: string;
   isLiked: boolean;
   location?: string;
+  savedBy?: string[];
 }
 
 export interface Comment {
@@ -34,7 +36,7 @@ export interface Comment {
 
 export interface Notification {
   id: string;
-  type: 'like' | 'comment' | 'follow' | 'mention';
+  type: "like" | "comment" | "follow" | "mention";
   user: User;
   post?: Post;
   text: string;

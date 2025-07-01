@@ -14,13 +14,45 @@ exports.createStory = async (req, res) => {
 
 exports.getAllStories = async (req, res) => {
   try {
+    const userId = req.query.userId;
     const stories = await Story.find()
-      .populate("user", "_id username avatar")
+      .populate("user", "_id username avatar isVerified")
       .sort({ createdAt: -1 });
-    res.json(stories);
+    const result = stories.map((story) => {
+      const obj = story.toObject();
+      if (userId) {
+        obj.isViewed = story.viewers.map(String).includes(String(userId));
+      }
+      return obj;
+    });
+    res.json(result);
   } catch (err) {
     res
       .status(500)
       .json({ message: "Storyler getirilemedi", error: err.message });
+  }
+};
+
+exports.viewStory = async (req, res) => {
+  try {
+    const storyId = req.params.id;
+    const { userId } = req.body;
+    if (!userId)
+      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+    const story = await Story.findById(storyId);
+    if (!story) return res.status(404).json({ message: "Story bulunamadı" });
+    if (!story.viewers.includes(userId)) {
+      story.viewers.push(userId);
+      await story.save();
+    }
+    res.json({
+      _id: story._id,
+      viewers: story.viewers,
+      isViewed: story.viewers.map(String).includes(String(userId)),
+    });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Story izlenme kaydedilemedi", error: err.message });
   }
 };

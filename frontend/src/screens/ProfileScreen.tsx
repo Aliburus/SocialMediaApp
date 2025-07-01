@@ -19,7 +19,7 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { mockUsers, mockPosts } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getUserPosts, getProfile } from "../services/api";
+import { getUserPosts, getProfile, getSavedPosts } from "../services/api";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -41,6 +41,7 @@ const ProfileScreen: React.FC = () => {
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [savedPosts, setSavedPosts] = useState<any[]>([]);
 
   const fetchUserData = async () => {
     setLoading(true);
@@ -94,6 +95,27 @@ const ProfileScreen: React.FC = () => {
     fetchUserPosts();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === "saved") {
+      const fetchSaved = async () => {
+        const userStr = await AsyncStorage.getItem("user");
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        const userId = userObj?._id || userObj?.id;
+        if (userId) {
+          const posts = await getSavedPosts(userId);
+          setSavedPosts(posts);
+          console.log(
+            "[ProfileScreen/getSavedPosts] userId:",
+            userId,
+            "posts:",
+            posts
+          );
+        }
+      };
+      fetchSaved();
+    }
+  }, [activeTab]);
+
   const renderPostItem = ({ item }: { item: any }) => {
     if (activeTab === "reels") {
       return (
@@ -109,7 +131,15 @@ const ProfileScreen: React.FC = () => {
       return (
         <TouchableOpacity
           style={styles.postItem}
-          onPress={() => navigation.navigate("SavedDetail", { post: item })}
+          onPress={() => {
+            const index = savedPosts.findIndex(
+              (post) => post._id === item._id || post.id === item.id
+            );
+            navigation.navigate("SavedDetail", {
+              savedPosts: savedPosts,
+              initialIndex: index >= 0 ? index : 0,
+            });
+          }}
         >
           <Image source={{ uri: item.image }} style={styles.postImage} />
         </TouchableOpacity>
@@ -127,7 +157,7 @@ const ProfileScreen: React.FC = () => {
 
   let tabData = userPosts;
   if (activeTab === "reels") tabData = mockReels;
-  if (activeTab === "saved") tabData = mockSaved;
+  if (activeTab === "saved") tabData = savedPosts;
   if (activeTab === "tagged") tabData = mockTagged;
 
   const onRefresh = async () => {
@@ -379,9 +409,9 @@ const ProfileScreen: React.FC = () => {
           )}
           {activeTab === "saved" && (
             <FlatList
-              data={mockSaved}
+              data={tabData}
               renderItem={renderPostItem}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item._id || item.id}
               numColumns={3}
               scrollEnabled={false}
               contentContainerStyle={{
@@ -389,6 +419,15 @@ const ProfileScreen: React.FC = () => {
                 paddingHorizontal: 0,
               }}
               columnWrapperStyle={{ gap: 0 }}
+              ListHeaderComponent={() => {
+                console.log(
+                  "[ProfileScreen/FlatList] tabData:",
+                  tabData,
+                  "savedPosts:",
+                  savedPosts
+                );
+                return null;
+              }}
             />
           )}
           {activeTab === "tagged" && (

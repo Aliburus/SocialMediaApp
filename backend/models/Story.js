@@ -6,6 +6,7 @@ const storySchema = new mongoose.Schema(
     image: { type: String, required: true },
     timestamp: { type: Date, default: Date.now },
     isViewed: { type: Boolean, default: false },
+    viewers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }
 );

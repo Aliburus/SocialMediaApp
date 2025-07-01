@@ -13,11 +13,42 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
-import { getPostById, getComments, toggleLike } from "../services/api";
+import {
+  getPostById,
+  getComments,
+  toggleLike,
+  savePost,
+} from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ShareModal } from "../components/ShareModal";
 
 const { width } = Dimensions.get("window");
+
+// Tarihi güzel formatta gösteren fonksiyon
+const timeAgo = (date: string | Date) => {
+  const now = new Date();
+  const past = new Date(date);
+  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+
+  if (diffInSeconds < 60) {
+    return "Az önce";
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes} dakika önce`;
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours} saat önce`;
+  } else if (diffInSeconds < 2592000) {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days} gün önce`;
+  } else if (diffInSeconds < 31536000) {
+    const months = Math.floor(diffInSeconds / 2592000);
+    return `${months} ay önce`;
+  } else {
+    const years = Math.floor(diffInSeconds / 31536000);
+    return `${years} yıl önce`;
+  }
+};
 
 const PostDetailScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -30,6 +61,7 @@ const PostDetailScreen: React.FC = () => {
   const [likesCount, setLikesCount] = React.useState(0);
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [likeLocked, setLikeLocked] = React.useState(false);
+  const [isSaved, setIsSaved] = React.useState(false);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -43,6 +75,10 @@ const PostDetailScreen: React.FC = () => {
         const userObj = userStr ? JSON.parse(userStr) : null;
         if (userObj?._id && Array.isArray(freshPost.likes)) {
           setIsLiked(freshPost.likes.includes(userObj._id));
+        }
+        // Post'un kayıtlı olup olmadığını kontrol et
+        if (userObj?._id && Array.isArray(freshPost.savedBy)) {
+          setIsSaved(freshPost.savedBy.includes(userObj._id));
         }
         const commentList = await getComments(
           initialPost._id || initialPost.id
@@ -96,6 +132,29 @@ const PostDetailScreen: React.FC = () => {
 
   const handleShare = () => {
     setShowShareModal(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      if (!userObj?._id) {
+        alert("Lütfen giriş yapın.");
+        return;
+      }
+
+      const postId = post._id || post.id;
+      await savePost(userObj._id, postId);
+
+      // Kayıtlı durumunu tersine çevir
+      setIsSaved(!isSaved);
+
+      // Post'u güncelle
+      const updatedPost = await getPostById(postId);
+      setPost(updatedPost);
+    } catch (err) {
+      alert("Kaydetme işlemi başarısız oldu.");
+    }
   };
 
   return (
@@ -174,73 +233,65 @@ const PostDetailScreen: React.FC = () => {
               />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity>
-            <Ionicons name="bookmark-outline" size={26} color={colors.text} />
+          <TouchableOpacity onPress={handleSave}>
+            <Ionicons
+              name={isSaved ? "bookmark" : "bookmark-outline"}
+              size={26}
+              color={isSaved ? colors.primary : colors.text}
+            />
           </TouchableOpacity>
         </View>
 
         {/* Post Info */}
         <View style={styles.postInfo}>
           <Text style={[styles.likes, { color: colors.text }]}>
-            {likesCount} likes
+            {likesCount} beğeni
           </Text>
-          <View style={styles.captionContainer}>
-            <Text style={[styles.username, { color: colors.text }]}>
-              {post.user.username}
-            </Text>
+
+          {/* Açıklama metni varsa göster */}
+          {post.caption && (
             <Text style={[styles.caption, { color: colors.text }]}>
-              {" "}
               {post.caption}
             </Text>
-          </View>
-          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-            {post.timestamp}
-          </Text>
-        </View>
+          )}
 
-        {/* Comments */}
-        <View style={styles.commentsContainer}>
-          <Text style={[styles.commentsTitle, { color: colors.text }]}>
-            Comments
-          </Text>
-          {comments.map((comment) => (
-            <View key={comment._id || comment.id} style={styles.commentItem}>
-              <Image
-                source={{ uri: comment.user.avatar }}
-                style={styles.commentAvatar}
-              />
-              <View style={styles.commentContent}>
-                <View style={styles.commentText}>
+          {/* Yorumlar (en fazla 2 tane) */}
+          {comments.length > 0 && (
+            <View style={styles.commentsPreview}>
+              {comments.slice(0, 2).map((comment) => (
+                <View
+                  key={comment._id || comment.id}
+                  style={styles.commentItem}
+                >
                   <Text
                     style={[styles.commentUsername, { color: colors.text }]}
                   >
                     {comment.user.username}
                   </Text>
-                  <Text style={[styles.commentMessage, { color: colors.text }]}>
+                  <Text style={[styles.commentText, { color: colors.text }]}>
                     {" "}
                     {comment.text}
                   </Text>
                 </View>
-                <View style={styles.commentActions}>
+              ))}
+              {comments.length > 2 && (
+                <TouchableOpacity onPress={handleComment}>
                   <Text
                     style={[
-                      styles.commentTimestamp,
+                      styles.viewAllComments,
                       { color: colors.textSecondary },
                     ]}
                   >
-                    {/* Zamanı hesaplamak için timeAgo fonksiyonu eklenebilir */}
+                    Tüm yorumları görüntüle ({comments.length})
                   </Text>
-                </View>
-              </View>
-              <TouchableOpacity>
-                <Ionicons
-                  name="heart-outline"
-                  size={16}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
+                </TouchableOpacity>
+              )}
             </View>
-          ))}
+          )}
+
+          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+            {post.createdAt ? timeAgo(post.createdAt) : post.timestamp}
+          </Text>
         </View>
       </ScrollView>
 
@@ -360,61 +411,13 @@ const styles = StyleSheet.create({
   caption: {
     fontSize: 16,
     lineHeight: 20,
+    marginBottom: 4,
   },
   timestamp: {
     fontSize: 12,
     textTransform: "uppercase",
   },
-  commentsContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  commentsTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 16,
-  },
-  commentItem: {
-    flexDirection: "row",
-    marginBottom: 16,
-  },
-  commentAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 12,
-  },
-  commentContent: {
-    flex: 1,
-  },
-  commentText: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 4,
-  },
-  commentUsername: {
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  commentMessage: {
-    fontSize: 14,
-  },
-  commentActions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  commentTimestamp: {
-    fontSize: 12,
-    marginRight: 16,
-  },
-  commentAction: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginRight: 16,
-  },
-  commentLikes: {
-    fontSize: 12,
-  },
+
   commentInputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -435,6 +438,24 @@ const styles = StyleSheet.create({
   postButton: {
     fontWeight: "600",
     fontSize: 16,
+  },
+  commentsPreview: {
+    marginTop: 4,
+  },
+  commentItem: {
+    flexDirection: "row",
+    marginBottom: 4,
+  },
+  commentUsername: {
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  commentText: {
+    fontSize: 14,
+  },
+  viewAllComments: {
+    fontSize: 14,
+    marginTop: 4,
   },
 });
 

@@ -17,7 +17,7 @@ import {
 } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { toggleLike } from "../services/api";
+import { toggleLike, savePost } from "../services/api";
 
 const { width } = Dimensions.get("window");
 
@@ -100,9 +100,14 @@ const PostCard: React.FC<PostCardProps> = ({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [likeLocked, setLikeLocked] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   // Like işlemi için debounce
   const likeTimeout = React.useRef<NodeJS.Timeout | null>(null);
+
+  const savedByArr = Array.isArray((post as any).savedBy)
+    ? (post as any).savedBy
+    : [];
 
   useEffect(() => {
     const checkLiked = async () => {
@@ -114,6 +119,29 @@ const PostCard: React.FC<PostCardProps> = ({
     };
     checkLiked();
   }, [post.likes]);
+
+  useEffect(() => {
+    const checkSaved = async () => {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      if (userId) {
+        const saved = savedByArr.includes(userId);
+        setIsSaved(saved);
+        console.log(
+          "[PostCard/useEffect] userId:",
+          userId,
+          "postId:",
+          (post as any)._id || post.id,
+          "post.savedBy:",
+          savedByArr,
+          "isSaved:",
+          saved
+        );
+      }
+    };
+    checkSaved();
+  }, [post.savedBy]);
 
   const handleLike = async () => {
     if (likeLocked) return;
@@ -148,6 +176,34 @@ const PostCard: React.FC<PostCardProps> = ({
       setLikesCount(prevLikes);
     } finally {
       setLikeLocked(false);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      const postId = (post as any)._id || post.id;
+      console.log(
+        "[PostCard/handleSave] userId:",
+        userId,
+        typeof userId,
+        "postId:",
+        postId,
+        typeof postId
+      );
+      if (!userId || !postId) return;
+      const res = await savePost(userId, postId);
+      setIsSaved((res.savedBy || []).includes(userId));
+      console.log(
+        "[PostCard/handleSave] response.savedBy:",
+        res.savedBy,
+        "isSaved:",
+        (res.savedBy || []).includes(userId)
+      );
+    } catch (err) {
+      console.log("[PostCard/handleSave] HATA:", err);
     }
   };
 
@@ -186,7 +242,7 @@ const PostCard: React.FC<PostCardProps> = ({
                 {post.user.username}
               </Text>
               {post.user.isVerified && (
-                <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" />
+                <Ionicons name="checkmark-circle" size={14} color="#1DA1F2" />
               )}
             </View>
             {post.location && (
@@ -196,11 +252,11 @@ const PostCard: React.FC<PostCardProps> = ({
             )}
           </View>
         </View>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
           <Ionicons
-            name="ellipsis-horizontal"
+            name={isSaved ? "bookmark" : "bookmark-outline"}
             size={24}
-            color={colors.textSecondary}
+            color={isSaved ? colors.primary : colors.text}
           />
         </TouchableOpacity>
       </View>
@@ -213,66 +269,47 @@ const PostCard: React.FC<PostCardProps> = ({
       {/* Actions */}
       <View style={styles.actions}>
         <View style={styles.leftActions}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <TouchableOpacity onPress={handleLike} style={styles.actionButton}>
             <Ionicons
               name={isLiked ? "heart" : "heart-outline"}
-              size={28}
+              size={26}
               color={isLiked ? "#FF3040" : colors.text}
-              style={{ marginRight: 2 }}
-              onPress={handleLike}
             />
-            <Text
-              style={{
-                color: colors.text,
-                fontWeight: "bold",
-                marginRight: 16,
-                fontSize: 18,
-              }}
-            >
+            <Text style={[styles.actionCount, { color: colors.text }]}>
               {typeof likesCount === "number"
                 ? likesCount
                 : Array.isArray(likesCount as any)
                 ? (likesCount as any).length
                 : 0}
             </Text>
-            <TouchableOpacity onPress={onComment}>
-              <Ionicons
-                name="chatbubble-outline"
-                size={26}
-                color={colors.text}
-                style={{ marginRight: 2 }}
-              />
-            </TouchableOpacity>
-            <Text
-              style={{
-                color: colors.text,
-                fontWeight: "bold",
-                marginRight: 16,
-                fontSize: 18,
-              }}
-            >
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={onComment} style={styles.actionButton}>
+            <Ionicons name="chatbubble-outline" size={24} color={colors.text} />
+            <Text style={[styles.actionCount, { color: colors.text }]}>
               {post.comments}
             </Text>
-            <TouchableOpacity onPress={handleShare}>
-              <Ionicons
-                name="paper-plane-outline"
-                size={26}
-                color={colors.text}
-                style={{ marginRight: 16 }}
-              />
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={handleShare} style={styles.actionButton}>
+            <Ionicons
+              name="paper-plane-outline"
+              size={24}
+              color={colors.text}
+            />
+          </TouchableOpacity>
         </View>
-        <Ionicons name="bookmark-outline" size={26} color={colors.text} />
       </View>
 
-      {/* Kullanıcı adı ve caption sadece caption varsa gösterilecek */}
+      {/* Caption */}
       {post.caption ? (
-        <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
-          <Text style={{ fontWeight: "bold", color: colors.text }}>
+        <View style={styles.captionContainer}>
+          <Text style={[styles.captionUsername, { color: colors.text }]}>
             {post.user?.username || ""}
           </Text>
-          <Text style={{ color: colors.text }}>{post.caption}</Text>
+          <Text style={[styles.caption, { color: colors.text }]}>
+            {post.caption}
+          </Text>
         </View>
       ) : null}
 
@@ -333,24 +370,25 @@ const PostCard: React.FC<PostCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 16,
+    height: Dimensions.get("window").height * 0.9,
+    marginBottom: 0,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   userInfo: {
     flexDirection: "row",
     alignItems: "center",
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 10,
   },
   usernameContainer: {
     flexDirection: "row",
@@ -358,35 +396,57 @@ const styles = StyleSheet.create({
   },
   username: {
     fontWeight: "600",
-    fontSize: 16,
+    fontSize: 15,
     marginRight: 4,
   },
   location: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 11,
+    marginTop: 1,
+  },
+  saveButton: {
+    padding: 6,
   },
   postImage: {
     width: width,
-    height: width,
+    height: Dimensions.get("window").height * 0.9 - 200, // Header ve actions için alan bırak
     resizeMode: "cover",
   },
   actions: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   leftActions: {
     flexDirection: "row",
+    alignItems: "center",
   },
-  content: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  actionCount: {
+    fontWeight: "600",
+    fontSize: 15,
+    marginLeft: 4,
+  },
+  captionContainer: {
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  captionUsername: {
+    fontWeight: "600",
+    fontSize: 15,
+    marginRight: 6,
   },
   caption: {
-    fontSize: 16,
+    fontSize: 15,
     lineHeight: 20,
+    flex: 1,
   },
   // Modal styles
   modalContainer: {
@@ -447,9 +507,9 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   friendAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   onlineIndicator: {
     position: "absolute",
@@ -466,12 +526,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   friendUsername: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "500",
     color: "#333",
   },
   friendStatus: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#666",
     marginTop: 2,
   },

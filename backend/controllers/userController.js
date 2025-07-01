@@ -5,6 +5,7 @@ const {
   validateRegisterInput,
   validateLoginInput,
 } = require("../utils/validate");
+const Post = require("../models/Post");
 
 function validateEmail(email) {
   return /^\S+@\S+\.\S+$/.test(email);
@@ -125,5 +126,81 @@ exports.getProfile = async (req, res) => {
     res
       .status(500)
       .json({ message: "Profil getirilemedi", error: err.message });
+  }
+};
+
+exports.savePost = async (req, res) => {
+  try {
+    const { userId, postId } = req.body;
+    console.log(
+      "[savePost] userId:",
+      userId,
+      typeof userId,
+      "postId:",
+      postId,
+      typeof postId
+    );
+    if (!userId || !postId)
+      return res.status(400).json({ message: "Eksik veri" });
+    const user = await User.findById(userId);
+    const post = await Post.findById(postId);
+    if (!user || !post)
+      return res
+        .status(404)
+        .json({ message: "Kullanıcı veya post bulunamadı" });
+    console.log(
+      "[savePost] Önce user.saved:",
+      user.saved,
+      "post.savedBy:",
+      post.savedBy
+    );
+    // User'ın saved dizisi
+    const userIndex = user.saved.indexOf(postId);
+    if (userIndex === -1) {
+      user.saved.push(postId);
+      console.log("[savePost] Post kaydedildi, user.saved'e eklendi");
+    } else {
+      user.saved.splice(userIndex, 1);
+      console.log("[savePost] Post kaydı kaldırıldı, user.saved'den çıkarıldı");
+    }
+    // Post'un savedBy dizisi
+    const postIndex = post.savedBy.indexOf(userId);
+    if (postIndex === -1) {
+      post.savedBy.push(userId);
+      console.log("[savePost] Kullanıcı post.savedBy'ya eklendi");
+    } else {
+      post.savedBy.splice(postIndex, 1);
+      console.log("[savePost] Kullanıcı post.savedBy'dan çıkarıldı");
+    }
+    await user.save();
+    await post.save();
+    console.log(
+      "[savePost] Sonra user.saved:",
+      user.saved,
+      "post.savedBy:",
+      post.savedBy
+    );
+    res.json({ saved: user.saved, savedBy: post.savedBy });
+  } catch (err) {
+    console.error("[savePost] Hata:", err);
+    res
+      .status(500)
+      .json({ message: "Kaydetme işlemi başarısız", error: err.message });
+  }
+};
+
+exports.getSavedPosts = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId).populate({
+      path: "saved",
+      populate: { path: "user", select: "_id username avatar" },
+    });
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    res.json(user.saved);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Kaydedilenler getirilemedi", error: err.message });
   }
 };

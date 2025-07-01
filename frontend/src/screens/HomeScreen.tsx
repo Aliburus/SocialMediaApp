@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  Dimensions,
 } from "react-native";
 import {
   useSafeAreaInsets,
@@ -45,7 +46,10 @@ const HomeScreen: React.FC = () => {
 
   const fetchStories = async () => {
     try {
-      const data = await getStories();
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      const data = await getStories(userId);
       setStories(data);
     } catch (err) {
       console.log("[STORY] Hata:", err);
@@ -76,60 +80,50 @@ const HomeScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  // Kendi hikaye elemanı
-  const renderMyStory = () => {
-    return (
-      <TouchableOpacity
-        style={{ alignItems: "center", marginRight: 16, width: 70 }}
-        onPress={() => navigation.navigate("AddStory")}
-      >
-        <View style={{ marginBottom: 4 }}>
-          <View
-            style={{
-              width: 66,
-              height: 66,
-              borderRadius: 33,
-              justifyContent: "center",
-              alignItems: "center",
+  // Story'lerin izlenmişlik durumunu kontrol et
+  const viewedUserIds = React.useMemo(() => {
+    const ids = new Set();
+    stories.forEach((story) => {
+      if (story.isViewed) ids.add(story.user._id || story.user.id);
+    });
+    return ids;
+  }, [stories]);
+
+  // Kendi hikaye elemanı (her zaman + ikonlu ve tıklanabilir)
+  const renderMyStory = () => (
+    <TouchableOpacity
+      style={styles.myStoryContainer}
+      onPress={() => navigation.navigate("AddStory")}
+      activeOpacity={0.8}
+    >
+      <View style={styles.myStoryImageContainer}>
+        <View
+          style={[
+            styles.storyImageWrapper,
+            { backgroundColor: colors.surface },
+          ]}
+        >
+          <Image
+            source={{
+              uri:
+                myAvatar ||
+                "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
             }}
-          >
-            <Image
-              source={{
-                uri: myAvatar || "https://ui-avatars.com/api/?name=User",
-              }}
-              style={{
-                width: 60,
-                height: 60,
-                borderRadius: 30,
-                borderWidth: 2,
-                borderColor: "#fff",
-              }}
-            />
-            <View
-              style={{
-                position: "absolute",
-                bottom: 4,
-                right: 4,
-                width: 22,
-                height: 22,
-                borderRadius: 11,
-                backgroundColor: "#0095f6",
-                borderWidth: 2,
-                borderColor: "#fff",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Ionicons name="add" size={16} color="#fff" />
-            </View>
+            style={styles.myStoryImage}
+          />
+          <View style={styles.addStoryIcon}>
+            <Ionicons name="add" size={12} color="#fff" />
           </View>
         </View>
-        <Text style={{ fontSize: 12, textAlign: "center", color: colors.text }}>
-          Hikayen
-        </Text>
-      </TouchableOpacity>
-    );
-  };
+      </View>
+      <Text
+        style={[styles.storyUsername, { color: colors.text }]}
+        numberOfLines={1}
+      >
+        Hikayen
+      </Text>
+    </TouchableOpacity>
+  );
 
   // Story'leri kullanıcıya göre grupla
   const groupedStories = React.useMemo(() => {
@@ -141,15 +135,6 @@ const HomeScreen: React.FC = () => {
     });
     return Array.from(map.values()).map((userStories) => userStories[0]);
   }, [stories]);
-
-  // Story barı için padding ve margin azaltıldı
-  const storyBarStyle = {
-    paddingTop: 4,
-    paddingBottom: 4,
-    marginBottom: 0,
-    backgroundColor: colors.background,
-    borderBottomColor: colors.border,
-  };
 
   // StoryScreen açıksa story barı gösterme
   const isStoryOpen = navigation
@@ -167,6 +152,37 @@ const HomeScreen: React.FC = () => {
     });
   };
 
+  // Story barını ListHeaderComponent olarak ekle
+  const renderStoriesBar = () => (
+    <View
+      style={[
+        styles.storiesSection,
+        {
+          backgroundColor: colors.background,
+          borderBottomColor: colors.border,
+        },
+      ]}
+    >
+      <FlatList
+        data={groupedStories}
+        renderItem={({ item }) => (
+          <StoryItem
+            story={item}
+            isActive={activeUserId === (item.user._id || item.user.id)}
+            isViewed={viewedUserIds.has(item.user._id || item.user.id)}
+            onPress={() => handleStoryPress(item)}
+          />
+        )}
+        keyExtractor={(item) => item.user._id || item.user.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        ListHeaderComponent={renderMyStory()}
+        contentContainerStyle={styles.storiesContent}
+        style={styles.storiesList}
+      />
+    </View>
+  );
+
   const renderPost = ({ item }: { item: any }) => (
     <PostCard
       post={item}
@@ -180,72 +196,62 @@ const HomeScreen: React.FC = () => {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar
         translucent
         backgroundColor="transparent"
         style={isDark ? "light" : "dark"}
       />
+
+      {/* Header */}
       <SafeAreaView
         edges={["top"]}
         style={{ backgroundColor: colors.background }}
       >
         <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingHorizontal: 16,
-            paddingVertical: 12,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
-          }}
+          style={[
+            styles.header,
+            {
+              backgroundColor: colors.background,
+              borderBottomColor: colors.border,
+            },
+          ]}
         >
-          <Text
-            style={{ fontSize: 24, fontWeight: "bold", color: colors.primary }}
-          >
-            SocialApp
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={styles.headerLeft}>
+            <Text style={[styles.appTitle, { color: colors.primary }]}>
+              SocialApp
+            </Text>
+          </View>
+
+          <View style={styles.headerRight}>
             <TouchableOpacity
-              style={{ marginLeft: 16 }}
+              style={styles.headerButton}
               onPress={() => navigation.navigate("Notifications")}
+              activeOpacity={0.7}
             >
-              <Ionicons name="heart-outline" size={28} color={colors.text} />
+              <Ionicons name="heart-outline" size={26} color={colors.text} />
             </TouchableOpacity>
+
             <TouchableOpacity
-              style={{ marginLeft: 16 }}
+              style={styles.headerButton}
               onPress={() => navigation.navigate("DMList")}
+              activeOpacity={0.7}
             >
               <Ionicons
                 name="paper-plane-outline"
-                size={28}
+                size={26}
                 color={colors.text}
               />
             </TouchableOpacity>
-            <View style={{ marginLeft: 16 }}>
-              <ThemeToggle size={28} />
+
+            <View style={styles.themeToggleContainer}>
+              <ThemeToggle size={26} />
             </View>
           </View>
         </View>
       </SafeAreaView>
-      {!isStoryOpen && (
-        <FlatList
-          data={groupedStories}
-          renderItem={({ item }) => (
-            <StoryItem
-              story={item}
-              isActive={activeUserId === (item.user._id || item.user.id)}
-              onPress={() => handleStoryPress(item)}
-            />
-          )}
-          keyExtractor={(item) => item.user._id || item.user.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.storiesList, storyBarStyle]}
-          ListHeaderComponent={renderMyStory()}
-        />
-      )}
+
+      {/* Posts List with Stories Header */}
       <FlatList
         data={posts}
         renderItem={renderPost}
@@ -253,7 +259,21 @@ const HomeScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         refreshing={refreshing}
         onRefresh={onRefresh}
+        ListHeaderComponent={!isStoryOpen ? renderStoriesBar : undefined}
+        style={styles.postsList}
+        contentContainerStyle={styles.postsContent}
+        pagingEnabled
+        snapToInterval={Dimensions.get("window").height}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        getItemLayout={(data, index) => ({
+          length: Dimensions.get("window").height,
+          offset: Dimensions.get("window").height * index,
+          index,
+        })}
       />
+
+      {/* Share Modal */}
       <ShareModal
         visible={showShareModal}
         onClose={() => setShowShareModal(false)}
@@ -266,12 +286,112 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  storiesContainer: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+
+  // Header Styles
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    elevation: 1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  appTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    letterSpacing: -0.5,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  headerButton: {
+    padding: 8,
+    borderRadius: 20,
+    marginHorizontal: 2,
+  },
+  themeToggleContainer: {
+    marginLeft: 4,
+  },
+
+  // Stories Section Styles - Optimized spacing
+  storiesSection: {
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   storiesList: {
-    paddingHorizontal: 16,
+    flexGrow: 0,
+  },
+  storiesContent: {
+    paddingHorizontal: 12,
+    alignItems: "center",
+    gap: 8,
+  },
+
+  // My Story Styles - Reduced sizes
+  myStoryContainer: {
+    alignItems: "center",
+    marginRight: 8,
+    width: 64,
+  },
+  myStoryImageContainer: {
+    marginBottom: 4,
+  },
+  storyImageWrapper: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    padding: 2,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  myStoryImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
+  addStoryIcon: {
+    position: "absolute",
+    bottom: -1,
+    right: -1,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#007AFF",
+    borderWidth: 2,
+    borderColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  storyUsername: {
+    fontSize: 11,
+    fontWeight: "500",
+    textAlign: "center",
+    maxWidth: 64,
+  },
+
+  // Posts List - No extra spacing
+  postsList: {
+    flex: 1,
+  },
+  postsContent: {
+    flexGrow: 1,
   },
 });
 

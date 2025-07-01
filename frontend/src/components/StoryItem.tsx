@@ -7,9 +7,15 @@ interface StoryItemProps {
   story: Story;
   onPress?: () => void;
   isActive?: boolean;
+  isViewed?: boolean;
 }
 
-const StoryItem: React.FC<StoryItemProps> = ({ story, onPress, isActive }) => {
+const StoryItem: React.FC<StoryItemProps> = ({
+  story,
+  onPress,
+  isActive,
+  isViewed,
+}) => {
   return (
     <TouchableOpacity onPress={onPress} style={styles.container}>
       <View style={styles.imageContainer}>
@@ -17,7 +23,11 @@ const StoryItem: React.FC<StoryItemProps> = ({ story, onPress, isActive }) => {
           <View style={styles.innerBorder}>
             <Image source={{ uri: story.user.avatar }} style={styles.avatar} />
           </View>
-        ) : !story.isViewed ? (
+        ) : isViewed ? (
+          <View style={styles.viewedBorder}>
+            <Image source={{ uri: story.user.avatar }} style={styles.avatar} />
+          </View>
+        ) : (
           <LinearGradient
             colors={["#E91E63", "#F06292", "#FF9800"]}
             style={styles.gradient}
@@ -29,10 +39,6 @@ const StoryItem: React.FC<StoryItemProps> = ({ story, onPress, isActive }) => {
               />
             </View>
           </LinearGradient>
-        ) : (
-          <View style={styles.viewedBorder}>
-            <Image source={{ uri: story.user.avatar }} style={styles.avatar} />
-          </View>
         )}
       </View>
       <Text style={styles.username} numberOfLines={1}>
@@ -45,11 +51,11 @@ const StoryItem: React.FC<StoryItemProps> = ({ story, onPress, isActive }) => {
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-    marginRight: 10,
-    width: 64,
+    marginRight: 8,
+    width: 60,
   },
   imageContainer: {
-    marginBottom: 2,
+    marginBottom: 4,
   },
   gradient: {
     width: 60,
@@ -59,9 +65,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   innerBorder: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: "white",
     justifyContent: "center",
     alignItems: "center",
@@ -76,9 +82,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
   },
   username: {
     fontSize: 11,

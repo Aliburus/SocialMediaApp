@@ -6,7 +6,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
-import { Text, Platform, View } from "react-native";
+import {
+  Text,
+  Platform,
+  View,
+  Image,
+  TouchableOpacity,
+  Alert,
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Screens
@@ -36,6 +43,45 @@ const Stack = createStackNavigator();
 
 function MainTabs() {
   const { colors, isDark } = useTheme();
+  const [userAvatar, setUserAvatar] = useState<string>("");
+
+  useEffect(() => {
+    const getUserAvatar = async () => {
+      try {
+        const userStr = await AsyncStorage.getItem("user");
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        if (userObj?.avatar) {
+          setUserAvatar(userObj.avatar);
+        }
+      } catch (err) {
+        console.error("Avatar yüklenemedi:", err);
+      }
+    };
+    getUserAvatar();
+  }, []);
+
+  const handleProfileLongPress = () => {
+    Alert.alert(
+      "Çıkış Yap",
+      "Hesabınızdan çıkış yapmak istediğinizden emin misiniz?",
+      [
+        {
+          text: "İptal",
+          style: "cancel",
+        },
+        {
+          text: "Çıkış Yap",
+          style: "destructive",
+          onPress: async () => {
+            await AsyncStorage.removeItem("user");
+            // Logout sonrası uygulamayı yeniden başlat
+            // Bu işlem login sayfasına yönlendirecek
+            Alert.alert("Çıkış Yapıldı", "Uygulama yeniden başlatılıyor...");
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <Tab.Navigator
@@ -71,7 +117,27 @@ function MainTabs() {
           } else if (route.name === "Camera") {
             iconName = focused ? "camera" : "camera-outline";
           } else if (route.name === "Profile") {
-            iconName = focused ? "person" : "person-outline";
+            return (
+              <TouchableOpacity
+                onLongPress={handleProfileLongPress}
+                activeOpacity={0.8}
+              >
+                <Image
+                  source={{
+                    uri:
+                      userAvatar ||
+                      "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
+                  }}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    borderWidth: focused ? 2 : 0,
+                    borderColor: colors.primary,
+                  }}
+                />
+              </TouchableOpacity>
+            );
           } else {
             iconName = "home-outline";
           }
