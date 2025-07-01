@@ -3,12 +3,20 @@ import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../context/ThemeContext";
+import api from "../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import { useNavigation } from "@react-navigation/native";
+import * as ImagePicker from "expo-image-picker";
 
 const AddStoryScreen: React.FC = () => {
   const [facing, setFacing] = useState<CameraType>("back");
   const [permission, requestPermission] = useCameraPermissions();
   const [preview, setPreview] = useState<string | null>(null);
   const cameraRef = useRef<any>(null);
+  const { colors } = useTheme();
+  const navigation = useNavigation<any>();
 
   if (!permission) {
     return <View style={{ flex: 1, backgroundColor: "#000" }} />;
@@ -43,27 +51,120 @@ const AddStoryScreen: React.FC = () => {
     setFacing((current) => (current === "back" ? "front" : "back"));
   }
 
+  async function shareStory() {
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      if (!userId) {
+        alert("Kullanıcı bulunamadı");
+        return;
+      }
+      await api.post("/users/stories", {
+        user: userId,
+        image: preview,
+      });
+      alert("Story paylaşıldı!");
+      navigation.goBack();
+    } catch (err) {
+      console.log("[STORY PAYLAŞIM HATASI]", err, (err as any)?.response?.data);
+      alert("Story paylaşılırken hata oluştu");
+    }
+  }
+
+  const pickFromGallery = async () => {
+    try {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        alert("Galeriye erişim izni vermeniz gerekiyor.");
+        return;
+      }
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setPreview(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.log("[STORY GALERİ HATASI]", err);
+      alert("Galeri açılırken bir hata oluştu.");
+    }
+  };
+
   if (preview) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
-        <Image
-          source={{ uri: preview }}
-          style={{ flex: 1, width: "100%" }}
-          resizeMode="cover"
-        />
-        <View style={styles.bottomBar}>
-          <TouchableOpacity
-            style={styles.captureButton}
-            onPress={() => setPreview(null)}
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#111" }}>
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
+          <Text
+            style={{
+              color: "#fff",
+              fontSize: 20,
+              fontWeight: "bold",
+              marginBottom: 16,
+            }}
           >
-            <Ionicons name="close" size={32} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.captureButton, { backgroundColor: "#E91E63" }]}
-            onPress={() => alert("Story paylaşıldı!")}
+            Hikaye Önizlemesi
+          </Text>
+          <Image
+            source={{ uri: preview }}
+            style={{
+              width: "90%",
+              height: 400,
+              borderRadius: 24,
+              marginBottom: 32,
+              shadowColor: "#000",
+              shadowOpacity: 0.4,
+              shadowRadius: 16,
+              shadowOffset: { width: 0, height: 8 },
+              borderWidth: 2,
+              borderColor: "#fff",
+            }}
+            resizeMode="cover"
+          />
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 16,
+              backgroundColor: "#222a",
+              borderRadius: 24,
+              padding: 16,
+              alignItems: "center",
+            }}
           >
-            <Ionicons name="send" size={32} color="#fff" />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#fff",
+                borderRadius: 20,
+                paddingVertical: 10,
+                paddingHorizontal: 24,
+                marginRight: 8,
+              }}
+              onPress={() => setPreview(null)}
+            >
+              <Text style={{ color: "#222", fontWeight: "bold", fontSize: 16 }}>
+                Vazgeç
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#E91E63",
+                borderRadius: 20,
+                paddingVertical: 12,
+                paddingHorizontal: 32,
+              }}
+              onPress={shareStory}
+            >
+              <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 18 }}>
+                Paylaş
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -77,6 +178,19 @@ const AddStoryScreen: React.FC = () => {
           onPress={toggleCameraFacing}
         >
           <Ionicons name="camera-reverse" size={28} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{
+            position: "absolute",
+            left: 24,
+            bottom: 48,
+            backgroundColor: "#222a",
+            borderRadius: 16,
+            padding: 10,
+          }}
+          onPress={pickFromGallery}
+        >
+          <Ionicons name="images" size={28} color="#fff" />
         </TouchableOpacity>
         <View style={styles.bottomBar}>
           <TouchableOpacity style={styles.captureButton} onPress={takePhoto}>

@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,13 +17,16 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { useTheme } from "../context/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
 
 const StoryScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { story } = route.params as { story: any };
+  const { stories } = route.params as { stories: any[] };
+  const [current, setCurrent] = React.useState(0);
+  const { colors } = useTheme();
 
   const translateY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
@@ -48,6 +51,32 @@ const StoryScreen: React.FC = () => {
 
   const insets = useSafeAreaInsets();
 
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    progress.setValue(0);
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: 8000,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) handleNext();
+    });
+  }, [current]);
+
+  const handleNext = () => {
+    if (current < stories.length - 1) {
+      setCurrent((c) => c + 1);
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const handlePrev = () => {
+    if (current > 0) setCurrent((c) => c - 1);
+    else navigation.goBack();
+  };
+
   return (
     <>
       <StatusBar
@@ -64,41 +93,85 @@ const StoryScreen: React.FC = () => {
           {...panResponder.panHandlers}
         >
           {/* Story görseli */}
-          <Image
-            source={{
-              uri:
-                story?.image ||
-                story?.media ||
-                "https://images.pexels.com/photos/3802510/pexels-photo-3802510.jpeg",
-            }}
-            style={styles.storyImage}
-            resizeMode="cover"
-          />
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={handleNext}
+            onLongPress={handlePrev}
+          >
+            <Image
+              source={{
+                uri:
+                  stories[current]?.image ||
+                  stories[current]?.media ||
+                  "https://images.pexels.com/photos/3802510/pexels-photo-3802510.jpeg",
+              }}
+              style={styles.storyImage}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
 
           {/* Üst progress bar */}
           <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View style={styles.progressFill} />
+            <View style={{ flexDirection: "row", gap: 4 }}>
+              {stories.map((_, i) => (
+                <View
+                  key={i}
+                  style={[styles.progressBar, { flex: 1, marginHorizontal: 2 }]}
+                >
+                  {i < current ? (
+                    <View style={[styles.progressFill, { width: "100%" }]} />
+                  ) : i === current ? (
+                    <Animated.View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, width - 24],
+                          }),
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <View style={[styles.progressFill, { width: 0 }]} />
+                  )}
+                </View>
+              ))}
             </View>
           </View>
 
           {/* Üst header */}
           <View style={styles.header}>
-            <View style={styles.userInfo}>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+            >
               <Image
                 source={{
-                  uri: "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg",
+                  uri:
+                    stories[current]?.user?.avatar ||
+                    "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg",
                 }}
                 style={styles.profileImage}
               />
-              <Text style={styles.username}>mr.fastdriver</Text>
-              <Text style={styles.timeAgo}>32d</Text>
+              <Text style={styles.username}>
+                {stories[current]?.user?.username || ""}
+              </Text>
+              {stories[current]?.user?.isVerified && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={18}
+                  color="#1DA1F2"
+                  style={{ marginLeft: 2 }}
+                />
+              )}
+              <Text style={styles.timeAgo}>5h</Text>
             </View>
             <TouchableOpacity
               style={styles.moreButton}
               onPress={() => navigation.goBack()}
             >
-              <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
+              <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
           </View>
 
@@ -109,12 +182,9 @@ const StoryScreen: React.FC = () => {
             <View style={styles.inputRow}>
               <TextInput
                 style={styles.messageInput}
-                placeholder="Mesaj gönder"
+                placeholder="Send message"
                 placeholderTextColor="rgba(255,255,255,0.6)"
               />
-              <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="heart-outline" size={28} color="#fff" />
-              </TouchableOpacity>
               <TouchableOpacity style={styles.actionButton}>
                 <Ionicons name="paper-plane-outline" size={28} color="#fff" />
               </TouchableOpacity>

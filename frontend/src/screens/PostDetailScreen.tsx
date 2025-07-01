@@ -12,49 +12,102 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { useTheme } from "../context/ThemeContext";
+import { getPostById, getComments, toggleLike } from "../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ShareModal } from "../components/ShareModal";
 
 const { width } = Dimensions.get("window");
 
 const PostDetailScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const route = useRoute();
-  const { post } = route.params as { post: any };
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const { post: initialPost } = route.params as { post: any };
+  const { colors } = useTheme();
+  const [post, setPost] = React.useState<any>(initialPost);
+  const [comments, setComments] = React.useState<any[]>([]);
+  const [isLiked, setIsLiked] = React.useState(false);
+  const [likesCount, setLikesCount] = React.useState(0);
+  const [showShareModal, setShowShareModal] = React.useState(false);
+  const [likeLocked, setLikeLocked] = React.useState(false);
 
-  const mockComments = [
-    {
-      id: "1",
-      user: {
-        username: "alice_wonder",
-        avatar:
-          "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150",
-      },
-      text: "Amazing shot! 📸",
-      timestamp: "2h",
-      likes: 12,
-    },
-    {
-      id: "2",
-      user: {
-        username: "bob_photographer",
-        avatar:
-          "https://images.pexels.com/photos/91227/pexels-photo-91227.jpeg?auto=compress&cs=tinysrgb&w=150",
-      },
-      text: "Love the colors in this photo! Where was this taken?",
-      timestamp: "1h",
-      likes: 8,
-    },
-  ];
+  React.useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const freshPost = await getPostById(initialPost._id || initialPost.id);
+        setPost(freshPost);
+        setLikesCount(
+          Array.isArray(freshPost.likes) ? freshPost.likes.length : 0
+        );
+        const userStr = await AsyncStorage.getItem("user");
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        if (userObj?._id && Array.isArray(freshPost.likes)) {
+          setIsLiked(freshPost.likes.includes(userObj._id));
+        }
+        const commentList = await getComments(
+          initialPost._id || initialPost.id
+        );
+        setComments(commentList);
+      } catch (err) {
+        // log
+      }
+    };
+    fetchData();
+  }, [initialPost]);
+
+  const handleLike = async () => {
+    if (likeLocked) return;
+    setLikeLocked(true);
+    const prevLiked = isLiked;
+    const prevLikes = likesCount;
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      if (!userObj?._id) {
+        alert("Lütfen giriş yapın.");
+        setLikeLocked(false);
+        return;
+      }
+      const postId = post._id || post.id;
+      if (!isLiked) setLikesCount((c: number) => c + 1);
+      else setLikesCount((c: number) => (c > 0 ? c - 1 : 0));
+      setIsLiked((prev: any) => !prev);
+      const updatedPost = await toggleLike(postId, userObj._id);
+      setLikesCount(
+        Array.isArray(updatedPost.likes) ? updatedPost.likes.length : 0
+      );
+      setIsLiked(
+        Array.isArray(updatedPost.likes)
+          ? updatedPost.likes.includes(userObj._id)
+          : false
+      );
+      setPost(updatedPost);
+    } catch (err) {
+      setIsLiked(prevLiked);
+      setLikesCount(prevLikes);
+    } finally {
+      setLikeLocked(false);
+    }
+  };
+
+  const handleComment = () => {
+    navigation.navigate("Comment", { postId: post._id || post.id });
+  };
+
+  const handleShare = () => {
+    setShowShareModal(true);
+  };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "white" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Post</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Post</Text>
         <TouchableOpacity>
-          <Ionicons name="paper-plane-outline" size={24} color="#333" />
+          <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -65,18 +118,28 @@ const PostDetailScreen: React.FC = () => {
             <Image source={{ uri: post.user.avatar }} style={styles.avatar} />
             <View>
               <View style={styles.usernameContainer}>
-                <Text style={styles.username}>{post.user.username}</Text>
+                <Text style={[styles.username, { color: colors.text }]}>
+                  {post.user.username}
+                </Text>
                 {post.user.isVerified && (
                   <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" />
                 )}
               </View>
               {post.location && (
-                <Text style={styles.location}>{post.location}</Text>
+                <Text
+                  style={[styles.location, { color: colors.textSecondary }]}
+                >
+                  {post.location}
+                </Text>
               )}
             </View>
           </View>
           <TouchableOpacity>
-            <Ionicons name="ellipsis-horizontal" size={24} color="#666" />
+            <Ionicons
+              name="ellipsis-horizontal"
+              size={24}
+              color={colors.textSecondary}
+            />
           </TouchableOpacity>
         </View>
 
@@ -86,67 +149,95 @@ const PostDetailScreen: React.FC = () => {
         {/* Post Actions */}
         <View style={styles.actions}>
           <View style={styles.leftActions}>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
               <Ionicons
-                name={post.isLiked ? "heart" : "heart-outline"}
+                name={isLiked ? "heart" : "heart-outline"}
                 size={28}
-                color={post.isLiked ? "#E91E63" : "#000"}
+                color={isLiked ? "#FF3040" : colors.text}
               />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="chatbubble-outline" size={26} color="#000" />
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={handleComment}
+            >
+              <Ionicons
+                name="chatbubble-outline"
+                size={26}
+                color={colors.text}
+              />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
-              <Ionicons name="paper-plane-outline" size={26} color="#000" />
+            <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
+              <Ionicons
+                name="paper-plane-outline"
+                size={26}
+                color={colors.text}
+              />
             </TouchableOpacity>
           </View>
           <TouchableOpacity>
-            <Ionicons name="bookmark-outline" size={26} color="#000" />
+            <Ionicons name="bookmark-outline" size={26} color={colors.text} />
           </TouchableOpacity>
         </View>
 
         {/* Post Info */}
         <View style={styles.postInfo}>
-          <Text style={styles.likes}>{post.likes.toLocaleString()} likes</Text>
+          <Text style={[styles.likes, { color: colors.text }]}>
+            {likesCount} likes
+          </Text>
           <View style={styles.captionContainer}>
-            <Text style={styles.username}>{post.user.username}</Text>
-            <Text style={styles.caption}> {post.caption}</Text>
+            <Text style={[styles.username, { color: colors.text }]}>
+              {post.user.username}
+            </Text>
+            <Text style={[styles.caption, { color: colors.text }]}>
+              {" "}
+              {post.caption}
+            </Text>
           </View>
-          <Text style={styles.timestamp}>{post.timestamp}</Text>
+          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+            {post.timestamp}
+          </Text>
         </View>
 
         {/* Comments */}
         <View style={styles.commentsContainer}>
-          <Text style={styles.commentsTitle}>Comments</Text>
-          {mockComments.map((comment) => (
-            <View key={comment.id} style={styles.commentItem}>
+          <Text style={[styles.commentsTitle, { color: colors.text }]}>
+            Comments
+          </Text>
+          {comments.map((comment) => (
+            <View key={comment._id || comment.id} style={styles.commentItem}>
               <Image
                 source={{ uri: comment.user.avatar }}
                 style={styles.commentAvatar}
               />
               <View style={styles.commentContent}>
                 <View style={styles.commentText}>
-                  <Text style={styles.commentUsername}>
+                  <Text
+                    style={[styles.commentUsername, { color: colors.text }]}
+                  >
                     {comment.user.username}
                   </Text>
-                  <Text style={styles.commentMessage}> {comment.text}</Text>
+                  <Text style={[styles.commentMessage, { color: colors.text }]}>
+                    {" "}
+                    {comment.text}
+                  </Text>
                 </View>
                 <View style={styles.commentActions}>
-                  <Text style={styles.commentTimestamp}>
-                    {comment.timestamp}
+                  <Text
+                    style={[
+                      styles.commentTimestamp,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {/* Zamanı hesaplamak için timeAgo fonksiyonu eklenebilir */}
                   </Text>
-                  <TouchableOpacity>
-                    <Text style={styles.commentAction}>Reply</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity>
-                    <Text style={styles.commentLikes}>
-                      {comment.likes} likes
-                    </Text>
-                  </TouchableOpacity>
                 </View>
               </View>
               <TouchableOpacity>
-                <Ionicons name="heart-outline" size={16} color="#666" />
+                <Ionicons
+                  name="heart-outline"
+                  size={16}
+                  color={colors.textSecondary}
+                />
               </TouchableOpacity>
             </View>
           ))}
@@ -154,7 +245,12 @@ const PostDetailScreen: React.FC = () => {
       </ScrollView>
 
       {/* Comment Input */}
-      <View style={styles.commentInputContainer}>
+      <View
+        style={[
+          styles.commentInputContainer,
+          { backgroundColor: colors.background, borderTopColor: colors.border },
+        ]}
+      >
         <Image
           source={{
             uri: "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150",
@@ -162,14 +258,23 @@ const PostDetailScreen: React.FC = () => {
           style={styles.inputAvatar}
         />
         <TextInput
-          style={styles.commentInput}
+          style={[
+            styles.commentInput,
+            { color: colors.text, backgroundColor: colors.surface },
+          ]}
           placeholder="Add a comment..."
-          placeholderTextColor="#666"
+          placeholderTextColor={colors.textSecondary}
         />
         <TouchableOpacity>
-          <Text style={styles.postButton}>Post</Text>
+          <Text style={[styles.postButton, { color: colors.primary }]}>
+            Post
+          </Text>
         </TouchableOpacity>
       </View>
+      <ShareModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -177,7 +282,6 @@ const PostDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "white",
   },
   header: {
     flexDirection: "row",
@@ -186,12 +290,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
   },
   postHeader: {
     flexDirection: "row",
@@ -221,7 +323,6 @@ const styles = StyleSheet.create({
   },
   location: {
     fontSize: 12,
-    color: "#666",
     marginTop: 2,
   },
   postImage: {
@@ -261,7 +362,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   timestamp: {
-    color: "#666",
     fontSize: 12,
     textTransform: "uppercase",
   },
@@ -273,7 +373,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 16,
-    color: "#333",
   },
   commentItem: {
     flexDirection: "row",
@@ -299,7 +398,6 @@ const styles = StyleSheet.create({
   },
   commentMessage: {
     fontSize: 14,
-    color: "#333",
   },
   commentActions: {
     flexDirection: "row",
@@ -307,18 +405,15 @@ const styles = StyleSheet.create({
   },
   commentTimestamp: {
     fontSize: 12,
-    color: "#666",
     marginRight: 16,
   },
   commentAction: {
     fontSize: 12,
-    color: "#666",
     fontWeight: "600",
     marginRight: 16,
   },
   commentLikes: {
     fontSize: 12,
-    color: "#666",
   },
   commentInputContainer: {
     flexDirection: "row",
@@ -326,8 +421,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: "#E5E5E5",
-    backgroundColor: "white",
   },
   inputAvatar: {
     width: 32,
@@ -338,10 +431,8 @@ const styles = StyleSheet.create({
   commentInput: {
     flex: 1,
     fontSize: 16,
-    color: "#333",
   },
   postButton: {
-    color: "#E91E63",
     fontWeight: "600",
     fontSize: 16,
   },

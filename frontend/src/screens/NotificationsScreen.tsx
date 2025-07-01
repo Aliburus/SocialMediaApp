@@ -13,23 +13,33 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { mockNotifications } from "../data/mockData";
+import { useTheme } from "../context/ThemeContext";
 
 const NotificationsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   const renderNotificationItem = ({ item }: { item: any }) => {
     const getNotificationIcon = () => {
       switch (item.type) {
         case "like":
-          return <Ionicons name="heart" size={24} color="#E91E63" />;
+          return <Ionicons name="heart" size={24} color={colors.primary} />;
         case "comment":
-          return <Ionicons name="chatbubble" size={24} color="#2196F3" />;
+          return <Ionicons name="chatbubble" size={24} color={colors.info} />;
         case "follow":
-          return <Ionicons name="person-add" size={24} color="#4CAF50" />;
+          return (
+            <Ionicons name="person-add" size={24} color={colors.success} />
+          );
         case "mention":
-          return <Ionicons name="at" size={24} color="#FF9800" />;
+          return <Ionicons name="at" size={24} color={colors.warning} />;
         default:
-          return <Ionicons name="notifications" size={24} color="#666" />;
+          return (
+            <Ionicons
+              name="notifications"
+              size={24}
+              color={colors.textSecondary}
+            />
+          );
       }
     };
 
@@ -37,16 +47,27 @@ const NotificationsScreen: React.FC = () => {
       <TouchableOpacity
         style={[
           styles.notificationItem,
-          !item.isRead && styles.unreadNotification,
+          !item.isRead && [
+            styles.unreadNotification,
+            { backgroundColor: colors.surface },
+          ],
+          { backgroundColor: colors.background },
         ]}
       >
         <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
         <View style={styles.notificationContent}>
           <View style={styles.notificationText}>
-            <Text style={styles.username}>{item.user.username}</Text>
-            <Text style={styles.notificationMessage}> {item.text}</Text>
+            <Text style={[styles.username, { color: colors.text }]}>
+              {item.user.username}
+            </Text>
+            <Text style={[styles.notificationMessage, { color: colors.text }]}>
+              {" "}
+              {item.text}
+            </Text>
           </View>
-          <Text style={styles.timestamp}>{item.timestamp}</Text>
+          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+            {item.timestamp}
+          </Text>
         </View>
         <View style={styles.notificationIcon}>{getNotificationIcon()}</View>
         {item.post && (
@@ -60,12 +81,16 @@ const NotificationsScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notifications</Text>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>
+          Notifications
+        </Text>
         <TouchableOpacity>
-          <Ionicons name="checkmark-done" size={24} color="#E91E63" />
+          <Ionicons name="checkmark-done" size={24} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -76,7 +101,7 @@ const NotificationsScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           ...styles.notificationsList,
-          paddingBottom: insets.bottom + 16,
+          paddingBottom: 16,
         }}
       />
     </SafeAreaView>
@@ -86,7 +111,6 @@ const NotificationsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "white",
   },
   header: {
     flexDirection: "row",
@@ -95,12 +119,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#333",
   },
   notificationsList: {
     padding: 16,
@@ -114,7 +136,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   unreadNotification: {
-    backgroundColor: "#F8F9FA",
+    // backgroundColor will be set dynamically
   },
   avatar: {
     width: 50,
@@ -133,15 +155,12 @@ const styles = StyleSheet.create({
   username: {
     fontWeight: "600",
     fontSize: 16,
-    color: "#333",
   },
   notificationMessage: {
     fontSize: 16,
-    color: "#333",
   },
   timestamp: {
     fontSize: 12,
-    color: "#666",
     marginTop: 4,
   },
   notificationIcon: {

@@ -13,6 +13,7 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useTheme } from "../context/ThemeContext";
 
 const mockDMs = [
   {
@@ -40,30 +41,44 @@ const mockDMs = [
 const DMListScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const renderItem = ({ item }: { item: any }) => (
     <TouchableOpacity
-      style={styles.dmItem}
+      style={[styles.dmItem, { borderBottomColor: colors.border }]}
       onPress={() => navigation.navigate("DMChat", { user: item.user })}
     >
       <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
       <View style={styles.dmInfo}>
-        <Text style={styles.username}>{item.user.username}</Text>
-        <Text style={styles.lastMessage}>{item.lastMessage}</Text>
+        <Text style={[styles.username, { color: colors.text }]}>
+          {item.user.username}
+        </Text>
+        <Text style={[styles.lastMessage, { color: colors.textSecondary }]}>
+          {item.lastMessage}
+        </Text>
       </View>
-      <Text style={styles.time}>{item.time}</Text>
+      <Text style={[styles.time, { color: colors.textSecondary }]}>
+        {item.time}
+      </Text>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: "white" }}
-      edges={["bottom"]}
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={["top", "bottom"]}
     >
       {/* Üst bar */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Direct</Text>
-        <TouchableOpacity>
-          <Ionicons name="create-outline" size={28} color="#222" />
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <Text
+          style={[
+            styles.headerTitle,
+            { color: colors.text, flex: 1, textAlign: "left" },
+          ]}
+        >
+          Direct
+        </Text>
+        <TouchableOpacity style={{ marginLeft: 12 }}>
+          <Ionicons name="create-outline" size={28} color={colors.text} />
         </TouchableOpacity>
       </View>
       {/* DM Listesi */}
@@ -71,7 +86,11 @@ const DMListScreen: React.FC = () => {
         data={mockDMs}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + 16,
+          paddingHorizontal: 8,
+        }}
+        showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
   );
@@ -80,7 +99,6 @@ const DMListScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
   },
   header: {
     flexDirection: "row",
@@ -89,12 +107,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 18,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#222",
   },
   listContent: {
     padding: 8,
@@ -104,7 +120,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f2f2f2",
   },
   avatar: {
     width: 54,
@@ -118,15 +133,12 @@ const styles = StyleSheet.create({
   username: {
     fontWeight: "bold",
     fontSize: 16,
-    color: "#222",
   },
   lastMessage: {
-    color: "#666",
     fontSize: 14,
     marginTop: 2,
   },
   time: {
-    color: "#aaa",
     fontSize: 12,
     marginLeft: 8,
   },

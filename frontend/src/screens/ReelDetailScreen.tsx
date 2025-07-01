@@ -1,14 +1,18 @@
 import React from "react";
 import { View, StyleSheet, Dimensions } from "react-native";
-import { Video } from "expo-av";
+import { Video, ResizeMode } from "expo-av";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../context/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
 
 const ReelDetailScreen: React.FC = ({ route }: any) => {
   const { reel } = route.params;
+  const { colors } = useTheme();
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <Video
         source={{
           uri:
@@ -18,7 +22,7 @@ const ReelDetailScreen: React.FC = ({ route }: any) => {
         }}
         style={styles.video}
         useNativeControls
-        resizeMode="cover"
+        resizeMode={ResizeMode.COVER}
         shouldPlay
         isLooping
       />

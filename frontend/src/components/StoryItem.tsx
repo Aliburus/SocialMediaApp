@@ -1,30 +1,32 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Story } from '../types';
+import React from "react";
+import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Story } from "../types";
 
 interface StoryItemProps {
   story: Story;
   onPress?: () => void;
+  isActive?: boolean;
 }
 
-const StoryItem: React.FC<StoryItemProps> = ({ story, onPress }) => {
+const StoryItem: React.FC<StoryItemProps> = ({ story, onPress, isActive }) => {
   return (
     <TouchableOpacity onPress={onPress} style={styles.container}>
       <View style={styles.imageContainer}>
-        {!story.isViewed ? (
+        {isActive ? (
+          <View style={styles.innerBorder}>
+            <Image source={{ uri: story.user.avatar }} style={styles.avatar} />
+          </View>
+        ) : !story.isViewed ? (
           <LinearGradient
-            colors={['#E91E63', '#F06292', '#FF9800']}
+            colors={["#E91E63", "#F06292", "#FF9800"]}
             style={styles.gradient}
           >
             <View style={styles.innerBorder}>
-              <Image source={{ uri: story.user.avatar }} style={styles.avatar} />
+              <Image
+                source={{ uri: story.user.avatar }}
+                style={styles.avatar}
+              />
             </View>
           </LinearGradient>
         ) : (
@@ -42,46 +44,48 @@ const StoryItem: React.FC<StoryItemProps> = ({ story, onPress }) => {
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
-    marginRight: 16,
-    width: 70,
+    alignItems: "center",
+    marginRight: 10,
+    width: 64,
   },
   imageContainer: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   gradient: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  innerBorder: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'white',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  innerBorder: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: "white",
+    justifyContent: "center",
+    alignItems: "center",
   },
   viewedBorder: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     borderWidth: 2,
-    borderColor: '#E5E5E5',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: "#E5E5E5",
+    justifyContent: "center",
+    alignItems: "center",
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
   username: {
-    fontSize: 12,
-    textAlign: 'center',
-    color: '#333',
+    fontSize: 11,
+    textAlign: "center",
+    color: "#333",
+    marginTop: 2,
+    maxWidth: 60,
   },
 });
 

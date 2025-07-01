@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,14 +8,18 @@ import {
   ScrollView,
   FlatList,
   Dimensions,
+  RefreshControl,
 } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { mockUsers, mockPosts } from "../data/mockData";
+import { useTheme } from "../context/ThemeContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getUserPosts, getProfile } from "../services/api";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -26,12 +30,69 @@ const mockTagged = mockPosts.slice(6, 12); // örnek için farklı postlar
 
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
-  const currentUser = mockUsers[0]; // Simulate current user
-  const userPosts = mockPosts.filter((post) => post.user.id === currentUser.id);
+  const [userPosts, setUserPosts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<
     "grid" | "reels" | "saved" | "tagged"
   >("grid");
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const [profile, setProfile] = useState<any>(null);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchUserData = async () => {
+    setLoading(true);
+    const userStr = await AsyncStorage.getItem("user");
+    const userObj = userStr ? JSON.parse(userStr) : null;
+    const userId = userObj?._id || userObj?.id;
+    try {
+      const profileData = await getProfile(userId);
+      console.log("[PROFILE] Backend'den gelen profil verisi:", profileData);
+      setProfile(profileData);
+      setFollowersCount(profileData.followersCount || 0);
+      setFollowingCount(profileData.followingCount || 0);
+    } catch (err) {
+      setProfile(null);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchUserData();
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserData();
+    }, [])
+  );
+
+  useEffect(() => {
+    const fetchUserPosts = async () => {
+      setLoading(true);
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      const endpoint = `/posts/user/${userId}`;
+      console.log("[PROFILE] userId:", userId);
+      console.log("[PROFILE] Backend endpoint:", endpoint);
+      try {
+        const posts = await getUserPosts(userId);
+        console.log("[PROFILE] Backend'den gelen userPosts:", posts);
+        setUserPosts(posts);
+      } catch (err: any) {
+        console.log(
+          "[PROFILE] Profilde post çekme hatası:",
+          err,
+          err?.response?.data
+        );
+      }
+      setLoading(false);
+    };
+    fetchUserPosts();
+  }, []);
 
   const renderPostItem = ({ item }: { item: any }) => {
     if (activeTab === "reels") {
@@ -55,7 +116,10 @@ const ProfileScreen: React.FC = () => {
       );
     }
     return (
-      <TouchableOpacity style={styles.postItem}>
+      <TouchableOpacity
+        style={styles.postItem}
+        onPress={() => navigation.navigate("PostDetail", { post: item })}
+      >
         <Image source={{ uri: item.image }} style={styles.postImage} />
       </TouchableOpacity>
     );
@@ -66,25 +130,43 @@ const ProfileScreen: React.FC = () => {
   if (activeTab === "saved") tabData = mockSaved;
   if (activeTab === "tagged") tabData = mockTagged;
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchUserData();
+    setRefreshing(false);
+  };
+
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: "white" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       edges={["top", "bottom"]}
     >
-      <ScrollView>
+      <ScrollView
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Grid yükleniyor */}
+        {activeTab === "grid" && loading && (
+          <View style={{ alignItems: "center", marginTop: 16 }}>
+            <Text style={{ color: colors.textSecondary }}>Yükleniyor...</Text>
+          </View>
+        )}
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity>
-            <Ionicons name="person-add-outline" size={24} color="#333" />
+            <Ionicons name="person-add-outline" size={24} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.usernameContainer}>
-            <Text style={styles.headerUsername}>{currentUser.username}</Text>
-            {currentUser.isVerified && (
+            <Text style={[styles.headerUsername, { color: colors.text }]}>
+              {profile?.username || ""}
+            </Text>
+            {profile?.isVerified && (
               <Ionicons name="checkmark-circle" size={20} color="#1DA1F2" />
             )}
           </View>
           <TouchableOpacity>
-            <Ionicons name="menu-outline" size={24} color="#333" />
+            <Ionicons name="menu-outline" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
 
@@ -92,119 +174,237 @@ const ProfileScreen: React.FC = () => {
         <View style={styles.profileInfo}>
           <View style={styles.profileHeader}>
             <Image
-              source={{ uri: currentUser.avatar }}
+              source={{ uri: profile?.avatar || "" }}
               style={styles.profileImage}
             />
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{currentUser.postsCount}</Text>
-                <Text style={styles.statLabel}>Posts</Text>
+                <Text style={[styles.statNumber, { color: colors.text }]}>
+                  {userPosts.length}
+                </Text>
+                <Text
+                  style={[styles.statLabel, { color: colors.textSecondary }]}
+                >
+                  Posts
+                </Text>
               </View>
               <TouchableOpacity
                 style={styles.statItem}
                 onPress={() => navigation.navigate("Followers" as never)}
               >
-                <Text style={styles.statNumber}>
-                  {currentUser.followersCount.toLocaleString()}
+                <Text style={[styles.statNumber, { color: colors.text }]}>
+                  {followersCount}
                 </Text>
-                <Text style={styles.statLabel}>Followers</Text>
+                <Text
+                  style={[styles.statLabel, { color: colors.textSecondary }]}
+                >
+                  Followers
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.statItem}
                 onPress={() => navigation.navigate("Following" as never)}
               >
-                <Text style={styles.statNumber}>
-                  {currentUser.followingCount.toLocaleString()}
+                <Text style={[styles.statNumber, { color: colors.text }]}>
+                  {followingCount}
                 </Text>
-                <Text style={styles.statLabel}>Following</Text>
+                <Text
+                  style={[styles.statLabel, { color: colors.textSecondary }]}
+                >
+                  Following
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.bioContainer}>
-            <Text style={styles.fullName}>{currentUser.fullName}</Text>
-            {currentUser.bio && (
-              <Text style={styles.bio}>{currentUser.bio}</Text>
+            <Text style={[styles.fullName, { color: colors.text }]}>
+              {profile?.name || ""}
+            </Text>
+            {profile?.bio && (
+              <Text style={[styles.bio, { color: colors.text }]}>
+                {profile.bio}
+              </Text>
             )}
           </View>
 
           <TouchableOpacity
-            style={styles.editButton}
+            style={[styles.editButton, { backgroundColor: colors.surface }]}
             onPress={() => navigation.navigate("EditProfile" as never)}
           >
-            <Text style={styles.editButtonText}>Edit Profile</Text>
+            <Text style={[styles.editButtonText, { color: colors.text }]}>
+              Edit Profile
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Story Highlights */}
-        <View style={styles.highlightsContainer}>
+        <View
+          style={[
+            styles.highlightsContainer,
+            { borderBottomColor: colors.border },
+          ]}
+        >
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <TouchableOpacity
               style={styles.addHighlight}
               onPress={() => navigation.navigate("AddStory")}
             >
-              <View style={styles.addHighlightCircle}>
-                <Ionicons name="add" size={24} color="#666" />
+              <View
+                style={[
+                  styles.addHighlightCircle,
+                  { borderColor: colors.border },
+                ]}
+              >
+                <Ionicons name="add" size={24} color={colors.textSecondary} />
               </View>
-              <Text style={styles.highlightText}>New</Text>
+              <Text
+                style={[styles.highlightText, { color: colors.textSecondary }]}
+              >
+                New
+              </Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
 
         {/* Tabs */}
-        <View style={styles.tabsContainer}>
+        <View
+          style={[styles.tabsContainer, { borderBottomColor: colors.border }]}
+        >
           <TouchableOpacity
-            style={[styles.tab, activeTab === "grid" && styles.activeTab]}
+            style={[
+              styles.tab,
+              activeTab === "grid" && [
+                styles.activeTab,
+                { borderBottomColor: colors.primary },
+              ],
+            ]}
             onPress={() => setActiveTab("grid")}
           >
             <Ionicons
               name="grid-outline"
               size={24}
-              color={activeTab === "grid" ? "#E91E63" : "#666"}
+              color={
+                activeTab === "grid" ? colors.primary : colors.textSecondary
+              }
             />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, activeTab === "reels" && styles.activeTab]}
+            style={[
+              styles.tab,
+              activeTab === "reels" && [
+                styles.activeTab,
+                { borderBottomColor: colors.primary },
+              ],
+            ]}
             onPress={() => setActiveTab("reels")}
           >
             <Ionicons
               name="play-outline"
               size={24}
-              color={activeTab === "reels" ? "#E91E63" : "#666"}
+              color={
+                activeTab === "reels" ? colors.primary : colors.textSecondary
+              }
             />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, activeTab === "saved" && styles.activeTab]}
+            style={[
+              styles.tab,
+              activeTab === "saved" && [
+                styles.activeTab,
+                { borderBottomColor: colors.primary },
+              ],
+            ]}
             onPress={() => setActiveTab("saved")}
           >
             <Ionicons
               name="bookmark-outline"
               size={24}
-              color={activeTab === "saved" ? "#E91E63" : "#666"}
+              color={
+                activeTab === "saved" ? colors.primary : colors.textSecondary
+              }
             />
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, activeTab === "tagged" && styles.activeTab]}
+            style={[
+              styles.tab,
+              activeTab === "tagged" && [
+                styles.activeTab,
+                { borderBottomColor: colors.primary },
+              ],
+            ]}
             onPress={() => setActiveTab("tagged")}
           >
             <Ionicons
               name="person-outline"
               size={24}
-              color={activeTab === "tagged" ? "#E91E63" : "#666"}
+              color={
+                activeTab === "tagged" ? colors.primary : colors.textSecondary
+              }
             />
           </TouchableOpacity>
         </View>
 
         {/* Tab Content */}
         <View style={styles.postsContainer}>
-          <FlatList
-            data={tabData}
-            renderItem={renderPostItem}
-            keyExtractor={(item) => item.id}
-            numColumns={3}
-            scrollEnabled={false}
-            contentContainerStyle={styles.postsList}
-          />
+          {/* Grid: Kullanıcının kendi postları */}
+          {activeTab === "grid" && (
+            <FlatList
+              data={userPosts}
+              renderItem={renderPostItem}
+              keyExtractor={(item) => item._id || item.id}
+              numColumns={3}
+              scrollEnabled={false}
+              contentContainerStyle={{
+                paddingBottom: 24,
+                paddingHorizontal: 0,
+              }}
+              columnWrapperStyle={{ gap: 0 }}
+            />
+          )}
+          {/* Diğer tablar için eski FlatList veya içerik */}
+          {activeTab === "reels" && (
+            <FlatList
+              data={mockReels}
+              renderItem={renderPostItem}
+              keyExtractor={(item) => item.id}
+              numColumns={3}
+              scrollEnabled={false}
+              contentContainerStyle={{
+                paddingBottom: 24,
+                paddingHorizontal: 0,
+              }}
+              columnWrapperStyle={{ gap: 0 }}
+            />
+          )}
+          {activeTab === "saved" && (
+            <FlatList
+              data={mockSaved}
+              renderItem={renderPostItem}
+              keyExtractor={(item) => item.id}
+              numColumns={3}
+              scrollEnabled={false}
+              contentContainerStyle={{
+                paddingBottom: 24,
+                paddingHorizontal: 0,
+              }}
+              columnWrapperStyle={{ gap: 0 }}
+            />
+          )}
+          {activeTab === "tagged" && (
+            <FlatList
+              data={mockTagged}
+              renderItem={renderPostItem}
+              keyExtractor={(item) => item.id}
+              numColumns={3}
+              scrollEnabled={false}
+              contentContainerStyle={{
+                paddingBottom: 24,
+                paddingHorizontal: 0,
+              }}
+              columnWrapperStyle={{ gap: 0 }}
+            />
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -214,7 +414,6 @@ const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "white",
   },
   header: {
     flexDirection: "row",
@@ -223,7 +422,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
   },
   usernameContainer: {
     flexDirection: "row",
@@ -260,11 +458,9 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#333",
   },
   statLabel: {
     fontSize: 14,
-    color: "#666",
     marginTop: 2,
   },
   bioContainer: {
@@ -273,12 +469,10 @@ const styles = StyleSheet.create({
   fullName: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
     marginBottom: 4,
   },
   bio: {
     fontSize: 14,
-    color: "#333",
     lineHeight: 20,
   },
   editButton: {
@@ -290,13 +484,11 @@ const styles = StyleSheet.create({
   editButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
   },
   highlightsContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
   },
   addHighlight: {
     alignItems: "center",
@@ -307,7 +499,6 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     borderWidth: 2,
-    borderColor: "#E5E5E5",
     borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
@@ -315,7 +506,6 @@ const styles = StyleSheet.create({
   },
   highlightText: {
     fontSize: 12,
-    color: "#666",
   },
   postsContainer: {
     flex: 1,
@@ -323,7 +513,6 @@ const styles = StyleSheet.create({
   tabsContainer: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
   },
   tab: {
     flex: 1,
@@ -332,13 +521,12 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: "#E91E63",
-  },
-  postsList: {
-    padding: 1,
   },
   postItem: {
-    margin: 1,
+    width: imageSize,
+    height: imageSize,
+    margin: 0,
+    backgroundColor: "#eee",
   },
   postImage: {
     width: imageSize,

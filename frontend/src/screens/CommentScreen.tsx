@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,39 +6,156 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../context/ThemeContext";
+import { getComments, addComment } from "../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Ionicons } from "@expo/vector-icons";
+import { useRoute } from "@react-navigation/native";
 
-const mockComments = [
-  { id: "1", user: "user1", text: "Harika fotoğraf!" },
-  { id: "2", user: "user2", text: "Çok beğendim." },
-];
+const timeAgo = (dateString: string) => {
+  const now = new Date();
+  const date = new Date(dateString);
+  const diff = Math.floor((now.getTime() - date.getTime()) / 60000); // dakika
+  if (diff < 1) return "şimdi";
+  if (diff < 60) return `${diff}m`;
+  const hours = Math.floor(diff / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}g`;
+};
 
 const CommentScreen: React.FC = () => {
-  return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Yorumlar</Text>
-      <FlatList
-        data={mockComments}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.commentItem}>
-            <Text style={styles.user}>{item.user}:</Text>
-            <Text style={styles.text}>{item.text}</Text>
-          </View>
-        )}
-        style={{ width: "100%" }}
-      />
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Yorum ekle..."
-          placeholderTextColor="#888"
-        />
-        <TouchableOpacity style={styles.sendButton}>
-          <Text style={styles.sendText}>Gönder</Text>
-        </TouchableOpacity>
+  const { colors } = useTheme();
+  const route = useRoute<any>();
+  const postId =
+    route.params?.post?._id || route.params?.post?.id || route.params?.postId;
+  const [comments, setComments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const fetchComments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getComments(postId);
+      setComments(data);
+    } catch (err) {
+      setComments([]);
+    }
+    setLoading(false);
+  }, [postId]);
+
+  useEffect(() => {
+    fetchComments();
+  }, [fetchComments]);
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    setSending(true);
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      if (!userObj?._id) {
+        alert("Yorum için giriş yapmalısın.");
+        setSending(false);
+        return;
+      }
+      await addComment(postId, userObj._id, input.trim());
+      setInput("");
+      fetchComments();
+    } catch (err: any) {
+      console.log("Yorum ekleme hatası:", err, err?.response?.data);
+      let msg = "Yorum eklenemedi";
+      if (err?.response?.data?.message) msg = err.response.data.message;
+      else if (err?.message) msg = err.message;
+      alert(msg);
+    }
+    setSending(false);
+  };
+
+  const renderItem = ({ item }: { item: any }) => (
+    <View style={styles.commentRow}>
+      <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
+      <View style={styles.commentContent}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={[styles.username, { color: colors.text }]}>
+            {item.user.username}
+          </Text>
+          <Text style={[styles.time, { color: colors.textSecondary }]}>
+            {"  "}
+            {timeAgo(item.createdAt)}
+          </Text>
+        </View>
+        <Text style={[styles.commentText, { color: colors.text }]}>
+          {item.text}
+        </Text>
+        {/* <View style={{ flexDirection: "row", marginTop: 2 }}>
+          <TouchableOpacity><Text style={[styles.reply, { color: colors.textSecondary }]}>Yanıtla</Text></TouchableOpacity>
+        </View> */}
       </View>
+      <TouchableOpacity style={styles.likeBtn}>
+        <Ionicons name="heart-outline" size={20} color={colors.textSecondary} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
+      <View style={styles.headerBar}>
+        <View style={styles.headerBarLine} />
+      </View>
+      <Text style={[styles.title, { color: colors.text }]}>Yorumlar</Text>
+      {loading ? (
+        <ActivityIndicator
+          size="large"
+          color={colors.primary}
+          style={{ marginTop: 32 }}
+        />
+      ) : (
+        <FlatList
+          data={comments}
+          keyExtractor={(item) => item._id || item.id}
+          renderItem={renderItem}
+          style={{ width: "100%" }}
+          contentContainerStyle={{ paddingBottom: 16 }}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={16}
+      >
+        <View
+          style={[
+            styles.inputContainer,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <TextInput
+            style={[styles.input, { color: colors.text }]}
+            placeholder="Yorum ekle..."
+            placeholderTextColor={colors.textSecondary}
+            value={input}
+            onChangeText={setInput}
+            editable={!sending}
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, { backgroundColor: colors.primary }]}
+            onPress={handleSend}
+            disabled={sending || !input.trim()}
+          >
+            <Ionicons name="send" size={20} color={colors.background} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -46,51 +163,81 @@ const CommentScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-    padding: 16,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+  },
+  headerBar: {
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  headerBarLine: {
+    width: 48,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#4446",
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
-    marginBottom: 16,
-    color: "#222",
+    marginBottom: 8,
+    marginLeft: 16,
   },
-  commentItem: {
+  commentRow: {
     flexDirection: "row",
-    marginBottom: 12,
+    alignItems: "flex-start",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#2223",
   },
-  user: {
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 10,
+    marginTop: 2,
+  },
+  commentContent: {
+    flex: 1,
+  },
+  username: {
     fontWeight: "bold",
-    marginRight: 6,
-    color: "#333",
+    fontSize: 15,
   },
-  text: {
-    color: "#333",
+  time: {
+    fontSize: 12,
+    marginLeft: 4,
+  },
+  commentText: {
+    fontSize: 15,
+    marginTop: 2,
+  },
+  likeBtn: {
+    marginLeft: 8,
+    marginTop: 2,
+    padding: 4,
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 16,
+    borderTopWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   input: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    fontSize: 16,
     paddingVertical: 8,
-    marginRight: 8,
-    color: "#222",
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: "transparent",
   },
   sendButton: {
-    backgroundColor: "#E91E63",
     borderRadius: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-  },
-  sendText: {
-    color: "#fff",
-    fontWeight: "bold",
+    marginLeft: 6,
   },
 });
 

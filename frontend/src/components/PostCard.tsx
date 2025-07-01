@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   Dimensions,
   Modal,
   FlatList,
-  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Post } from "../types";
@@ -16,6 +15,9 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { useTheme } from "../context/ThemeContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { toggleLike } from "../services/api";
 
 const { width } = Dimensions.get("window");
 
@@ -86,15 +88,67 @@ const PostCard: React.FC<PostCardProps> = ({
   onComment,
   onShare,
 }) => {
-  const [isLiked, setIsLiked] = useState(post.isLiked);
-  const [likesCount, setLikesCount] = useState(post.likes);
+  const [isLiked, setIsLiked] = useState(false);
+  const [likesCount, setLikesCount] = useState(
+    typeof post.likes === "number"
+      ? post.likes
+      : Array.isArray(post.likes as any)
+      ? (post.likes as any).length
+      : 0
+  );
   const [showShareModal, setShowShareModal] = useState(false);
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const [likeLocked, setLikeLocked] = useState(false);
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikesCount(isLiked ? likesCount - 1 : likesCount + 1);
-    onLike?.();
+  // Like işlemi için debounce
+  const likeTimeout = React.useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const checkLiked = async () => {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      if (userObj?._id && Array.isArray(post.likes)) {
+        setIsLiked(post.likes.includes(userObj._id));
+      }
+    };
+    checkLiked();
+  }, [post.likes]);
+
+  const handleLike = async () => {
+    if (likeLocked) return;
+    setLikeLocked(true);
+    const prevLiked = isLiked;
+    const prevLikes = likesCount;
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      if (!userObj?._id) {
+        alert("Lütfen giriş yapın.");
+        setLikeLocked(false);
+        return;
+      }
+      const postId = (post as any)._id || post.id;
+      // Optimistic UI: sadece bir kez artır/azalt, 0'ın altına düşmesin
+      if (!isLiked) setLikesCount((c: number) => c + 1);
+      else setLikesCount((c: number) => (c > 0 ? c - 1 : 0));
+      setIsLiked((prev: any) => !prev);
+      const updatedPost = await toggleLike(postId, userObj._id);
+      setLikesCount(
+        Array.isArray(updatedPost.likes) ? updatedPost.likes.length : 0
+      );
+      setIsLiked(
+        Array.isArray(updatedPost.likes)
+          ? updatedPost.likes.includes(userObj._id)
+          : false
+      );
+      onLike?.();
+    } catch (err) {
+      setIsLiked(prevLiked);
+      setLikesCount(prevLikes);
+    } finally {
+      setLikeLocked(false);
+    }
   };
 
   const handleShare = () => {
@@ -121,25 +175,33 @@ const PostCard: React.FC<PostCardProps> = ({
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
           <Image source={{ uri: post.user.avatar }} style={styles.avatar} />
           <View>
             <View style={styles.usernameContainer}>
-              <Text style={styles.username}>{post.user.username}</Text>
+              <Text style={[styles.username, { color: colors.text }]}>
+                {post.user.username}
+              </Text>
               {post.user.isVerified && (
                 <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" />
               )}
             </View>
             {post.location && (
-              <Text style={styles.location}>{post.location}</Text>
+              <Text style={[styles.location, { color: colors.textSecondary }]}>
+                {post.location}
+              </Text>
             )}
           </View>
         </View>
         <TouchableOpacity>
-          <Ionicons name="ellipsis-horizontal" size={24} color="#666" />
+          <Ionicons
+            name="ellipsis-horizontal"
+            size={24}
+            color={colors.textSecondary}
+          />
         </TouchableOpacity>
       </View>
 
@@ -151,41 +213,68 @@ const PostCard: React.FC<PostCardProps> = ({
       {/* Actions */}
       <View style={styles.actions}>
         <View style={styles.leftActions}>
-          <TouchableOpacity onPress={handleLike} style={styles.actionButton}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Ionicons
               name={isLiked ? "heart" : "heart-outline"}
               size={28}
-              color={isLiked ? "#E91E63" : "#000"}
+              color={isLiked ? "#FF3040" : colors.text}
+              style={{ marginRight: 2 }}
+              onPress={handleLike}
             />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onComment} style={styles.actionButton}>
-            <Ionicons name="chatbubble-outline" size={26} color="#000" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleShare} style={styles.actionButton}>
-            <Ionicons name="paper-plane-outline" size={26} color="#000" />
-          </TouchableOpacity>
+            <Text
+              style={{
+                color: colors.text,
+                fontWeight: "bold",
+                marginRight: 16,
+                fontSize: 18,
+              }}
+            >
+              {typeof likesCount === "number"
+                ? likesCount
+                : Array.isArray(likesCount as any)
+                ? (likesCount as any).length
+                : 0}
+            </Text>
+            <TouchableOpacity onPress={onComment}>
+              <Ionicons
+                name="chatbubble-outline"
+                size={26}
+                color={colors.text}
+                style={{ marginRight: 2 }}
+              />
+            </TouchableOpacity>
+            <Text
+              style={{
+                color: colors.text,
+                fontWeight: "bold",
+                marginRight: 16,
+                fontSize: 18,
+              }}
+            >
+              {post.comments}
+            </Text>
+            <TouchableOpacity onPress={handleShare}>
+              <Ionicons
+                name="paper-plane-outline"
+                size={26}
+                color={colors.text}
+                style={{ marginRight: 16 }}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
-        <TouchableOpacity>
-          <Ionicons name="bookmark-outline" size={26} color="#000" />
-        </TouchableOpacity>
+        <Ionicons name="bookmark-outline" size={26} color={colors.text} />
       </View>
 
-      {/* Likes and Caption */}
-      <View style={styles.content}>
-        <Text style={styles.likes}>{likesCount.toLocaleString()} likes</Text>
-        <View style={styles.captionContainer}>
-          <Text style={styles.username}>{post.user.username}</Text>
-          <Text style={styles.caption}> {post.caption}</Text>
+      {/* Kullanıcı adı ve caption sadece caption varsa gösterilecek */}
+      {post.caption ? (
+        <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+          <Text style={{ fontWeight: "bold", color: colors.text }}>
+            {post.user?.username || ""}
+          </Text>
+          <Text style={{ color: colors.text }}>{post.caption}</Text>
         </View>
-        {post.comments > 0 && (
-          <TouchableOpacity onPress={onComment}>
-            <Text style={styles.viewComments}>
-              View all {post.comments} comments
-            </Text>
-          </TouchableOpacity>
-        )}
-        <Text style={styles.timestamp}>{post.timestamp}</Text>
-      </View>
+      ) : null}
 
       {/* Share Modal */}
       <Modal
@@ -244,7 +333,6 @@ const PostCard: React.FC<PostCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "white",
     marginBottom: 16,
   },
   header: {
@@ -275,7 +363,6 @@ const styles = StyleSheet.create({
   },
   location: {
     fontSize: 12,
-    color: "#666",
     marginTop: 2,
   },
   postImage: {
@@ -293,36 +380,13 @@ const styles = StyleSheet.create({
   leftActions: {
     flexDirection: "row",
   },
-  actionButton: {
-    marginRight: 16,
-  },
   content: {
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
-  likes: {
-    fontWeight: "600",
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  captionContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 4,
-  },
   caption: {
     fontSize: 16,
     lineHeight: 20,
-  },
-  viewComments: {
-    color: "#666",
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  timestamp: {
-    color: "#666",
-    fontSize: 12,
-    textTransform: "uppercase",
   },
   // Modal styles
   modalContainer: {

@@ -10,6 +10,7 @@ import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../context/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
 
@@ -18,6 +19,7 @@ const CameraScreen: React.FC = () => {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<any>(null);
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   if (!permission) {
     return <View style={{ flex: 1, backgroundColor: "#000" }} />;

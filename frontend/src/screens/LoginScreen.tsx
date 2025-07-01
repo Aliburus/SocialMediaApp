@@ -14,19 +14,63 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useTheme } from "../context/ThemeContext";
+import { login as loginService } from "../services/authService";
+import { messages } from "../utils/messages";
 
 const { width } = Dimensions.get("window");
 
-const LoginScreen: React.FC = () => {
+type LoginScreenProps = {
+  onLogin?: (user: any) => void;
+  onGoToRegister?: () => void;
+};
+
+const LoginScreen: React.FC<LoginScreenProps> = ({
+  onLogin,
+  onGoToRegister,
+}) => {
   const navigation = useNavigation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const { colors, isDark } = useTheme();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleLogin = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const user = await loginService({ emailOrUsername: email, password });
+      setLoading(false);
+      if (onLogin) {
+        onLogin(user);
+      } else {
+        navigation.navigate("MainTabs" as never);
+      }
+    } catch (err: any) {
+      setLoading(false);
+      setError(err?.response?.data?.message || messages.loginFail);
+      console.log("Login error:", {
+        message: err?.message,
+        code: err?.code,
+        config: err?.config,
+        response: err?.response,
+        toJSON: err?.toJSON ? err.toJSON() : undefined,
+        full: err,
+      });
+    }
+  };
 
   return (
     <>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-      <SafeAreaView style={styles.container}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={colors.background}
+      />
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.keyboardView}
@@ -34,16 +78,23 @@ const LoginScreen: React.FC = () => {
           <View style={styles.content}>
             {/* Logo */}
             <View style={styles.logoContainer}>
-              <Text style={styles.logoText}>Instagram</Text>
+              {/* <Text style={[styles.logoText, { color: colors.text }]}>socialapp</Text> */}
             </View>
 
             {/* Form */}
             <View style={styles.formContainer}>
               <View style={styles.inputContainer}>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                    },
+                  ]}
                   placeholder="Telefon numarası, kullanıcı adı veya e-posta"
-                  placeholderTextColor="#8e8e8e"
+                  placeholderTextColor={colors.textSecondary}
                   value={email}
                   onChangeText={setEmail}
                   autoCapitalize="none"
@@ -53,9 +104,16 @@ const LoginScreen: React.FC = () => {
 
               <View style={styles.inputContainer}>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                    },
+                  ]}
                   placeholder="Şifre"
-                  placeholderTextColor="#8e8e8e"
+                  placeholderTextColor={colors.textSecondary}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -67,17 +125,42 @@ const LoginScreen: React.FC = () => {
                   <Ionicons
                     name={showPassword ? "eye" : "eye-off"}
                     size={20}
-                    color="#8e8e8e"
+                    color={colors.textSecondary}
                   />
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity style={styles.loginButton}>
-                <Text style={styles.loginButtonText}>Giriş Yap</Text>
+              <TouchableOpacity
+                style={[
+                  styles.loginButton,
+                  { backgroundColor: colors.primary },
+                ]}
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                <Text
+                  style={[styles.loginButtonText, { color: colors.background }]}
+                >
+                  {loading ? "..." : "Giriş Yap"}
+                </Text>
               </TouchableOpacity>
 
+              {error && (
+                <Text
+                  style={{
+                    color: colors.error,
+                    textAlign: "center",
+                    marginTop: 8,
+                  }}
+                >
+                  {error}
+                </Text>
+              )}
+
               <TouchableOpacity style={styles.forgotPassword}>
-                <Text style={styles.forgotPasswordText}>
+                <Text
+                  style={[styles.forgotPasswordText, { color: colors.primary }]}
+                >
                   Şifreni mi unuttun?
                 </Text>
               </TouchableOpacity>
@@ -85,28 +168,40 @@ const LoginScreen: React.FC = () => {
 
             {/* Divider */}
             <View style={styles.dividerContainer}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>YA DA</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Facebook Login */}
-            <TouchableOpacity style={styles.facebookButton}>
-              <Ionicons name="logo-facebook" size={20} color="#1877f2" />
-              <Text style={styles.facebookButtonText}>
-                Facebook ile devam et
+              <View
+                style={[styles.dividerLine, { backgroundColor: colors.border }]}
+              />
+              <Text
+                style={[styles.dividerText, { color: colors.textSecondary }]}
+              >
+                YA DA
               </Text>
-            </TouchableOpacity>
+              <View
+                style={[styles.dividerLine, { backgroundColor: colors.border }]}
+              />
+            </View>
           </View>
 
           {/* Bottom */}
           <View style={styles.bottomContainer}>
             <View style={styles.signupContainer}>
-              <Text style={styles.signupText}>Hesabın yok mu? </Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate("Register" as never)}
+              <Text
+                style={[styles.signupText, { color: colors.textSecondary }]}
               >
-                <Text style={styles.signupLink}>Kaydol.</Text>
+                Hesabın yok mu?{" "}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (onGoToRegister) {
+                    onGoToRegister();
+                  } else {
+                    navigation.navigate("Register" as never);
+                  }
+                }}
+              >
+                <Text style={[styles.signupLink, { color: colors.primary }]}>
+                  Kaydol.
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -119,7 +214,6 @@ const LoginScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
   },
   keyboardView: {
     flex: 1,
@@ -136,7 +230,6 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 32,
     fontWeight: "300",
-    color: "#000",
     fontFamily: Platform.OS === "ios" ? "Billabong" : "serif",
   },
   formContainer: {
@@ -147,14 +240,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   input: {
-    backgroundColor: "#fafafa",
     borderWidth: 1,
-    borderColor: "#dbdbdb",
     borderRadius: 5,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 14,
-    color: "#262626",
   },
   eyeButton: {
     position: "absolute",
@@ -163,14 +253,12 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   loginButton: {
-    backgroundColor: "#0095f6",
     borderRadius: 5,
     paddingVertical: 14,
     alignItems: "center",
     marginTop: 12,
   },
   loginButtonText: {
-    color: "#fff",
     fontSize: 14,
     fontWeight: "600",
   },
@@ -179,7 +267,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   forgotPasswordText: {
-    color: "#00376b",
     fontSize: 12,
   },
   dividerContainer: {
@@ -190,25 +277,11 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#dbdbdb",
   },
   dividerText: {
-    color: "#8e8e8e",
     fontSize: 13,
     fontWeight: "600",
     marginHorizontal: 18,
-  },
-  facebookButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-  },
-  facebookButtonText: {
-    color: "#1877f2",
-    fontSize: 14,
-    fontWeight: "600",
-    marginLeft: 8,
   },
   bottomContainer: {
     paddingBottom: 20,
@@ -219,14 +292,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 20,
     borderTopWidth: 1,
-    borderTopColor: "#dbdbdb",
   },
   signupText: {
-    color: "#8e8e8e",
     fontSize: 12,
   },
   signupLink: {
-    color: "#0095f6",
     fontSize: 12,
     fontWeight: "600",
   },

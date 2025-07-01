@@ -15,6 +15,7 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { mockUsers, mockPosts } from "../data/mockData";
+import { useTheme } from "../context/ThemeContext";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -23,6 +24,7 @@ const SearchScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"posts" | "users">("posts");
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   const filteredUsers = mockUsers.filter(
     (user) =>
@@ -35,18 +37,26 @@ const SearchScreen: React.FC = () => {
       <Image source={{ uri: item.avatar }} style={styles.userAvatar} />
       <View style={styles.userInfo}>
         <View style={styles.usernameContainer}>
-          <Text style={styles.username}>{item.username}</Text>
+          <Text style={[styles.username, { color: colors.text }]}>
+            {item.username}
+          </Text>
           {item.isVerified && (
             <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" />
           )}
         </View>
-        <Text style={styles.fullName}>{item.fullName}</Text>
-        <Text style={styles.followersCount}>
+        <Text style={[styles.fullName, { color: colors.textSecondary }]}>
+          {item.fullName}
+        </Text>
+        <Text style={[styles.followersCount, { color: colors.textSecondary }]}>
           {item.followersCount.toLocaleString()} followers
         </Text>
       </View>
-      <TouchableOpacity style={styles.followButton}>
-        <Text style={styles.followButtonText}>Follow</Text>
+      <TouchableOpacity
+        style={[styles.followButton, { backgroundColor: colors.primary }]}
+      >
+        <Text style={[styles.followButtonText, { color: colors.background }]}>
+          Follow
+        </Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -59,56 +69,82 @@ const SearchScreen: React.FC = () => {
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: "white" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       edges={["top", "bottom"]}
     >
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.searchContainer}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <View
+          style={[styles.searchContainer, { backgroundColor: colors.surface }]}
+        >
           <Ionicons
             name="search"
             size={20}
-            color="#666"
+            color={colors.textSecondary}
             style={styles.searchIcon}
           />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text }]}
             placeholder="Search users and posts..."
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholderTextColor="#666"
+            placeholderTextColor={colors.textSecondary}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery("")}>
-              <Ionicons name="close-circle" size={20} color="#666" />
+              <Ionicons
+                name="close-circle"
+                size={20}
+                color={colors.textSecondary}
+              />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
       {/* Tabs */}
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === "posts" && styles.activeTab]}
+          style={[
+            styles.tab,
+            activeTab === "posts" && [
+              styles.activeTab,
+              { borderBottomColor: colors.primary },
+            ],
+          ]}
           onPress={() => setActiveTab("posts")}
         >
           <Text
             style={[
               styles.tabText,
-              activeTab === "posts" && styles.activeTabText,
+              { color: colors.textSecondary },
+              activeTab === "posts" && [
+                styles.activeTabText,
+                { color: colors.primary },
+              ],
             ]}
           >
             Posts
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === "users" && styles.activeTab]}
+          style={[
+            styles.tab,
+            activeTab === "users" && [
+              styles.activeTab,
+              { borderBottomColor: colors.primary },
+            ],
+          ]}
           onPress={() => setActiveTab("users")}
         >
           <Text
             style={[
               styles.tabText,
-              activeTab === "users" && styles.activeTabText,
+              { color: colors.textSecondary },
+              activeTab === "users" && [
+                styles.activeTabText,
+                { color: colors.primary },
+              ],
             ]}
           >
             Users
@@ -142,18 +178,15 @@ const SearchScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "white",
   },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F5F5F5",
     borderRadius: 25,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -164,12 +197,10 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: "#333",
   },
   tabContainer: {
     flexDirection: "row",
     borderBottomWidth: 1,
-    borderBottomColor: "#E5E5E5",
   },
   tab: {
     flex: 1,
@@ -178,15 +209,12 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: "#E91E63",
   },
   tabText: {
     fontSize: 16,
-    color: "#666",
     fontWeight: "500",
   },
   activeTabText: {
-    color: "#E91E63",
     fontWeight: "600",
   },
   usersList: {
@@ -197,7 +225,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#F5F5F5",
   },
   userAvatar: {
     width: 50,
@@ -219,22 +246,18 @@ const styles = StyleSheet.create({
   },
   fullName: {
     fontSize: 14,
-    color: "#666",
     marginTop: 2,
   },
   followersCount: {
     fontSize: 12,
-    color: "#666",
     marginTop: 2,
   },
   followButton: {
-    backgroundColor: "#E91E63",
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
   },
   followButtonText: {
-    color: "white",
     fontWeight: "600",
     fontSize: 14,
   },

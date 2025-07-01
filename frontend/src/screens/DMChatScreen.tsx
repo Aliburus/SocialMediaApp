@@ -14,6 +14,7 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
+import { useTheme } from "../context/ThemeContext";
 
 const mockMessages = [
   { id: "1", fromMe: false, text: "Selam!" },
@@ -27,16 +28,14 @@ const DMChatScreen: React.FC = () => {
   const navigation = useNavigation();
   const { user } = (route.params as any) || {};
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: "white" }}
-      edges={["bottom"]}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Üst bar */}
-      <View style={styles.header}>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={26} color="#222" />
+          <Ionicons name="arrow-back" size={26} color={colors.text} />
         </TouchableOpacity>
         <Image
           source={{
@@ -44,7 +43,9 @@ const DMChatScreen: React.FC = () => {
           }}
           style={styles.avatar}
         />
-        <Text style={styles.username}>{user?.username || "kullanici"}</Text>
+        <Text style={[styles.username, { color: colors.text }]}>
+          {user?.username || "kullanici"}
+        </Text>
       </View>
       {/* Mesajlar */}
       <FlatList
@@ -54,24 +55,44 @@ const DMChatScreen: React.FC = () => {
           <View
             style={[
               styles.messageBubble,
-              item.fromMe ? styles.myMessage : styles.theirMessage,
+              item.fromMe
+                ? [styles.myMessage, { backgroundColor: colors.primary }]
+                : [styles.theirMessage, { backgroundColor: colors.surface }],
             ]}
           >
-            <Text style={styles.messageText}>{item.text}</Text>
+            <Text
+              style={[
+                styles.messageText,
+                { color: item.fromMe ? colors.background : colors.text },
+              ]}
+            >
+              {item.text}
+            </Text>
           </View>
         )}
         contentContainerStyle={styles.messagesList}
         inverted
       />
       {/* Mesaj yazma kutusu */}
-      <View style={[styles.inputBar, { bottom: insets.bottom + 8 }]}>
+      <View
+        style={[
+          styles.inputBar,
+          {
+            borderTopColor: colors.border,
+            backgroundColor: colors.background,
+          },
+        ]}
+      >
         <TextInput
-          style={styles.input}
+          style={[
+            styles.input,
+            { color: colors.text, backgroundColor: colors.surface },
+          ]}
           placeholder="Mesaj yaz..."
-          placeholderTextColor="#888"
+          placeholderTextColor={colors.textSecondary}
         />
         <TouchableOpacity>
-          <Ionicons name="send" size={24} color="#E91E63" />
+          <Ionicons name="send" size={24} color={colors.primary} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -81,7 +102,6 @@ const DMChatScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
   },
   header: {
     flexDirection: "row",
@@ -89,7 +109,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
   },
   avatar: {
     width: 38,
@@ -100,7 +119,6 @@ const styles = StyleSheet.create({
   username: {
     fontWeight: "bold",
     fontSize: 18,
-    color: "#222",
   },
   messagesList: {
     flexGrow: 1,
@@ -115,31 +133,24 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   myMessage: {
-    backgroundColor: "#E91E63",
     alignSelf: "flex-end",
   },
   theirMessage: {
-    backgroundColor: "#eee",
     alignSelf: "flex-start",
   },
   messageText: {
-    color: "#222",
     fontSize: 15,
   },
   inputBar: {
     flexDirection: "row",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#eee",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#fff",
   },
   input: {
     flex: 1,
     fontSize: 16,
-    color: "#222",
-    backgroundColor: "#f5f5f5",
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,
