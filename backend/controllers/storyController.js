@@ -15,7 +15,10 @@ exports.createStory = async (req, res) => {
 exports.getAllStories = async (req, res) => {
   try {
     const userId = req.query.userId;
-    const stories = await Story.find()
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const stories = await Story.find({
+      timestamp: { $gte: twentyFourHoursAgo },
+    })
       .populate("user", "_id username avatar isVerified")
       .sort({ createdAt: -1 });
     const result = stories.map((story) => {

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
+  RefreshControl,
+  InteractionManager,
+  Alert,
 } from "react-native";
 import {
   SafeAreaView,
@@ -14,10 +17,156 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { mockNotifications } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
+import {
+  getNotifications,
+  acceptFollowRequest,
+  rejectFollowRequest,
+  followUser,
+} from "../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { StackNavigationProp } from "@react-navigation/stack";
+import { Swipeable } from "react-native-gesture-handler";
 
-const NotificationsScreen: React.FC = () => {
+type RootStackParamList = {
+  UserProfile: { user: any };
+  // diğer ekranlar...
+};
+
+function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const [followedIds, setFollowedIds] = useState<string[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Bildirimleri getir fonksiyonu
+  const fetchNotifications = async (uid: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const notifs = await getNotifications(uid);
+      setNotifications(notifs);
+      const followed = (notifs as any[])
+        .filter(
+          (n: any) =>
+            n.type === "follow" &&
+            n.status === "accepted" &&
+            Array.isArray(n.user?.followers) &&
+            n.user.followers.some((f: any) => (f._id || f) == uid)
+        )
+        .map((n: any) => n.user?._id || n.user?.id)
+        .filter(Boolean);
+      setFollowedIds(followed);
+    } catch (err) {
+      setError("Bildirimler yüklenemedi");
+    }
+    setLoading(false);
+  };
+
+  // Kullanıcıyı al
+  useEffect(() => {
+    (async () => {
+      try {
+        const userStr = await AsyncStorage.getItem("user");
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        setUserId(userObj?._id || userObj?.id || null);
+      } catch (err) {
+        setUserId(null);
+      }
+    })();
+  }, []);
+
+  // userId değişince veya sayfa açılınca bildirimleri getir
+  useFocusEffect(
+    React.useCallback(() => {
+      if (userId) {
+        fetchNotifications(userId);
+      }
+    }, [userId])
+  );
+
+  // Pull to refresh fonksiyonu
+  const onRefresh = async () => {
+    if (!userId) return;
+    setRefreshing(true);
+    InteractionManager.runAfterInteractions(async () => {
+      await fetchNotifications(userId);
+      setRefreshing(false);
+    });
+  };
+
+  const handleAccept = async (notifId: string, requesterId: string) => {
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      if (!userId) return;
+      await acceptFollowRequest(userId, requesterId);
+      setNotifications((prev) =>
+        prev.map((notif) =>
+          notif.id === notifId ? { ...notif, status: "accepted" } : notif
+        )
+      );
+    } catch (err) {
+      // Hata yönetimi eklenebilir
+    }
+  };
+  const handleReject = async (notifId: string, requesterId: string) => {
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      if (!userId) return;
+      await rejectFollowRequest(userId, requesterId);
+      setNotifications((prev) => prev.filter((notif) => notif.id !== notifId));
+    } catch (err) {
+      // Hata yönetimi eklenebilir
+    }
+  };
+  const handleFollowToggle = (notifId: string) => {
+    setNotifications((prev) =>
+      prev.map((notif) =>
+        notif.id === notifId
+          ? {
+              ...notif,
+              user: {
+                ...notif.user,
+                isFollowing: !notif.user.isFollowing,
+              },
+            }
+          : notif
+      )
+    );
+  };
+  const handleFollowBack = async (userId: string) => {
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const currentUserId = userObj?._id || userObj?.id;
+      if (!currentUserId) return;
+      await followUser(currentUserId, userId);
+      setFollowedIds((prev) => [...prev, userId]);
+    } catch (err) {
+      // Hata yönetimi eklenebilir
+    }
+  };
+
+  const handleMarkAsRead = (notifId: string) => {
+    setNotifications((prev) =>
+      prev.map((notif) =>
+        notif.id === notifId ? { ...notif, isRead: true } : notif
+      )
+    );
+  };
+
+  const handleDeleteNotification = (notifId: string) => {
+    setNotifications((prev) => prev.filter((notif) => notif.id !== notifId));
+  };
 
   const renderNotificationItem = ({ item }: { item: any }) => {
     const getNotificationIcon = () => {
@@ -43,70 +192,284 @@ const NotificationsScreen: React.FC = () => {
       }
     };
 
-    return (
-      <TouchableOpacity
-        style={[
-          styles.notificationItem,
-          !item.isRead && [
-            styles.unreadNotification,
-            { backgroundColor: colors.surface },
-          ],
-          { backgroundColor: colors.background },
-        ]}
+    // Swipeable sağdan sola kaydırınca silme
+    const renderRightActions = () => (
+      <View
+        style={{
+          width: 80,
+          backgroundColor: "red",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100%",
+        }}
       >
-        <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
-        <View style={styles.notificationContent}>
-          <View style={styles.notificationText}>
-            <Text style={[styles.username, { color: colors.text }]}>
-              {item.user.username}
-            </Text>
-            <Text style={[styles.notificationMessage, { color: colors.text }]}>
-              {" "}
-              {item.text}
+        <Ionicons name="trash" size={32} color="#fff" />
+      </View>
+    );
+
+    return (
+      <Swipeable
+        renderRightActions={renderRightActions}
+        onSwipeableOpen={() => {
+          Alert.alert(
+            "Bildirimi Sil",
+            "Bu bildirimi silmek istediğine emin misin?",
+            [
+              { text: "İptal", style: "cancel" },
+              {
+                text: "Sil",
+                style: "destructive",
+                onPress: () => handleDeleteNotification(item.id),
+              },
+            ]
+          );
+        }}
+      >
+        <TouchableOpacity
+          style={[
+            styles.notificationItem,
+            item.isRead
+              ? { backgroundColor: "#ffdddd" } // Okunduysa kırmızımsı arka plan
+              : [
+                  styles.unreadNotification,
+                  { backgroundColor: colors.surface },
+                ],
+            { backgroundColor: colors.background },
+          ]}
+          onPress={() => handleMarkAsRead(item.id)}
+        >
+          <Image
+            source={{ uri: item.user?.avatar || item.from?.avatar }}
+            style={styles.avatar}
+          />
+          <View style={styles.notificationContent}>
+            <View style={styles.notificationText}>
+              <Text style={[styles.username, { color: colors.text }]}>
+                {item.user?.username || item.from?.username}
+              </Text>
+              {typeof item.user?.followersCount === "number" &&
+                typeof item.user?.followingCount === "number" && (
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                      Takipçi: {item.user.followersCount}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                      Takip: {item.user.followingCount}
+                    </Text>
+                  </View>
+                )}
+              <Text
+                style={[styles.notificationMessage, { color: colors.text }]}
+              >
+                {" "}
+                {item.text}
+              </Text>
+            </View>
+            <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+              {item.timestamp}
             </Text>
           </View>
-          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-            {item.timestamp}
-          </Text>
-        </View>
-        <View style={styles.notificationIcon}>{getNotificationIcon()}</View>
-        {item.post && (
-          <Image
-            source={{ uri: item.post.image }}
-            style={styles.postThumbnail}
-          />
-        )}
-      </TouchableOpacity>
+          <View style={styles.notificationIcon}>{getNotificationIcon()}</View>
+          {item.post && (
+            <Image
+              source={{ uri: item.post.image }}
+              style={styles.postThumbnail}
+            />
+          )}
+        </TouchableOpacity>
+      </Swipeable>
     );
   };
 
-  return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: colors.background }]}
-    >
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Notifications
-        </Text>
-        <TouchableOpacity>
-          <Ionicons name="checkmark-done" size={24} color={colors.primary} />
+  const renderNotif = ({ item }: { item: any }) => {
+    const isFollowed =
+      Array.isArray(item.user?.followers) &&
+      userId &&
+      item.user.followers.some((f: any) => (f._id || f) == userId);
+    const goToProfile = () => {
+      const userParam = item.user?._id
+        ? { ...item.user, id: item.user._id }
+        : item.user;
+      navigation.navigate("UserProfile", { user: userParam });
+    };
+    if (item.type === "follow" && item.status === "pending") {
+      return (
+        <TouchableOpacity
+          onPress={goToProfile}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            padding: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            backgroundColor: colors.background,
+          }}
+        >
+          <Image
+            source={{ uri: item.user?.avatar || item.from?.avatar }}
+            style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text }}>
+              <Text style={{ fontWeight: "bold" }}>
+                {item.user?.username || item.from?.username}
+              </Text>{" "}
+              seni takip etmek istiyor
+            </Text>
+            <View style={{ flexDirection: "row", marginTop: 8 }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: colors.primary,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 6,
+                  marginRight: 8,
+                }}
+                onPress={() =>
+                  handleAccept(item.id, item.user?._id || item.from?._id)
+                }
+              >
+                <Text style={{ color: colors.background, fontWeight: "bold" }}>
+                  Kabul Et
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: colors.error,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderRadius: 6,
+                }}
+                onPress={() =>
+                  handleReject(item.id, item.user?._id || item.from?._id)
+                }
+              >
+                <Text style={{ color: colors.background, fontWeight: "bold" }}>
+                  Sil
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </TouchableOpacity>
-      </View>
+      );
+    }
+    if (item.type === "follow" && item.status === "accepted") {
+      return (
+        <TouchableOpacity
+          onPress={goToProfile}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            padding: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            backgroundColor: colors.background,
+          }}
+        >
+          <Image
+            source={{ uri: item.user?.avatar || item.from?.avatar }}
+            style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }}
+          />
+          <Text style={{ color: colors.text, flex: 1 }}>
+            <Text style={{ fontWeight: "bold" }}>
+              {item.user?.username || item.from?.username}
+            </Text>{" "}
+            ile artık birbirinizi takip ediyorsunuz
+          </Text>
+          <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+          {!isFollowed && (
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.primary,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 6,
+                marginLeft: 8,
+              }}
+              onPress={() => handleFollowBack(item.user?._id || item.user?.id)}
+            >
+              <Text style={{ color: colors.background, fontWeight: "bold" }}>
+                Geri Takip Et
+              </Text>
+            </TouchableOpacity>
+          )}
+          {isFollowed && (
+            <View
+              style={{
+                backgroundColor: colors.success,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 6,
+                marginLeft: 8,
+              }}
+            >
+              <Text style={{ color: colors.background, fontWeight: "bold" }}>
+                Takiptesin
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    }
+    return renderNotificationItem({ item });
+  };
 
-      <FlatList
-        data={mockNotifications}
-        renderItem={renderNotificationItem}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          ...styles.notificationsList,
-          paddingBottom: 16,
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <View
+        style={{
+          padding: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
         }}
-      />
+      >
+        <Text style={{ fontSize: 20, fontWeight: "bold", color: colors.text }}>
+          Bildirimler
+        </Text>
+      </View>
+      {loading ? (
+        <Text
+          style={{
+            textAlign: "center",
+            marginTop: 32,
+            color: colors.textSecondary,
+          }}
+        >
+          Yükleniyor...
+        </Text>
+      ) : error ? (
+        <Text
+          style={{
+            textAlign: "center",
+            marginTop: 32,
+            color: colors.error,
+          }}
+        >
+          {error}
+        </Text>
+      ) : notifications.length === 0 ? (
+        <Text
+          style={{
+            textAlign: "center",
+            marginTop: 32,
+            color: colors.textSecondary,
+          }}
+        >
+          Hiç bildirimin yok.
+        </Text>
+      ) : (
+        <FlatList
+          data={notifications}
+          renderItem={renderNotif}
+          keyExtractor={(_, i) => i.toString()}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        />
+      )}
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

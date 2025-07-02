@@ -19,20 +19,23 @@ const StoryItem: React.FC<StoryItemProps> = ({
   return (
     <TouchableOpacity onPress={onPress} style={styles.container}>
       <View style={styles.imageContainer}>
-        {isActive ? (
-          <View style={styles.innerBorder}>
-            <Image source={{ uri: story.user.avatar }} style={styles.avatar} />
-          </View>
-        ) : isViewed ? (
-          <View style={styles.viewedBorder}>
-            <Image source={{ uri: story.user.avatar }} style={styles.avatar} />
+        {isViewed ? (
+          <View style={styles.outerBorderGray}>
+            <View style={styles.innerBlackCircle}>
+              <Image
+                source={{ uri: story.user.avatar }}
+                style={styles.avatar}
+              />
+            </View>
           </View>
         ) : (
           <LinearGradient
-            colors={["#E91E63", "#F06292", "#FF9800"]}
-            style={styles.gradient}
+            colors={["#f09433", "#e6683c", "#dc2743", "#cc2366", "#bc1888"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.outerBorderGradient}
           >
-            <View style={styles.innerBorder}>
+            <View style={styles.innerBlackCircle}>
               <Image
                 source={{ uri: story.user.avatar }}
                 style={styles.avatar}
@@ -52,46 +55,48 @@ const styles = StyleSheet.create({
   container: {
     alignItems: "center",
     marginRight: 8,
-    width: 60,
+    width: 70,
   },
   imageContainer: {
     marginBottom: 4,
   },
-  gradient: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  outerBorderGradient: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     justifyContent: "center",
     alignItems: "center",
+    padding: 3,
   },
-  innerBorder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "white",
+  outerBorderGray: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 3,
+    borderColor: "#333333",
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#000",
   },
-  viewedBorder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: "#E5E5E5",
+  innerBlackCircle: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    backgroundColor: "#000",
     justifyContent: "center",
     alignItems: "center",
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
   username: {
-    fontSize: 11,
+    fontSize: 13,
     textAlign: "center",
-    color: "#333",
+    color: "#ccc",
     marginTop: 2,
-    maxWidth: 60,
+    maxWidth: 70,
   },
 });
 

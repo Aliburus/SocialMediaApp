@@ -17,7 +17,7 @@ import {
 } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { toggleLike, savePost } from "../services/api";
+import { toggleLike, savePost, getComments } from "../services/api";
 
 const { width } = Dimensions.get("window");
 
@@ -81,6 +81,32 @@ const friendsList = [
   },
 ];
 
+// Tarihi güzel formatta gösteren fonksiyon
+const timeAgo = (date: string | Date) => {
+  if (!date) return "";
+  const now = new Date();
+  const past = new Date(date);
+  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+  if (diffInSeconds < 60) {
+    return "Az önce";
+  } else if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `${minutes} dakika önce`;
+  } else if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `${hours} saat önce`;
+  } else if (diffInSeconds < 2592000) {
+    const days = Math.floor(diffInSeconds / 86400);
+    return `${days} gün önce`;
+  } else if (diffInSeconds < 31536000) {
+    const months = Math.floor(diffInSeconds / 2592000);
+    return `${months} ay önce`;
+  } else {
+    const years = Math.floor(diffInSeconds / 31536000);
+    return `${years} yıl önce`;
+  }
+};
+
 const PostCard: React.FC<PostCardProps> = ({
   post,
   onPress,
@@ -101,6 +127,8 @@ const PostCard: React.FC<PostCardProps> = ({
   const { colors } = useTheme();
   const [likeLocked, setLikeLocked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [comments, setComments] = useState<any[]>([]);
+  const [showFullCaption, setShowFullCaption] = useState(false);
 
   // Like işlemi için debounce
   const likeTimeout = React.useRef<NodeJS.Timeout | null>(null);
@@ -109,12 +137,14 @@ const PostCard: React.FC<PostCardProps> = ({
     ? (post as any).savedBy
     : [];
 
+  const captionText = post.caption || post.description || "";
+
   useEffect(() => {
     const checkLiked = async () => {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
       if (userObj?._id && Array.isArray(post.likes)) {
-        setIsLiked(post.likes.includes(userObj._id));
+        setIsLiked((post.likes as any[]).includes(userObj._id));
       }
     };
     checkLiked();
@@ -128,20 +158,23 @@ const PostCard: React.FC<PostCardProps> = ({
       if (userId) {
         const saved = savedByArr.includes(userId);
         setIsSaved(saved);
-        console.log(
-          "[PostCard/useEffect] userId:",
-          userId,
-          "postId:",
-          (post as any)._id || post.id,
-          "post.savedBy:",
-          savedByArr,
-          "isSaved:",
-          saved
-        );
       }
     };
     checkSaved();
   }, [post.savedBy]);
+
+  useEffect(() => {
+    const fetchComments = async () => {
+      try {
+        const postId = post._id || post.id;
+        const commentList = await getComments(postId);
+        setComments(commentList);
+      } catch (err) {
+        setComments([]);
+      }
+    };
+    fetchComments();
+  }, [post]);
 
   const handleLike = async () => {
     if (likeLocked) return;
@@ -156,7 +189,7 @@ const PostCard: React.FC<PostCardProps> = ({
         setLikeLocked(false);
         return;
       }
-      const postId = (post as any)._id || post.id;
+      const postId = post._id || post.id;
       // Optimistic UI: sadece bir kez artır/azalt, 0'ın altına düşmesin
       if (!isLiked) setLikesCount((c: number) => c + 1);
       else setLikesCount((c: number) => (c > 0 ? c - 1 : 0));
@@ -184,7 +217,7 @@ const PostCard: React.FC<PostCardProps> = ({
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
-      const postId = (post as any)._id || post.id;
+      const postId = post._id || post.id;
       console.log(
         "[PostCard/handleSave] userId:",
         userId,
@@ -301,17 +334,74 @@ const PostCard: React.FC<PostCardProps> = ({
         </View>
       </View>
 
-      {/* Caption */}
-      {post.caption ? (
-        <View style={styles.captionContainer}>
-          <Text style={[styles.captionUsername, { color: colors.text }]}>
-            {post.user?.username || ""}
+      {/* Post Info */}
+      <View style={{ paddingHorizontal: 14, paddingBottom: 8 }}>
+        <Text style={{ color: colors.text, fontWeight: "bold", fontSize: 15 }}>
+          {typeof likesCount === "number"
+            ? likesCount + " beğeni"
+            : Array.isArray(likesCount as any)
+            ? (likesCount as any).length + " beğeni"
+            : "0 beğeni"}
+        </Text>
+        {(post.caption || post.description) && (
+          <View style={{ marginTop: 2 }}>
+            <Text
+              style={{ color: colors.text, flexWrap: "wrap" }}
+              numberOfLines={showFullCaption ? undefined : 2}
+              ellipsizeMode={showFullCaption ? undefined : "tail"}
+            >
+              <Text style={{ fontWeight: "bold" }}>
+                {post.user?.username || ""}{" "}
+              </Text>
+              {captionText}
+            </Text>
+            {!showFullCaption && captionText.length > 80 && (
+              <TouchableOpacity onPress={() => setShowFullCaption(true)}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 13,
+                    marginTop: 2,
+                  }}
+                >
+                  devamını gör
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+        {/* Yorumlar (en fazla 2 tane) */}
+        {comments.length > 0 && (
+          <View style={{ marginTop: 2 }}>
+            {comments.slice(0, 2).map((comment) => (
+              <View
+                key={comment._id || comment.id}
+                style={{ flexDirection: "row", flexWrap: "wrap" }}
+              >
+                <Text style={{ fontWeight: "bold", color: colors.text }}>
+                  {comment.user?.username}
+                </Text>
+                <Text style={{ color: colors.text }}> {comment.text}</Text>
+              </View>
+            ))}
+            {comments.length > 2 && (
+              <TouchableOpacity onPress={onComment}>
+                <Text style={{ color: colors.textSecondary }}>
+                  Tüm yorumları görüntüle ({comments.length})
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+        {/* Paylaşım tarihi */}
+        {(post.createdAt || post.timestamp) && (
+          <Text
+            style={{ color: colors.textSecondary, fontSize: 12, marginTop: 4 }}
+          >
+            {timeAgo(post.createdAt || post.timestamp)}
           </Text>
-          <Text style={[styles.caption, { color: colors.text }]}>
-            {post.caption}
-          </Text>
-        </View>
-      ) : null}
+        )}
+      </View>
 
       {/* Share Modal */}
       <Modal

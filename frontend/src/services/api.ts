@@ -12,8 +12,8 @@ const api = axios.create({
 export default api;
 
 // Tüm postları listele
-export const getAllPosts = async () => {
-  const res = await api.get("/posts");
+export const getAllPosts = async (userId?: string) => {
+  const res = await api.get("/posts" + (userId ? `?userId=${userId}` : ""));
   return res.data;
 };
 
@@ -99,5 +99,77 @@ export const savePost = async (userId: string, postId: string) => {
 // Kullanıcının kaydedilen postlarını getir
 export const getSavedPosts = async (userId: string) => {
   const res = await api.get(`/users/saved/${userId}`);
+  return res.data;
+};
+
+// Kullanıcıyı takip et
+export const followUser = async (userId: string, targetUserId: string) => {
+  const res = await api.post("/users/follow", { userId, targetUserId });
+  return res.data;
+};
+
+// Kullanıcıyı takipten çıkar
+export const unfollowUser = async (userId: string, targetUserId: string) => {
+  const res = await api.post("/users/unfollow", { userId, targetUserId });
+  return res.data;
+};
+
+// Username'e göre kullanıcı arama
+export const searchUsers = async (query: string) => {
+  const res = await api.get(`/users/search?q=${encodeURIComponent(query)}`);
+  return res.data;
+};
+
+// Takip isteği gönder
+export const sendFollowRequest = async (
+  userId: string,
+  targetUserId: string
+) => {
+  const res = await api.post("/users/send-follow-request", {
+    userId,
+    targetUserId,
+  });
+  return res.data;
+};
+
+// Takip isteğini iptal et
+export const cancelFollowRequest = async (
+  userId: string,
+  targetUserId: string
+) => {
+  const res = await api.post("/users/cancel-follow-request", {
+    userId,
+    targetUserId,
+  });
+  return res.data;
+};
+
+// Takip isteğini kabul et
+export const acceptFollowRequest = async (
+  userId: string,
+  requesterId: string
+) => {
+  const res = await api.post("/users/accept-follow-request", {
+    userId,
+    requesterId,
+  });
+  return res.data;
+};
+
+// Takip isteğini reddet
+export const rejectFollowRequest = async (
+  userId: string,
+  requesterId: string
+) => {
+  const res = await api.post("/users/reject-follow-request", {
+    userId,
+    requesterId,
+  });
+  return res.data;
+};
+
+// Bildirimleri getir
+export const getNotifications = async (userId: string) => {
+  const res = await api.get(`/users/notifications/${userId}`);
   return res.data;
 };

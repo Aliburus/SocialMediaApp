@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,13 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { mockUsers, mockPosts } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
+import {
+  searchUsers as searchUsersApi,
+  sendFollowRequest,
+  cancelFollowRequest,
+} from "../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -23,43 +30,176 @@ const imageSize = (width - 6) / 3;
 const SearchScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"posts" | "users">("posts");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const searchInputRef = useRef<TextInput>(null);
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [requestSentMap, setRequestSentMap] = useState<{
+    [userId: string]: boolean;
+  }>({});
+  const [loadingMap, setLoadingMap] = useState<{ [userId: string]: boolean }>(
+    {}
+  );
+  const navigation = useNavigation<any>();
 
-  const filteredUsers = mockUsers.filter(
-    (user) =>
-      user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.fullName.toLowerCase().includes(searchQuery.toLowerCase())
+  useEffect(() => {
+    (async () => {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      setCurrentUserId(userObj?._id || userObj?.id || "");
+    })();
+  }, []);
+
+  // Arama sonuçları değiştiğinde requestSentMap'i güncelle
+  useEffect(() => {
+    if (!currentUserId) return;
+    const newMap: { [userId: string]: boolean } = {};
+    searchResults.forEach((u) => {
+      const userId = u._id || u.id;
+      newMap[userId] =
+        u.pendingFollowRequests?.includes(currentUserId) || false;
+    });
+    setRequestSentMap(newMap);
+  }, [searchResults, currentUserId]);
+
+  // Arama fonksiyonu
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    if (query.length > 0) {
+      setLoading(true);
+      try {
+        const results = await searchUsersApi(query);
+        setSearchResults(results);
+      } catch (err) {
+        setSearchResults([]);
+      }
+      setLoading(false);
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  const filteredUsers = mockUsers.filter((user) =>
+    user.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const renderUserItem = ({ item }: { item: any }) => (
-    <TouchableOpacity style={styles.userItem}>
-      <Image source={{ uri: item.avatar }} style={styles.userAvatar} />
-      <View style={styles.userInfo}>
-        <View style={styles.usernameContainer}>
-          <Text style={[styles.username, { color: colors.text }]}>
-            {item.username}
-          </Text>
-          {item.isVerified && (
-            <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" />
-          )}
-        </View>
-        <Text style={[styles.fullName, { color: colors.textSecondary }]}>
-          {item.fullName}
-        </Text>
-        <Text style={[styles.followersCount, { color: colors.textSecondary }]}>
-          {item.followersCount.toLocaleString()} followers
-        </Text>
-      </View>
+  const handleSendRequest = async (userId: string) => {
+    setLoadingMap((prev) => ({ ...prev, [userId]: true }));
+    try {
+      await sendFollowRequest(currentUserId, userId);
+      setRequestSentMap((prev) => ({ ...prev, [userId]: true }));
+      setSearchResults((prev) =>
+        prev.map((u) =>
+          u._id === userId || u.id === userId
+            ? {
+                ...u,
+                pendingFollowRequests: [
+                  ...(u.pendingFollowRequests || []),
+                  currentUserId,
+                ],
+              }
+            : u
+        )
+      );
+      console.log(`Takip isteği gönderildi: ${userId}`);
+    } catch (err) {
+      console.log("Takip isteği gönderilemedi:", err);
+    }
+    setLoadingMap((prev) => ({ ...prev, [userId]: false }));
+  };
+
+  const handleCancelRequest = async (userId: string) => {
+    setLoadingMap((prev) => ({ ...prev, [userId]: true }));
+    try {
+      await cancelFollowRequest(currentUserId, userId);
+      setRequestSentMap((prev) => ({ ...prev, [userId]: false }));
+      setSearchResults((prev) =>
+        prev.map((u) =>
+          u._id === userId || u.id === userId
+            ? {
+                ...u,
+                pendingFollowRequests: (u.pendingFollowRequests || []).filter(
+                  (id: string) => id !== currentUserId
+                ),
+              }
+            : u
+        )
+      );
+      console.log(`Takip isteği iptal edildi: ${userId}`);
+    } catch (err) {
+      console.log("Takip isteği iptal edilemedi:", err);
+    }
+    setLoadingMap((prev) => ({ ...prev, [userId]: false }));
+  };
+
+  const renderUserItem = ({ item }: { item: any }) => {
+    if (!item || !item.username) return null;
+    const userId = item._id || item.id;
+    const requestSent =
+      requestSentMap[userId] ??
+      (item.pendingFollowRequests?.includes(currentUserId) ||
+        item.sentFollowRequests?.includes(userId));
+    const loading = loadingMap[userId] || false;
+    return (
       <TouchableOpacity
-        style={[styles.followButton, { backgroundColor: colors.primary }]}
+        style={styles.userItem}
+        onPress={() => navigation.navigate("UserProfile", { user: item })}
       >
-        <Text style={[styles.followButtonText, { color: colors.background }]}>
-          Follow
-        </Text>
+        <Image
+          source={{
+            uri: item.avatar || "https://ui-avatars.com/api/?name=User",
+          }}
+          style={styles.userAvatar}
+        />
+        <View style={styles.userInfo}>
+          <View style={styles.usernameContainer}>
+            <Text style={[styles.username, { color: colors.text }]}>
+              {" "}
+              {item.username || "Kullanıcı"}
+            </Text>
+            {item.isVerified && (
+              <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" />
+            )}
+          </View>
+        </View>
+        {userId !== currentUserId &&
+          (requestSent ? (
+            <TouchableOpacity
+              style={[
+                styles.followButton,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.primary,
+                  borderWidth: 1,
+                },
+              ]}
+              onPress={() => handleCancelRequest(userId)}
+              disabled={loading}
+            >
+              <Text
+                style={[styles.followButtonText, { color: colors.primary }]}
+              >
+                İsteği İptal Et
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.followButton, { backgroundColor: colors.primary }]}
+              onPress={() => handleSendRequest(userId)}
+              disabled={loading}
+            >
+              <Text
+                style={[styles.followButtonText, { color: colors.background }]}
+              >
+                Takip Et
+              </Text>
+            </TouchableOpacity>
+          ))}
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const renderPostItem = ({ item }: { item: any }) => (
     <TouchableOpacity style={styles.postItem}>
@@ -73,9 +213,22 @@ const SearchScreen: React.FC = () => {
       edges={["top", "bottom"]}
     >
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            borderBottomColor: colors.border,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          },
+        ]}
+      >
         <View
-          style={[styles.searchContainer, { backgroundColor: colors.surface }]}
+          style={[
+            styles.searchContainer,
+            { backgroundColor: colors.surface, flex: 1 },
+          ]}
         >
           <Ionicons
             name="search"
@@ -84,14 +237,18 @@ const SearchScreen: React.FC = () => {
             style={styles.searchIcon}
           />
           <TextInput
+            ref={searchInputRef}
             style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Search users and posts..."
+            placeholder="Kullanıcı ara..."
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={handleSearch}
             placeholderTextColor={colors.textSecondary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
+            <TouchableOpacity onPress={() => handleSearch("")}>
               <Ionicons
                 name="close-circle"
                 size={20}
@@ -100,6 +257,15 @@ const SearchScreen: React.FC = () => {
             </TouchableOpacity>
           )}
         </View>
+        <TouchableOpacity
+          style={{ marginLeft: 12 }}
+          onPress={() => {
+            searchInputRef.current?.focus();
+            setActiveTab("users");
+          }}
+        >
+          <Ionicons name="search" size={24} color={colors.primary} />
+        </TouchableOpacity>
       </View>
 
       {/* Tabs */}
@@ -155,9 +321,9 @@ const SearchScreen: React.FC = () => {
       {/* Content */}
       {activeTab === "users" ? (
         <FlatList
-          data={searchQuery ? filteredUsers : mockUsers}
+          data={searchQuery.length > 0 ? searchResults : []}
           renderItem={renderUserItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item._id || item.id}
           showsVerticalScrollIndicator={false}
           key={"users"}
         />

@@ -8,6 +8,7 @@ import {
   Dimensions,
   FlatList,
   Alert,
+  InteractionManager,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -72,13 +73,15 @@ const SavedDetailScreen: React.FC = () => {
   const [comments, setComments] = useState<any[]>([]);
 
   useEffect(() => {
-    if (currentPost) {
-      setLikesCount(
-        Array.isArray(currentPost.likes) ? currentPost.likes.length : 0
-      );
-      checkIfLiked();
-      fetchComments();
-    }
+    InteractionManager.runAfterInteractions(() => {
+      if (currentPost) {
+        setLikesCount(
+          Array.isArray(currentPost.likes) ? currentPost.likes.length : 0
+        );
+        checkIfLiked();
+        fetchComments();
+      }
+    });
   }, [currentPost]);
 
   const fetchComments = async () => {
@@ -158,23 +161,7 @@ const SavedDetailScreen: React.FC = () => {
 
       const postId = currentPost._id || currentPost.id;
       await savePost(userObj._id, postId);
-
-      // Post'u kaydedilenlerden kaldır
-      const updatedPosts = posts.filter((_, index) => index !== currentIndex);
-      setPosts(updatedPosts);
-
-      if (updatedPosts.length === 0) {
-        // Tüm kaydedilenler kaldırıldıysa geri dön
-        navigation.goBack();
-      } else {
-        // Bir sonraki post'a geç veya öncekine
-        const newIndex =
-          currentIndex >= updatedPosts.length
-            ? updatedPosts.length - 1
-            : currentIndex;
-        setCurrentIndex(newIndex);
-        setCurrentPost(updatedPosts[newIndex]);
-      }
+      setIsSaved(false); // Sadece butonun görünümünü değiştir
     } catch (err) {
       Alert.alert("Hata", "Kaydetme işlemi başarısız oldu.");
     }
@@ -254,7 +241,11 @@ const SavedDetailScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
           <TouchableOpacity onPress={handleSave}>
-            <Ionicons name="bookmark" size={26} color={colors.primary} />
+            <Ionicons
+              name={isSaved ? "bookmark" : "bookmark-outline"}
+              size={26}
+              color={isSaved ? colors.primary : colors.textSecondary}
+            />
           </TouchableOpacity>
         </View>
 
@@ -333,38 +324,41 @@ const SavedDetailScreen: React.FC = () => {
     itemVisiblePercentThreshold: 50,
   };
 
+  // Header'ı ayrı bir fonksiyon olarak tanımla
+  const renderTopBar = () => (
+    <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <TouchableOpacity onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
+      </TouchableOpacity>
+      <Text style={[styles.headerTitle, { color: colors.text }]}>
+        Kaydedilenler ({posts.length})
+      </Text>
+      <TouchableOpacity>
+        <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          Kaydedilenler ({posts.length})
-        </Text>
-        <TouchableOpacity>
-          <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-
       <FlatList
         data={posts}
         renderItem={renderPost}
         keyExtractor={(item, index) => item._id || item.id || index.toString()}
-        pagingEnabled
         showsVerticalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         initialScrollIndex={initialIndex}
-        snapToInterval={height}
-        snapToAlignment="start"
-        decelerationRate="fast"
         getItemLayout={(data, index) => ({
           length: height,
           offset: height * index,
           index,
         })}
+        ListHeaderComponent={renderTopBar}
+        initialNumToRender={3}
+        maxToRenderPerBatch={3}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
 
       <ShareModal

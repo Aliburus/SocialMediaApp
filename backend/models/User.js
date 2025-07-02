@@ -13,6 +13,24 @@ const userSchema = new mongoose.Schema(
     },
     bio: { type: String, default: "" },
     saved: [{ type: mongoose.Schema.Types.ObjectId, ref: "Post" }],
+    followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    pendingFollowRequests: [
+      { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    ],
+    sentFollowRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    notifications: [
+      {
+        type: {
+          type: String,
+          enum: ["follow", "like", "comment"],
+          required: true,
+        },
+        from: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        date: { type: Date, default: Date.now },
+        read: { type: Boolean, default: false },
+      },
+    ],
   },
   { timestamps: true }
 );

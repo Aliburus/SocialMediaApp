@@ -54,6 +54,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   const systemColorScheme = useColorScheme();
   const [theme, setTheme] = useState<ThemeType>("system");
 
+  useEffect(() => {
+    setTheme("system");
+  }, [systemColorScheme]);
+
   const isDark =
     theme === "system" ? systemColorScheme === "dark" : theme === "dark";
 

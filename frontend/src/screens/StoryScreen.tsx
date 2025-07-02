@@ -16,10 +16,29 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import {
+  useNavigation,
+  useRoute,
+  useFocusEffect,
+} from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width, height } = Dimensions.get("window");
+
+// Zamanı güzel formatta göstermek için fonksiyon
+function timeAgo(dateString: string) {
+  const now = new Date();
+  const past = new Date(dateString);
+  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+  if (diffInSeconds < 60) return "Az önce";
+  if (diffInSeconds < 3600)
+    return `${Math.floor(diffInSeconds / 60)} dakika önce`;
+  if (diffInSeconds < 86400)
+    return `${Math.floor(diffInSeconds / 3600)} saat önce`;
+  return `${Math.floor(diffInSeconds / 86400)} gün önce`;
+}
 
 const StoryScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -27,6 +46,10 @@ const StoryScreen: React.FC = () => {
   const { stories } = route.params as { stories: any[] };
   const [current, setCurrent] = React.useState(0);
   const { colors } = useTheme();
+  const [userId, setUserId] = React.useState<string | null>(null);
+  const [isPaused, setIsPaused] = React.useState(false);
+  const [progressValue, setProgressValue] = React.useState(0);
+  const [remainingDuration, setRemainingDuration] = React.useState(8000);
 
   const translateY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
@@ -54,15 +77,53 @@ const StoryScreen: React.FC = () => {
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    progress.setValue(0);
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: 8000,
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished) handleNext();
-    });
+    let anim: Animated.CompositeAnimation | undefined;
+    if (!isPaused) {
+      progress.setValue(progressValue);
+      anim = Animated.timing(progress, {
+        toValue: 1,
+        duration: remainingDuration,
+        useNativeDriver: false,
+      });
+      anim.start(({ finished }) => {
+        if (finished) handleNext();
+      });
+    } else {
+      progress.stopAnimation((value) => {
+        setProgressValue(value);
+        setRemainingDuration((1 - value) * 8000);
+      });
+    }
+    return () => {
+      if (anim && anim.stop) anim.stop();
+    };
+  }, [current, isPaused]);
+
+  useEffect(() => {
+    setProgressValue(0);
+    setRemainingDuration(8000);
   }, [current]);
+
+  useEffect(() => {
+    // Kullanıcı bilgisini al
+    (async () => {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      setUserId(userObj?._id || userObj?.id || null);
+    })();
+  }, []);
+
+  useEffect(() => {
+    // Story izlenmiş olarak işaretle
+    if (stories[current]?._id && userId) {
+      axios.post(
+        `${
+          process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000"
+        }/api/stories/${stories[current]._id}/view`,
+        { userId }
+      );
+    }
+  }, [current, userId]);
 
   const handleNext = () => {
     if (current < stories.length - 1) {
@@ -92,24 +153,40 @@ const StoryScreen: React.FC = () => {
           style={[styles.container, { transform: [{ translateY }] }]}
           {...panResponder.panHandlers}
         >
-          {/* Story görseli */}
-          <TouchableOpacity
-            style={{ flex: 1 }}
-            activeOpacity={1}
-            onPress={handleNext}
-            onLongPress={handlePrev}
-          >
-            <Image
-              source={{
-                uri:
-                  stories[current]?.image ||
-                  stories[current]?.media ||
-                  "https://images.pexels.com/photos/3802510/pexels-photo-3802510.jpeg",
+          {/* Story görseli ve tıklama alanları */}
+          <View style={{ flex: 1, flexDirection: "row" }}>
+            {/* Sol alan: bir önceki story */}
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              activeOpacity={1}
+              onPress={() => {
+                if (current > 0) setCurrent((c) => c - 1);
               }}
-              style={styles.storyImage}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
+              onPressIn={() => setIsPaused(true)}
+              onPressOut={() => setIsPaused(false)}
+            >
+              <Image
+                source={{
+                  uri:
+                    stories[current]?.image ||
+                    stories[current]?.media ||
+                    "https://images.pexels.com/photos/3802510/pexels-photo-3802510.jpeg",
+                }}
+                style={[styles.storyImage, { position: "absolute", left: 0 }]}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+            {/* Sağ alan: bir sonraki story */}
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              activeOpacity={1}
+              onPress={handleNext}
+              onPressIn={() => setIsPaused(true)}
+              onPressOut={() => setIsPaused(false)}
+            >
+              {/* Boş, sadece tıklama alanı */}
+            </TouchableOpacity>
+          </View>
 
           {/* Üst progress bar */}
           <View style={styles.progressContainer}>
@@ -165,7 +242,11 @@ const StoryScreen: React.FC = () => {
                   style={{ marginLeft: 2 }}
                 />
               )}
-              <Text style={styles.timeAgo}>5h</Text>
+              <Text style={styles.timeAgo}>
+                {stories[current]?.timestamp
+                  ? timeAgo(stories[current].timestamp)
+                  : ""}
+              </Text>
             </View>
             <TouchableOpacity
               style={styles.moreButton}

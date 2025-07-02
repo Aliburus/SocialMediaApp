@@ -121,6 +121,12 @@ exports.getProfile = async (req, res) => {
       avatar: user.avatar,
       bio: user.bio,
       email: user.email,
+      followers: user.followers,
+      following: user.following,
+      followersCount: Array.isArray(user.followers) ? user.followers.length : 0,
+      followingCount: Array.isArray(user.following) ? user.following.length : 0,
+      pendingFollowRequests: user.pendingFollowRequests,
+      sentFollowRequests: user.sentFollowRequests,
     });
   } catch (err) {
     res
@@ -202,5 +208,316 @@ exports.getSavedPosts = async (req, res) => {
     res
       .status(500)
       .json({ message: "Kaydedilenler getirilemedi", error: err.message });
+  }
+};
+
+// Takip et
+exports.followUser = async (req, res) => {
+  try {
+    const { userId, targetUserId } = req.body;
+    if (!userId || !targetUserId) {
+      return res.status(400).json({ message: "Eksik veri" });
+    }
+    if (userId === targetUserId) {
+      return res.status(400).json({ message: "Kendini takip edemezsin" });
+    }
+    const user = await User.findById(userId);
+    const targetUser = await User.findById(targetUserId);
+    if (!user || !targetUser) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    if (!user.following.includes(targetUserId)) {
+      user.following.push(targetUserId);
+    }
+    if (!targetUser.followers.includes(userId)) {
+      targetUser.followers.push(userId);
+    }
+    await user.save();
+    await targetUser.save();
+    res.json({ following: user.following, followers: targetUser.followers });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Takip işlemi başarısız", error: err.message });
+  }
+};
+
+// Takipten çıkar
+exports.unfollowUser = async (req, res) => {
+  try {
+    const { userId, targetUserId } = req.body;
+    if (!userId || !targetUserId) {
+      return res.status(400).json({ message: "Eksik veri" });
+    }
+    if (userId === targetUserId) {
+      return res.status(400).json({ message: "Kendini takipten çıkaramazsın" });
+    }
+    const user = await User.findById(userId);
+    const targetUser = await User.findById(targetUserId);
+    if (!user || !targetUser) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    user.following = user.following.filter(
+      (id) => id.toString() !== targetUserId
+    );
+    targetUser.followers = targetUser.followers.filter(
+      (id) => id.toString() !== userId
+    );
+    targetUser.pendingFollowRequests = targetUser.pendingFollowRequests.filter(
+      (id) => id.toString() !== userId
+    );
+    targetUser.notifications = targetUser.notifications.filter(
+      (notif) => !(notif.type === "follow" && notif.from.toString() === userId)
+    );
+    await user.save();
+    await targetUser.save();
+    res.json({ following: user.following, followers: targetUser.followers });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Takipten çıkarma başarısız", error: err.message });
+  }
+};
+
+// Username'e göre kullanıcı arama (tüm kullanıcılar içinde)
+exports.searchUsers = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.length < 1) return res.json([]);
+    // Tüm kullanıcılar içinde username'e göre arama
+    const users = await User.find({
+      username: { $regex: q, $options: "i" },
+    }).select(
+      "_id username fullName avatar bio followers following isVerified pendingFollowRequests sentFollowRequests"
+    );
+    res.json(users);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Kullanıcılar aranamadı", error: err.message });
+  }
+};
+
+// Takip isteği gönder
+exports.sendFollowRequest = async (req, res) => {
+  try {
+    const { userId, targetUserId } = req.body;
+    if (!userId || !targetUserId) {
+      return res.status(400).json({ message: "Eksik veri" });
+    }
+    if (userId === targetUserId) {
+      return res.status(400).json({ message: "Kendine istek gönderemezsin" });
+    }
+    const targetUser = await User.findById(targetUserId);
+    const user = await User.findById(userId);
+    if (!targetUser || !user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    if (!targetUser.pendingFollowRequests.includes(userId)) {
+      targetUser.pendingFollowRequests.push(userId);
+      // Bildirim ekle
+      targetUser.notifications.push({ type: "follow", from: userId });
+      await targetUser.save();
+    }
+    if (!user.sentFollowRequests.includes(targetUserId)) {
+      user.sentFollowRequests.push(targetUserId);
+      await user.save();
+    }
+    res.json({
+      pendingFollowRequests: targetUser.pendingFollowRequests,
+      sentFollowRequests: user.sentFollowRequests,
+    });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Takip isteği gönderilemedi", error: err.message });
+  }
+};
+
+// Takip isteğini iptal et
+exports.cancelFollowRequest = async (req, res) => {
+  try {
+    const { userId, targetUserId } = req.body;
+    if (!userId || !targetUserId) {
+      return res.status(400).json({ message: "Eksik veri" });
+    }
+    const targetUser = await User.findById(targetUserId);
+    const user = await User.findById(userId);
+    if (!targetUser || !user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    targetUser.pendingFollowRequests = targetUser.pendingFollowRequests.filter(
+      (id) => id.toString() !== userId
+    );
+    targetUser.notifications = targetUser.notifications.filter(
+      (notif) => !(notif.type === "follow" && notif.from.toString() === userId)
+    );
+    await targetUser.save();
+    user.sentFollowRequests = user.sentFollowRequests.filter(
+      (id) => id.toString() !== targetUserId
+    );
+    await user.save();
+    res.json({
+      pendingFollowRequests: targetUser.pendingFollowRequests,
+      sentFollowRequests: user.sentFollowRequests,
+    });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Takip isteği iptal edilemedi", error: err.message });
+  }
+};
+
+// Bildirimleri getir
+exports.getNotifications = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log("[getNotifications] userId:", userId);
+    const user = await User.findById(userId).populate({
+      path: "notifications.from",
+      select: "_id username avatar",
+      populate: [
+        { path: "followers", select: "_id" },
+        { path: "following", select: "_id" },
+      ],
+    });
+    console.log("[getNotifications] user:", user ? user._id : null);
+    if (!user) {
+      console.log("[getNotifications] Kullanıcı bulunamadı:", userId);
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    // Bildirimleri zenginleştir
+    const notifications = (user.notifications || []).map((notif) => {
+      let status;
+      if (notif.type === "follow") {
+        if (
+          user.pendingFollowRequests
+            .map((id) => id.toString())
+            .includes(notif.from._id.toString())
+        ) {
+          status = "pending";
+        } else if (
+          user.followers
+            .map((id) => id.toString())
+            .includes(notif.from._id.toString())
+        ) {
+          status = "accepted";
+        }
+      }
+      // followersCount ve followingCount ekle
+      const followersCount = Array.isArray(notif.from.followers)
+        ? notif.from.followers.length
+        : 0;
+      const followingCount = Array.isArray(notif.from.following)
+        ? notif.from.following.length
+        : 0;
+      return {
+        id:
+          notif._id?.toString() ||
+          notif.id?.toString() ||
+          Math.random().toString(),
+        type: notif.type,
+        user: {
+          ...notif.from._doc,
+          followersCount,
+          followingCount,
+        },
+        text:
+          notif.type === "follow"
+            ? status === "pending"
+              ? "seni takip etmek istiyor"
+              : "seni takip etmeye başladı"
+            : "",
+        timestamp: notif.date,
+        isRead: notif.read,
+        status,
+      };
+    });
+    console.log("[getNotifications] notifications:", notifications);
+    res.json(notifications);
+  } catch (err) {
+    console.error("[getNotifications] Hata:", err);
+    res
+      .status(500)
+      .json({ message: "Bildirimler getirilemedi", error: err.message });
+  }
+};
+
+// Takip isteğini kabul et
+exports.acceptFollowRequest = async (req, res) => {
+  try {
+    const { userId, requesterId } = req.body;
+    if (!userId || !requesterId) {
+      return res.status(400).json({ message: "Eksik veri" });
+    }
+    const user = await User.findById(userId);
+    const requester = await User.findById(requesterId);
+    if (!user || !requester) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    // pendingFollowRequests listesinden çıkar
+    user.pendingFollowRequests = user.pendingFollowRequests.filter(
+      (id) => id.toString() !== requesterId
+    );
+    // followers ve following güncelle (idempotent)
+    if (!user.followers.includes(requesterId)) {
+      user.followers.push(requesterId);
+    }
+    if (!requester.following.includes(userId)) {
+      requester.following.push(userId);
+    }
+    // user'ın following'inde requesterId varsa ekleme (karşılıklı takip için)
+    if (!user.following.includes(requesterId)) {
+      // user.following.push(requesterId); // Burası eklenmemeli, sadece karşı taraf takip ediyor
+    }
+    // requester'ın followers'ında userId varsa ekleme
+    if (!requester.followers.includes(userId)) {
+      // requester.followers.push(userId); // Burası eklenmemeli, sadece tek taraflı takip
+    }
+    // requester'ın sentFollowRequests listesinden userId'yi çıkar
+    requester.sentFollowRequests = requester.sentFollowRequests.filter(
+      (id) => id.toString() !== userId
+    );
+    // Bildirim güncelle (opsiyonel: okundu yap)
+    user.notifications = user.notifications.map((notif) => {
+      if (notif.type === "follow" && notif.from.toString() === requesterId) {
+        return { ...notif, read: true };
+      }
+      return notif;
+    });
+    await user.save();
+    await requester.save();
+    res.json({ followers: user.followers, following: requester.following });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Takip isteği kabul edilemedi", error: err.message });
+  }
+};
+
+// Takip isteğini reddet
+exports.rejectFollowRequest = async (req, res) => {
+  try {
+    const { userId, requesterId } = req.body;
+    if (!userId || !requesterId) {
+      return res.status(400).json({ message: "Eksik veri" });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    user.pendingFollowRequests = user.pendingFollowRequests.filter(
+      (id) => id.toString() !== requesterId
+    );
+    user.notifications = user.notifications.filter(
+      (notif) =>
+        !(notif.type === "follow" && notif.from.toString() === requesterId)
+    );
+    await user.save();
+    res.json({ pendingFollowRequests: user.pendingFollowRequests });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Takip isteği reddedilemedi", error: err.message });
   }
 };

@@ -20,15 +20,21 @@ exports.createPost = async (req, res) => {
 // Tüm postları listeleme
 exports.getAllPosts = async (req, res) => {
   try {
-    const posts = await Post.find()
-      .populate("user", "username name avatar")
-      .sort({ createdAt: -1 });
-    // comments alanını sadece sayı olarak dön
-    const postsWithCommentCount = posts.map((post) => ({
-      ...post.toObject(),
-      comments: Array.isArray(post.comments) ? post.comments.length : 0,
-    }));
-    res.json(postsWithCommentCount);
+    const { userId } = req.query;
+    let posts;
+    if (userId) {
+      const user = await require("../models/User").findById(userId);
+      if (!user)
+        return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      posts = await Post.find({ user: { $in: user.following } })
+        .populate("user", "_id username avatar")
+        .sort({ createdAt: -1 });
+    } else {
+      posts = await Post.find()
+        .populate("user", "_id username avatar")
+        .sort({ createdAt: -1 });
+    }
+    res.json(posts);
   } catch (err) {
     res
       .status(500)

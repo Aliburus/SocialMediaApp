@@ -24,6 +24,7 @@
     "expo-linear-gradient": "~14.1.5",
     "expo-media-library": "~17.1.7",
     "expo-status-bar": "~2.2.3",
+    "lucide-react-native": "^0.525.0",
     "metro": "^0.82.4",
     "react": "19.0.0",
     "react-native": "0.79.4",

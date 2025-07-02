@@ -62,6 +62,7 @@ const PostDetailScreen: React.FC = () => {
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [likeLocked, setLikeLocked] = React.useState(false);
   const [isSaved, setIsSaved] = React.useState(false);
+  const [showFullCaption, setShowFullCaption] = React.useState(false);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -248,11 +249,37 @@ const PostDetailScreen: React.FC = () => {
             {likesCount} beğeni
           </Text>
 
-          {/* Açıklama metni varsa göster */}
-          {post.caption && (
-            <Text style={[styles.caption, { color: colors.text }]}>
-              {post.caption}
-            </Text>
+          {/* Açıklama metni varsa göster, çok uzunsa devamını gör butonu */}
+          {(post.caption || post.description) && (
+            <View style={{ marginTop: 2 }}>
+              <Text
+                style={[
+                  styles.caption,
+                  { color: colors.text, flexWrap: "wrap" },
+                ]}
+                numberOfLines={showFullCaption ? undefined : 2}
+                ellipsizeMode={showFullCaption ? undefined : "tail"}
+              >
+                <Text style={{ fontWeight: "bold" }}>
+                  {post.user?.username || ""}{" "}
+                </Text>
+                {post.caption || post.description}
+              </Text>
+              {!showFullCaption &&
+                (post.caption || post.description)?.length > 80 && (
+                  <TouchableOpacity onPress={() => setShowFullCaption(true)}>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 13,
+                        marginTop: 2,
+                      }}
+                    >
+                      devamını gör
+                    </Text>
+                  </TouchableOpacity>
+                )}
+            </View>
           )}
 
           {/* Yorumlar (en fazla 2 tane) */}

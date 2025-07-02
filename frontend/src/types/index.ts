@@ -9,6 +9,7 @@ export interface User {
   postsCount: number;
   isFollowing?: boolean;
   isVerified?: boolean;
+  isFollower?: boolean;
 }
 
 export interface Post {
@@ -17,12 +18,14 @@ export interface Post {
   user: User;
   image: string;
   caption: string;
+  description?: string;
   likes: number;
   comments: number;
   timestamp: string;
   isLiked: boolean;
   location?: string;
   savedBy?: string[];
+  createdAt?: string;
 }
 
 export interface Comment {
@@ -42,6 +45,7 @@ export interface Notification {
   text: string;
   timestamp: string;
   isRead: boolean;
+  status?: "pending" | "accepted" | "rejected";
 }
 
 export interface Story {

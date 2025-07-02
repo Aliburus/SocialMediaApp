@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -12,10 +12,62 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { mockUsers } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getProfile } from "../services/api";
 
 const FollowingScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
+  const [followingList, setFollowingList] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchFollowing = async () => {
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      if (!userId) return;
+      const me = await getProfile(userId);
+      const followingIds = (me.following || []).map(
+        (f: any) => f._id || f.id || f
+      );
+      const following = me.following || [];
+      // Her following için detaylı profil çek ve isFollowing flag'i ekle
+      const detailedFollowing = await Promise.all(
+        following.map(async (f: any) => {
+          let user = f;
+          if (!(typeof f === "object" && f.avatar)) {
+            user = await getProfile(f._id || f.id || f);
+          }
+          return {
+            ...user,
+            isFollowing: followingIds.includes(user._id || user.id || user),
+          };
+        })
+      );
+      setFollowingList(detailedFollowing);
+    } catch (err) {
+      setFollowingList([]);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchFollowing();
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchFollowing();
+    setRefreshing(false);
+  };
+
+  const handleFollowToggle = (userId: string) => {
+    setFollowingList((prevList) =>
+      prevList.map((user) =>
+        user.id === userId ? { ...user, isFollowing: !user.isFollowing } : user
+      )
+    );
+  };
 
   const renderFollowingItem = ({ item }: { item: any }) => (
     <TouchableOpacity
@@ -37,12 +89,25 @@ const FollowingScreen: React.FC = () => {
         </Text>
       </View>
       <TouchableOpacity
-        style={[styles.followingButton, { backgroundColor: colors.primary }]}
+        style={[
+          styles.followingButton,
+          {
+            backgroundColor: item.isFollowing
+              ? colors.primary
+              : colors.background,
+            borderWidth: item.isFollowing ? 0 : 1,
+            borderColor: colors.primary,
+          },
+        ]}
+        onPress={() => handleFollowToggle(item.id)}
       >
         <Text
-          style={[styles.followingButtonText, { color: colors.background }]}
+          style={[
+            styles.followingButtonText,
+            { color: item.isFollowing ? colors.background : colors.primary },
+          ]}
         >
-          Following
+          {item.isFollowing ? "Takipten Çık" : "Takip Et"}
         </Text>
       </TouchableOpacity>
     </TouchableOpacity>
@@ -61,9 +126,13 @@ const FollowingScreen: React.FC = () => {
         <View style={styles.placeholder} />
       </View>
       <FlatList
-        data={mockUsers}
+        data={followingList}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
         renderItem={renderFollowingItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item, index) =>
+          item._id?.toString() || item.id?.toString() || index.toString()
+        }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.followingList}
       />
@@ -107,19 +176,22 @@ const styles = StyleSheet.create({
   },
   userInfo: {
     flex: 1,
+    justifyContent: "center",
   },
   usernameContainer: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: 0,
   },
   username: {
     fontSize: 16,
     fontWeight: "600",
     marginRight: 4,
+    marginBottom: 0,
   },
   fullName: {
     fontSize: 14,
-    marginTop: 2,
+    marginTop: 0,
   },
   followingButton: {
     paddingHorizontal: 16,

@@ -59,6 +59,7 @@ const ReelDetailScreen: React.FC = () => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [likeLocked, setLikeLocked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [showFullCaption, setShowFullCaption] = useState(false);
 
   useEffect(() => {
     if (reel) {
@@ -272,11 +273,37 @@ const ReelDetailScreen: React.FC = () => {
             {likesCount} beğeni
           </Text>
 
-          {/* Açıklama metni varsa göster */}
-          {reel.caption && (
-            <Text style={[styles.caption, { color: colors.text }]}>
-              {reel.caption}
-            </Text>
+          {/* Açıklama metni varsa göster, çok uzunsa devamını gör butonu */}
+          {(reel.caption || reel.description) && (
+            <View style={{ marginTop: 2 }}>
+              <Text
+                style={[
+                  styles.caption,
+                  { color: colors.text, flexWrap: "wrap" },
+                ]}
+                numberOfLines={showFullCaption ? undefined : 2}
+                ellipsizeMode={showFullCaption ? undefined : "tail"}
+              >
+                <Text style={{ fontWeight: "bold" }}>
+                  {reel.user?.username || ""}{" "}
+                </Text>
+                {reel.caption || reel.description}
+              </Text>
+              {!showFullCaption &&
+                (reel.caption || reel.description)?.length > 80 && (
+                  <TouchableOpacity onPress={() => setShowFullCaption(true)}>
+                    <Text
+                      style={{
+                        color: colors.textSecondary,
+                        fontSize: 13,
+                        marginTop: 2,
+                      }}
+                    >
+                      devamını gör
+                    </Text>
+                  </TouchableOpacity>
+                )}
+            </View>
           )}
 
           {/* Yorumlar (en fazla 2 tane) */}

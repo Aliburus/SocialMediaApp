@@ -15,6 +15,7 @@ import {
   Alert,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 
 // Screens
 import HomeScreen from "./src/screens/HomeScreen";
@@ -41,7 +42,7 @@ import AddPostScreen from "./src/screens/AddPostScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-function MainTabs() {
+function MainTabs({ onLogout }: { onLogout: () => void }) {
   const { colors, isDark } = useTheme();
   const [userAvatar, setUserAvatar] = useState<string>("");
 
@@ -52,13 +53,34 @@ function MainTabs() {
         const userObj = userStr ? JSON.parse(userStr) : null;
         if (userObj?.avatar) {
           setUserAvatar(userObj.avatar);
+        } else {
+          setUserAvatar("");
         }
       } catch (err) {
-        console.error("Avatar yüklenemedi:", err);
+        setUserAvatar("");
       }
     };
     getUserAvatar();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const getUserAvatar = async () => {
+        try {
+          const userStr = await AsyncStorage.getItem("user");
+          const userObj = userStr ? JSON.parse(userStr) : null;
+          if (userObj?.avatar) {
+            setUserAvatar(userObj.avatar);
+          } else {
+            setUserAvatar("");
+          }
+        } catch (err) {
+          setUserAvatar("");
+        }
+      };
+      getUserAvatar();
+    }, [])
+  );
 
   const handleProfileLongPress = () => {
     Alert.alert(
@@ -74,9 +96,7 @@ function MainTabs() {
           style: "destructive",
           onPress: async () => {
             await AsyncStorage.removeItem("user");
-            // Logout sonrası uygulamayı yeniden başlat
-            // Bu işlem login sayfasına yönlendirecek
-            Alert.alert("Çıkış Yapıldı", "Uygulama yeniden başlatılıyor...");
+            onLogout();
           },
         },
       ]
@@ -119,8 +139,8 @@ function MainTabs() {
           } else if (route.name === "Profile") {
             return (
               <TouchableOpacity
+                activeOpacity={0.7}
                 onLongPress={handleProfileLongPress}
-                activeOpacity={0.8}
               >
                 <Image
                   source={{
@@ -129,9 +149,9 @@ function MainTabs() {
                       "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
                   }}
                   style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
                     borderWidth: focused ? 2 : 0,
                     borderColor: colors.primary,
                   }}
@@ -180,7 +200,29 @@ function MainTabs() {
         options={{ tabBarLabel: "" }}
       />
       <Tab.Screen name="Camera" component={CameraScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <Image
+              source={{
+                uri:
+                  userAvatar ||
+                  "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
+              }}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                borderWidth: focused ? 2 : 0,
+                borderColor: colors.primary,
+              }}
+            />
+          ),
+          tabBarLabel: "Profil",
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -223,21 +265,14 @@ function AppContent() {
     return (
       <SafeAreaProvider>
         <NavigationContainer>
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="Login">
-              {() => (
-                <LoginScreen
-                  onLogin={handleLogin}
-                  onGoToRegister={() => setShowRegister(true)}
-                />
-              )}
-            </Stack.Screen>
-            <Stack.Screen name="Register">
-              {() => (
-                <RegisterScreen onGoToLogin={() => setShowRegister(false)} />
-              )}
-            </Stack.Screen>
-          </Stack.Navigator>
+          {showRegister ? (
+            <RegisterScreen onGoToLogin={() => setShowRegister(false)} />
+          ) : (
+            <LoginScreen
+              onLogin={handleLogin}
+              onGoToRegister={() => setShowRegister(true)}
+            />
+          )}
         </NavigationContainer>
       </SafeAreaProvider>
     );
@@ -252,14 +287,23 @@ function AppContent() {
           translucent={false}
         />
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="MainTabs">
+            {() => <MainTabs onLogout={handleLogout} />}
+          </Stack.Screen>
           <Stack.Screen name="PostDetail" component={PostDetailScreen} />
           <Stack.Screen name="EditProfile" component={EditProfileScreen} />
           <Stack.Screen name="Followers" component={FollowersScreen} />
           <Stack.Screen name="Following" component={FollowingScreen} />
           <Stack.Screen name="Comment" component={CommentScreen} />
           <Stack.Screen name="Story" component={StoryScreen} />
-          <Stack.Screen name="DMList" component={DMListScreen} />
+          <Stack.Screen
+            name="DMList"
+            component={DMListScreen}
+            options={{
+              presentation: "transparentModal",
+              cardStyle: { backgroundColor: "rgba(0,0,0,0.7)" },
+            }}
+          />
           <Stack.Screen name="DMChat" component={DMChatScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="AddStory" component={AddStoryScreen} />

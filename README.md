@@ -1,18 +1,17 @@
 # SocialMediaApp
 
-Bu proje, React Native ve Expo kullanılarak geliştirilmiş, Instagram benzeri bir sosyal medya mobil uygulamasıdır.
+SocialMediaApp, React Native ve Expo kullanılarak geliştirilmiş, modern ve etkileşimli bir sosyal medya mobil uygulamasıdır. Uygulama, kullanıcıların fotoğraf ve hikaye paylaşabildiği, diğer kullanıcılarla etkileşime geçebildiği, mesajlaşabildiği ve bildirimler alabildiği bir platform sunar. Arayüz ve kullanıcı deneyimi, Instagram gibi popüler sosyal medya uygulamalarından ilham alınarak tasarlanmıştır.
 
-## Özellikler
+## Genel Mantık ve Temel Özellikler
 
-- Ana akış (postlar, beğeni, yorum, paylaşım)
-- Hikaye (story) görüntüleme ve ekleme
-- Kamera ile fotoğraf çekme ve hikaye paylaşma
-- DM (mesajlaşma) ve sohbet ekranları
-- Profil ve sekmeli profil görünümü (gönderiler, reels, kaydedilenler, etiketlenenler)
-- Takipçi ve takip edilen listeleri
-- Bildirimler
-- Modern ve Instagram'a benzer arayüz
-- SafeArea ve gesture bar uyumluluğu
+- Kullanıcılar, fotoğraf ve hikaye (story) paylaşabilir, başkalarının içeriklerini görüntüleyebilir.
+- Her kullanıcı kendi profilini oluşturabilir, düzenleyebilir ve diğer kullanıcıları takip edebilir.
+- Takipçi ve takip edilen listeleri dinamik olarak güncellenir ve kullanıcılar arası etkileşim sağlanır.
+- Kullanıcılar, gönderilere beğeni bırakabilir, yorum yapabilir ve içerikleri kaydedebilir.
+- Hikaye (story) ekranında, kullanıcılar hikayeler arasında kolayca geçiş yapabilir ve hikaye izleme deneyimi Instagram'a benzer şekilde sunulur.
+- Mesajlaşma (DM) özelliği ile kullanıcılar birebir sohbet edebilir.
+- Bildirimler ekranında, kullanıcıya gelen etkileşimler (takip, beğeni, yorum vb.) listelenir ve yönetilebilir.
+- Uygulama, modern mobil arayüz standartlarına uygun olarak light/dark mode, SafeArea ve gesture bar desteği ile geliştirilmiştir.
 
 ## Kullanılan Teknolojiler
 
@@ -23,6 +22,7 @@ Bu proje, React Native ve Expo kullanılarak geliştirilmiş, Instagram benzeri 
 - expo-camera
 - react-native-safe-area-context
 - @expo/vector-icons
+- react-native-gesture-handler
 
 ## Kurulum
 
@@ -48,9 +48,9 @@ Bu proje, React Native ve Expo kullanılarak geliştirilmiş, Instagram benzeri 
 ```
 frontend/
   src/
-    components/   # Bileşenler
+    components/   # Uygulama bileşenleri
     screens/      # Ekranlar
-    data/         # Mock veri
+    data/         # Mock veri ve örnekler
     types/        # Tip tanımları
 ```
 

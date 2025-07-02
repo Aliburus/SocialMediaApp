@@ -7,20 +7,27 @@ import {
   FlatList,
   Image,
   Dimensions,
+  InteractionManager,
+  PanResponder,
 } from "react-native";
 import {
   useSafeAreaInsets,
   SafeAreaView,
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import PostCard from "../components/PostCard";
 import StoryItem from "../components/StoryItem";
 import { mockPosts, mockStories } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { StatusBar } from "expo-status-bar";
-import { getAllPosts, getStories, getProfile } from "../services/api";
+import {
+  getAllPosts,
+  getStories,
+  getProfile,
+  getUserPosts,
+} from "../services/api";
 import { ShareModal } from "../components/ShareModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -34,13 +41,39 @@ const HomeScreen: React.FC = () => {
   const [stories, setStories] = React.useState<any[]>([]);
   const [myAvatar, setMyAvatar] = React.useState<string>("");
   const [activeUserId, setActiveUserId] = React.useState<string | null>(null);
+  const [followingIds, setFollowingIds] = React.useState<string[]>([]);
+  const [myPosts, setMyPosts] = React.useState<any[]>([]);
+  const [userId, setUserId] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const flatListRef = React.useRef<FlatList<any> | null>(null);
+
+  // PanResponder ile sağdan sola swipe hareketini algıla
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Sadece yatay kaydırma için
+        return Math.abs(gestureState.dx) > 20 && Math.abs(gestureState.dy) < 20;
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        // Sola doğru kaydırma (dx negatif ve belirli bir mesafeden fazla)
+        if (gestureState.dx < -50) {
+          navigation.navigate("DMList", { animation: "slide_from_right" });
+        }
+      },
+    })
+  ).current;
 
   const fetchPosts = async () => {
     try {
-      const data = await getAllPosts();
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      const data = await getAllPosts(userId);
       setPosts(data);
     } catch (err) {
       console.log("[POSTLAR] Hata:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -68,26 +101,99 @@ const HomeScreen: React.FC = () => {
     } catch {}
   };
 
-  React.useEffect(() => {
-    fetchPosts();
-    fetchStories();
-    fetchMyAvatar();
-  }, []);
+  const fetchMyFollowing = async () => {
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      if (userId) {
+        const profile = await getProfile(userId);
+        setFollowingIds(
+          (profile.following || []).map((id: any) => id.toString())
+        );
+      }
+    } catch {}
+  };
+
+  const fetchMyPosts = async () => {
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const userId = userObj?._id || userObj?.id;
+      if (userId) {
+        const data = await getUserPosts(userId);
+        setMyPosts(data);
+      }
+    } catch (err) {
+      console.log("[KENDİ POSTLARIM] Hata:", err);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchPosts();
+      fetchStories();
+      fetchMyAvatar();
+      fetchMyFollowing();
+      (async () => {
+        await fetchMyPosts();
+      })();
+      (async () => {
+        const userStr = await AsyncStorage.getItem("user");
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        setUserId(userObj?._id || userObj?.id || null);
+      })();
+    }, [])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchPosts();
-    setRefreshing(false);
+    InteractionManager.runAfterInteractions(async () => {
+      await fetchPosts();
+      setActiveUserId(null);
+      setRefreshing(false);
+    });
   };
+
+  // Post ve story'leri sadece takip edilenlerden filtrele
+  const filteredPosts = React.useMemo(() => {
+    const safeMyPosts = myPosts || [];
+    const followingPosts = posts.filter((post) =>
+      followingIds.includes(post.user._id || post.user.id)
+    );
+    // Kendi postlarını ekle, tekrar olmasın
+    const myUniquePosts = safeMyPosts.filter(
+      (post) =>
+        !followingPosts.some(
+          (fp) => (fp._id || fp.id) === (post._id || post.id)
+        )
+    );
+    if (followingPosts.length === 0 && safeMyPosts.length > 0) {
+      return safeMyPosts;
+    }
+    if (followingPosts.length > 0 && safeMyPosts.length > 0) {
+      return [...followingPosts, ...myUniquePosts];
+    }
+    return followingPosts;
+  }, [posts, followingIds, myPosts]);
+
+  const filteredStories = React.useMemo(() => {
+    if (!userId) return [];
+    return stories.filter(
+      (story) =>
+        followingIds.includes(story.user._id || story.user.id) ||
+        (story.user._id || story.user.id) === userId
+    );
+  }, [stories, followingIds, userId]);
 
   // Story'lerin izlenmişlik durumunu kontrol et
   const viewedUserIds = React.useMemo(() => {
     const ids = new Set();
-    stories.forEach((story) => {
+    filteredStories.forEach((story) => {
       if (story.isViewed) ids.add(story.user._id || story.user.id);
     });
     return ids;
-  }, [stories]);
+  }, [filteredStories]);
 
   // Kendi hikaye elemanı (her zaman + ikonlu ve tıklanabilir)
   const renderMyStory = () => (
@@ -125,10 +231,10 @@ const HomeScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  // Story'leri kullanıcıya göre grupla
+  // Story'leri kullanıcıya göre grupla (sadece takip edilenler)
   const groupedStories = React.useMemo(() => {
     const map = new Map();
-    stories.forEach((story) => {
+    filteredStories.forEach((story) => {
       const userId = story.user._id || story.user.id;
       if (!map.has(userId)) map.set(userId, []);
       map.get(userId).push(story);
@@ -183,6 +289,63 @@ const HomeScreen: React.FC = () => {
     </View>
   );
 
+  // Header'ı ayrı bir fonksiyon olarak tanımla
+  const renderTopBar = () => (
+    <View
+      style={{
+        backgroundColor: colors.background,
+        paddingTop: 6, // Status bar'a daha yakınlaştır
+      }}
+    >
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: colors.background,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
+        <View style={styles.headerLeft}>
+          <Text style={[styles.appTitle, { color: colors.primary }]}>
+            SocialApp
+          </Text>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.navigate("Notifications")}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="heart-outline" size={26} color={colors.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.navigate("DMList")}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="paper-plane-outline"
+              size={26}
+              color={colors.text}
+            />
+          </TouchableOpacity>
+          <View style={styles.themeToggleContainer}>
+            <ThemeToggle size={26} />
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+
+  // FlatList'in ListHeaderComponent'ine header ve story barı birlikte ekle
+  const renderListHeader = () => (
+    <>
+      {renderTopBar()}
+      {renderStoriesBar()}
+    </>
+  );
+
   const renderPost = ({ item }: { item: any }) => (
     <PostCard
       post={item}
@@ -196,89 +359,87 @@ const HomeScreen: React.FC = () => {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        style={isDark ? "light" : "dark"}
-      />
-
-      {/* Header */}
+    <>
+      {/* Sadece StatusBar sabit */}
       <SafeAreaView
         edges={["top"]}
         style={{ backgroundColor: colors.background }}
       >
-        <View
-          style={[
-            styles.header,
-            {
-              backgroundColor: colors.background,
-              borderBottomColor: colors.border,
-            },
-          ]}
-        >
-          <View style={styles.headerLeft}>
-            <Text style={[styles.appTitle, { color: colors.primary }]}>
-              SocialApp
+        <StatusBar
+          style={isDark ? "light" : "dark"}
+          backgroundColor={colors.background}
+          translucent={false}
+        />
+      </SafeAreaView>
+      <View
+        style={[styles.container, { backgroundColor: colors.background }]}
+        {...panResponder.panHandlers}
+      >
+        {/* Posts List with Stories Header */}
+        {loading ? (
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 32,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 18,
+                textAlign: "center",
+              }}
+            >
+              Yükleniyor...
             </Text>
           </View>
-
-          <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={() => navigation.navigate("Notifications")}
-              activeOpacity={0.7}
+        ) : filteredPosts.length === 0 ? (
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 32,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.textSecondary,
+                fontSize: 18,
+                textAlign: "center",
+              }}
             >
-              <Ionicons name="heart-outline" size={26} color={colors.text} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={() => navigation.navigate("DMList")}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name="paper-plane-outline"
-                size={26}
-                color={colors.text}
-              />
-            </TouchableOpacity>
-
-            <View style={styles.themeToggleContainer}>
-              <ThemeToggle size={26} />
-            </View>
+              Hiç post yok. Arkadaş bul!
+            </Text>
           </View>
-        </View>
-      </SafeAreaView>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={filteredPosts}
+            renderItem={renderPost}
+            keyExtractor={(item) => item._id?.toString() || item.id?.toString()}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            ListHeaderComponent={!isStoryOpen ? renderListHeader : undefined}
+            style={styles.postsList}
+            contentContainerStyle={styles.postsContent}
+            initialNumToRender={8}
+            maxToRenderPerBatch={8}
+            windowSize={10}
+            removeClippedSubviews={false}
+          />
+        )}
 
-      {/* Posts List with Stories Header */}
-      <FlatList
-        data={posts}
-        renderItem={renderPost}
-        keyExtractor={(item) => item._id || item.id}
-        showsVerticalScrollIndicator={false}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        ListHeaderComponent={!isStoryOpen ? renderStoriesBar : undefined}
-        style={styles.postsList}
-        contentContainerStyle={styles.postsContent}
-        pagingEnabled
-        snapToInterval={Dimensions.get("window").height}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        getItemLayout={(data, index) => ({
-          length: Dimensions.get("window").height,
-          offset: Dimensions.get("window").height * index,
-          index,
-        })}
-      />
-
-      {/* Share Modal */}
-      <ShareModal
-        visible={showShareModal}
-        onClose={() => setShowShareModal(false)}
-      />
-    </View>
+        {/* Share Modal */}
+        <ShareModal
+          visible={showShareModal}
+          onClose={() => setShowShareModal(false)}
+        />
+      </View>
+    </>
   );
 };
 
@@ -293,7 +454,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 6, // Daha az boşluk
     borderBottomWidth: StyleSheet.hairlineWidth,
     elevation: 1,
     shadowOffset: { width: 0, height: 1 },

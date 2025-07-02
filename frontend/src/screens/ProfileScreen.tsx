@@ -50,7 +50,7 @@ const ProfileScreen: React.FC = () => {
     const userId = userObj?._id || userObj?.id;
     try {
       const profileData = await getProfile(userId);
-      console.log("[PROFILE] Backend'den gelen profil verisi:", profileData);
+
       setProfile(profileData);
       setFollowersCount(profileData.followersCount || 0);
       setFollowingCount(profileData.followingCount || 0);
@@ -67,7 +67,19 @@ const ProfileScreen: React.FC = () => {
   useFocusEffect(
     React.useCallback(() => {
       fetchUserData();
-    }, [])
+      const fetchSaved = async () => {
+        const userStr = await AsyncStorage.getItem("user");
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        const userId = userObj?._id || userObj?.id;
+        if (userId) {
+          const posts = await getSavedPosts(userId);
+          setSavedPosts(posts);
+        }
+      };
+      if (activeTab === "saved") {
+        fetchSaved();
+      }
+    }, [activeTab])
   );
 
   useEffect(() => {
@@ -77,11 +89,10 @@ const ProfileScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
       const endpoint = `/posts/user/${userId}`;
-      console.log("[PROFILE] userId:", userId);
-      console.log("[PROFILE] Backend endpoint:", endpoint);
+
       try {
         const posts = await getUserPosts(userId);
-        console.log("[PROFILE] Backend'den gelen userPosts:", posts);
+
         setUserPosts(posts);
       } catch (err: any) {
         console.log(
@@ -104,12 +115,6 @@ const ProfileScreen: React.FC = () => {
         if (userId) {
           const posts = await getSavedPosts(userId);
           setSavedPosts(posts);
-          console.log(
-            "[ProfileScreen/getSavedPosts] userId:",
-            userId,
-            "posts:",
-            posts
-          );
         }
       };
       fetchSaved();
@@ -176,12 +181,6 @@ const ProfileScreen: React.FC = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Grid yükleniyor */}
-        {activeTab === "grid" && loading && (
-          <View style={{ alignItems: "center", marginTop: 16 }}>
-            <Text style={{ color: colors.textSecondary }}>Yükleniyor...</Text>
-          </View>
-        )}
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity>
@@ -420,12 +419,6 @@ const ProfileScreen: React.FC = () => {
               }}
               columnWrapperStyle={{ gap: 0 }}
               ListHeaderComponent={() => {
-                console.log(
-                  "[ProfileScreen/FlatList] tabData:",
-                  tabData,
-                  "savedPosts:",
-                  savedPosts
-                );
                 return null;
               }}
             />
