@@ -135,3 +135,41 @@ exports.getUserPosts = async (req, res) => {
       .json({ message: "Kullanıcı postları getirilemedi", error: err.message });
   }
 };
+
+// Postu sil (ve ilişkili yorumları sil)
+exports.deletePost = async (req, res) => {
+  try {
+    const postId = req.params.id;
+    // Postu sil
+    await Post.findByIdAndDelete(postId);
+    // Yorumları sil
+    await Comment.deleteMany({ post: postId });
+    // Like bilgileri post içinde tutuluyorsa zaten silinmiş olur
+    res.json({ message: "Post ve ilişkili veriler silindi" });
+  } catch (err) {
+    res.status(500).json({ message: "Post silinemedi", error: err.message });
+  }
+};
+
+// Postu arşivleyecek bir endpoint ekle
+exports.archivePost = async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const { archived } = req.body;
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: "Post bulunamadı" });
+    if (archived === false) {
+      post.archived = false;
+      post.archivedAt = null;
+      await post.save();
+      return res.json({ message: "Post arşivden çıkarıldı" });
+    } else {
+      post.archived = true;
+      post.archivedAt = new Date();
+      await post.save();
+      return res.json({ message: "Post arşivlendi" });
+    }
+  } catch (err) {
+    res.status(500).json({ message: "Post arşivlenemedi", error: err.message });
+  }
+};

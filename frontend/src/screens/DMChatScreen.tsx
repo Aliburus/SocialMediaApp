@@ -15,20 +15,38 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
-
-const mockMessages = [
-  { id: "1", fromMe: false, text: "Selam!" },
-  { id: "2", fromMe: true, text: "Merhaba!" },
-  { id: "3", fromMe: false, text: "Nasılsın?" },
-  { id: "4", fromMe: true, text: "İyiyim, sen?" },
-];
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getConversationMessages } from "../services/api";
+import { StackNavigationProp } from "@react-navigation/stack";
 
 const DMChatScreen: React.FC = () => {
   const route = useRoute();
-  const navigation = useNavigation();
+  const navigation = useNavigation<StackNavigationProp<any>>();
   const { user } = (route.params as any) || {};
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const [messages, setMessages] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    (async () => {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      if (userObj?._id || userObj?.id) {
+        const data = await getConversationMessages(
+          userObj._id || userObj.id,
+          user._id || user.id
+        );
+        setMessages(
+          data.messages.map((msg: any) => ({
+            id: msg._id,
+            fromMe:
+              (msg.sender._id || msg.sender) === (userObj._id || userObj.id),
+            text: msg.text,
+          }))
+        );
+      }
+    })();
+  }, [user]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -37,42 +55,56 @@ const DMChatScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={26} color={colors.text} />
         </TouchableOpacity>
-        <Image
-          source={{
-            uri: user?.avatar || "https://placehold.co/100x100/000/fff",
-          }}
-          style={styles.avatar}
-        />
+        <TouchableOpacity
+          onPress={() => navigation.navigate("UserProfile", { user })}
+        >
+          <Image
+            source={{
+              uri: user?.avatar || "https://placehold.co/100x100/000/fff",
+            }}
+            style={styles.avatar}
+          />
+        </TouchableOpacity>
         <Text style={[styles.username, { color: colors.text }]}>
           {user?.username || "kullanici"}
         </Text>
       </View>
       {/* Mesajlar */}
-      <FlatList
-        data={mockMessages}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View
-            style={[
-              styles.messageBubble,
-              item.fromMe
-                ? [styles.myMessage, { backgroundColor: colors.primary }]
-                : [styles.theirMessage, { backgroundColor: colors.surface }],
-            ]}
-          >
-            <Text
+      {messages.length === 0 ? (
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
+          <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
+            Henüz mesaj yok
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View
               style={[
-                styles.messageText,
-                { color: item.fromMe ? colors.background : colors.text },
+                styles.messageBubble,
+                item.fromMe
+                  ? [styles.myMessage, { backgroundColor: colors.primary }]
+                  : [styles.theirMessage, { backgroundColor: colors.surface }],
               ]}
             >
-              {item.text}
-            </Text>
-          </View>
-        )}
-        contentContainerStyle={styles.messagesList}
-        inverted
-      />
+              <Text
+                style={[
+                  styles.messageText,
+                  { color: item.fromMe ? colors.background : colors.text },
+                ]}
+              >
+                {item.text}
+              </Text>
+            </View>
+          )}
+          contentContainerStyle={styles.messagesList}
+          inverted
+        />
+      )}
       {/* Mesaj yazma kutusu */}
       <View
         style={[

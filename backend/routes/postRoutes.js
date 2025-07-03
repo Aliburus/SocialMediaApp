@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const postController = require("../controllers/postController");
+const { archivePost } = require("../controllers/postController");
 // const auth = require('../middleware/auth'); // Auth middleware eklenebilir
 
 // Kullanıcının kendi postlarını getir
@@ -17,5 +18,9 @@ router.put("/:id/like", postController.toggleLike);
 router.post("/:id/comments", postController.addComment);
 // Postun yorumlarını getir
 router.get("/:id/comments", postController.getComments);
+// Postu sil
+router.delete("/:id", postController.deletePost);
+// Postu arşivleye
+router.post("/:id/archive", archivePost);
 
 module.exports = router;

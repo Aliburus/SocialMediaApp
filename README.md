@@ -1,17 +1,17 @@
 # SocialMediaApp
 
-SocialMediaApp, React Native ve Expo kullanılarak geliştirilmiş, modern ve etkileşimli bir sosyal medya mobil uygulamasıdır. Uygulama, kullanıcıların fotoğraf ve hikaye paylaşabildiği, diğer kullanıcılarla etkileşime geçebildiği, mesajlaşabildiği ve bildirimler alabildiği bir platform sunar. Arayüz ve kullanıcı deneyimi, Instagram gibi popüler sosyal medya uygulamalarından ilham alınarak tasarlanmıştır.
+SocialMediaApp, React Native ve Expo ile geliştirilmiş modern bir sosyal medya uygulamasıdır.
 
-## Genel Mantık ve Temel Özellikler
+## Temel Özellikler
 
-- Kullanıcılar, fotoğraf ve hikaye (story) paylaşabilir, başkalarının içeriklerini görüntüleyebilir.
-- Her kullanıcı kendi profilini oluşturabilir, düzenleyebilir ve diğer kullanıcıları takip edebilir.
-- Takipçi ve takip edilen listeleri dinamik olarak güncellenir ve kullanıcılar arası etkileşim sağlanır.
-- Kullanıcılar, gönderilere beğeni bırakabilir, yorum yapabilir ve içerikleri kaydedebilir.
-- Hikaye (story) ekranında, kullanıcılar hikayeler arasında kolayca geçiş yapabilir ve hikaye izleme deneyimi Instagram'a benzer şekilde sunulur.
-- Mesajlaşma (DM) özelliği ile kullanıcılar birebir sohbet edebilir.
-- Bildirimler ekranında, kullanıcıya gelen etkileşimler (takip, beğeni, yorum vb.) listelenir ve yönetilebilir.
-- Uygulama, modern mobil arayüz standartlarına uygun olarak light/dark mode, SafeArea ve gesture bar desteği ile geliştirilmiştir.
+- Fotoğraf ve hikaye paylaşımı
+- Profil ve takip sistemi
+- Beğeni, yorum, kaydetme
+- DM (mesajlaşma)
+- Bildirimler
+- Arşivleme ve arşivden çıkarma
+- Light/Dark mode ve SafeArea desteği
+- Profilde sadece arşivde olmayan postlar sayılır
 
 ## Kullanılan Teknolojiler
 
@@ -53,5 +53,3 @@ frontend/
     data/         # Mock veri ve örnekler
     types/        # Tip tanımları
 ```
-
-Herhangi bir sorunda veya katkı yapmak isterseniz PR gönderebilirsiniz.

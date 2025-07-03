@@ -15,16 +15,24 @@ exports.createStory = async (req, res) => {
 exports.getAllStories = async (req, res) => {
   try {
     const userId = req.query.userId;
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const stories = await Story.find({
-      timestamp: { $gte: twentyFourHoursAgo },
-    })
-      .populate("user", "_id username avatar isVerified")
-      .sort({ createdAt: -1 });
-    const result = stories.map((story) => {
-      const obj = story.toObject();
+    const stories = await Story.find({}).populate("user");
+    const now = new Date();
+    for (const story of stories) {
+      if (
+        !story.archived &&
+        story.createdAt &&
+        now - story.createdAt > 24 * 60 * 60 * 1000
+      ) {
+        story.archived = true;
+        story.archivedAt = now;
+        await story.save();
+      }
+    }
+    const filtered = stories.filter((s) => !s.archived);
+    const result = filtered.map((s) => {
+      const obj = s.toObject();
       if (userId) {
-        obj.isViewed = story.viewers.map(String).includes(String(userId));
+        obj.isViewed = (s.viewers || []).map(String).includes(String(userId));
       }
       return obj;
     });

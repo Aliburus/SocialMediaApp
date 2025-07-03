@@ -7,46 +7,62 @@ import {
   FlatList,
   Image,
   StyleSheet,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getUserFriends } from "../services/api";
+import { useTheme } from "../context/ThemeContext";
 
 interface ShareModalProps {
   visible: boolean;
   onClose: () => void;
 }
 
-const friendsList = [
-  {
-    id: "1",
-    username: "ahmet_yilmaz",
-    avatar: "https://picsum.photos/200/200?random=1",
-    isOnline: true,
-  },
-  {
-    id: "2",
-    username: "ayse_demir",
-    avatar: "https://picsum.photos/200/200?random=2",
-    isOnline: false,
-  },
-  // ... diğer mock arkadaşlar ...
-];
-
 export const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose }) => {
+  const { colors, isDark } = useTheme();
+  const [friends, setFriends] = React.useState<any[]>([]);
+  const [search, setSearch] = React.useState("");
+  const filteredFriends = friends.filter((u) =>
+    u.username.toLowerCase().includes(search.toLowerCase())
+  );
+
+  React.useEffect(() => {
+    if (visible) {
+      (async () => {
+        const userStr = await AsyncStorage.getItem("user");
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        if (userObj?._id || userObj?.id) {
+          const list = await getUserFriends(userObj._id || userObj.id);
+          setFriends(list);
+        }
+      })();
+    }
+  }, [visible]);
+
   const renderFriendItem = ({ item }: { item: any }) => (
-    <TouchableOpacity style={styles.friendItem}>
+    <TouchableOpacity
+      style={[styles.friendItem, { backgroundColor: colors.surface }]}
+    >
       <View style={styles.friendAvatarContainer}>
         <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
-        {item.isOnline && <View style={styles.onlineIndicator} />}
+        {item.isOnline && (
+          <View
+            style={[styles.onlineIndicator, { borderColor: colors.surface }]}
+          />
+        )}
       </View>
       <View style={styles.friendInfo}>
-        <Text style={styles.friendUsername}>{item.username}</Text>
-        <Text style={styles.friendStatus}>
+        <Text style={[styles.friendUsername, { color: colors.text }]}>
+          {item.username}
+        </Text>
+        <Text style={[styles.friendStatus, { color: colors.textSecondary }]}>
           {item.isOnline ? "Çevrimiçi" : "Çevrimdışı"}
         </Text>
       </View>
       <TouchableOpacity style={styles.sendButton}>
-        <Ionicons name="paper-plane" size={20} color="#007AFF" />
+        <Ionicons name="paper-plane" size={20} color={colors.primary} />
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -58,44 +74,74 @@ export const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose }) => {
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.modalContainer} edges={["bottom"]}>
-        <View style={styles.modalHeader}>
+      <SafeAreaView
+        style={[styles.modalContainer, { backgroundColor: colors.background }]}
+        edges={["bottom"]}
+      >
+        <View
+          style={[styles.modalHeader, { borderBottomColor: colors.border }]}
+        >
           <TouchableOpacity onPress={onClose}>
-            <Ionicons name="close" size={24} color="#000" />
+            <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.modalTitle}>Paylaş</Text>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>
+            Paylaş
+          </Text>
           <View style={{ width: 24 }} />
         </View>
 
         <View style={styles.shareOptions}>
           <TouchableOpacity style={styles.shareOption}>
             <View style={styles.shareOptionIcon}>
-              <Ionicons name="add-circle" size={32} color="#007AFF" />
+              <Ionicons name="add-circle" size={32} color={colors.primary} />
             </View>
-            <Text style={styles.shareOptionText}>Hikaye</Text>
+            <Text style={[styles.shareOptionText, { color: colors.text }]}>
+              Hikaye
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.shareOption}>
             <View style={styles.shareOptionIcon}>
-              <Ionicons name="chatbubble" size={32} color="#007AFF" />
+              <Ionicons name="chatbubble" size={32} color={colors.primary} />
             </View>
-            <Text style={styles.shareOptionText}>Mesaj</Text>
+            <Text style={[styles.shareOptionText, { color: colors.text }]}>
+              Mesaj
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.shareOption}>
             <View style={styles.shareOptionIcon}>
-              <Ionicons name="copy" size={32} color="#007AFF" />
+              <Ionicons name="copy" size={32} color={colors.primary} />
             </View>
-            <Text style={styles.shareOptionText}>Bağlantıyı Kopyala</Text>
+            <Text style={[styles.shareOptionText, { color: colors.text }]}>
+              Bağlantıyı Kopyala
+            </Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.friendsSection}>
-          <Text style={styles.friendsSectionTitle}>Arkadaşlar</Text>
+          <Text style={[styles.friendsSectionTitle, { color: colors.text }]}>
+            Arkadaşlar
+          </Text>
+          <TextInput
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: 20,
+              paddingHorizontal: 16,
+              color: colors.text,
+              fontSize: 16,
+              height: 40,
+              marginBottom: 12,
+            }}
+            placeholder="Arkadaş ara..."
+            placeholderTextColor={colors.textSecondary}
+            value={search}
+            onChangeText={setSearch}
+          />
           <FlatList
-            data={friendsList}
+            data={filteredFriends}
             renderItem={renderFriendItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.id || item._id || item.username}
             showsVerticalScrollIndicator={false}
           />
         </View>

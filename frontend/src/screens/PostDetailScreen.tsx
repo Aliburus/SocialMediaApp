@@ -8,6 +8,7 @@ import {
   ScrollView,
   TextInput,
   Dimensions,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +19,8 @@ import {
   getComments,
   toggleLike,
   savePost,
+  deletePost,
+  archivePost,
 } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ShareModal } from "../components/ShareModal";
@@ -53,7 +56,10 @@ const timeAgo = (date: string | Date) => {
 const PostDetailScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { post: initialPost } = route.params as { post: any };
+  const { post: initialPost, fromArchive } = route.params as {
+    post: any;
+    fromArchive?: boolean;
+  };
   const { colors } = useTheme();
   const [post, setPost] = React.useState<any>(initialPost);
   const [comments, setComments] = React.useState<any[]>([]);
@@ -63,6 +69,7 @@ const PostDetailScreen: React.FC = () => {
   const [likeLocked, setLikeLocked] = React.useState(false);
   const [isSaved, setIsSaved] = React.useState(false);
   const [showFullCaption, setShowFullCaption] = React.useState(false);
+  const [showOptionsModal, setShowOptionsModal] = React.useState(false);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -158,6 +165,48 @@ const PostDetailScreen: React.FC = () => {
     }
   };
 
+  const handleDelete = async () => {
+    setShowOptionsModal(false);
+    try {
+      await deletePost(post._id || post.id);
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate("Home");
+      }
+    } catch (err) {
+      alert("Silme işlemi başarısız!");
+    }
+  };
+
+  const handleArchive = async () => {
+    setShowOptionsModal(false);
+    try {
+      await archivePost(post._id || post.id);
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate("Home");
+      }
+    } catch (err) {
+      alert("Arşivleme işlemi başarısız!");
+    }
+  };
+
+  const handleUnarchive = async () => {
+    setShowOptionsModal(false);
+    try {
+      await archivePost(post._id || post.id, false);
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate("Home");
+      }
+    } catch (err) {
+      alert("Arşivden çıkarma işlemi başarısız!");
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
@@ -166,8 +215,8 @@ const PostDetailScreen: React.FC = () => {
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Post</Text>
-        <TouchableOpacity>
-          <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
+        <TouchableOpacity onPress={() => setShowOptionsModal(true)}>
+          <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -194,13 +243,6 @@ const PostDetailScreen: React.FC = () => {
               )}
             </View>
           </View>
-          <TouchableOpacity>
-            <Ionicons
-              name="ellipsis-horizontal"
-              size={24}
-              color={colors.textSecondary}
-            />
-          </TouchableOpacity>
         </View>
 
         {/* Post Image */}
@@ -323,36 +365,130 @@ const PostDetailScreen: React.FC = () => {
       </ScrollView>
 
       {/* Comment Input */}
-      <View
-        style={[
-          styles.commentInputContainer,
-          { backgroundColor: colors.background, borderTopColor: colors.border },
-        ]}
-      >
-        <Image
-          source={{
-            uri: "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150",
-          }}
-          style={styles.inputAvatar}
-        />
-        <TextInput
+      {!fromArchive && (
+        <View
           style={[
-            styles.commentInput,
-            { color: colors.text, backgroundColor: colors.surface },
+            styles.commentInputContainer,
+            {
+              backgroundColor: colors.background,
+              borderTopColor: colors.border,
+            },
           ]}
-          placeholder="Add a comment..."
-          placeholderTextColor={colors.textSecondary}
-        />
-        <TouchableOpacity>
-          <Text style={[styles.postButton, { color: colors.primary }]}>
-            Post
-          </Text>
-        </TouchableOpacity>
-      </View>
+        >
+          <Image
+            source={{
+              uri: "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150",
+            }}
+            style={styles.inputAvatar}
+          />
+          <TextInput
+            style={[
+              styles.commentInput,
+              { color: colors.text, backgroundColor: colors.surface },
+            ]}
+            placeholder="Add a comment..."
+            placeholderTextColor={colors.textSecondary}
+          />
+          <TouchableOpacity>
+            <Text style={[styles.postButton, { color: colors.primary }]}>
+              Post
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <ShareModal
         visible={showShareModal}
         onClose={() => setShowShareModal(false)}
       />
+      <Modal
+        visible={showOptionsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOptionsModal(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.4)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: 18,
+              paddingVertical: 18,
+              paddingHorizontal: 28,
+              minWidth: 220,
+              alignItems: "center",
+            }}
+          >
+            <TouchableOpacity
+              onPress={handleDelete}
+              style={{ paddingVertical: 10, width: "100%" }}
+            >
+              <Text
+                style={{
+                  color: colors.error,
+                  fontWeight: "bold",
+                  fontSize: 17,
+                  textAlign: "center",
+                }}
+              >
+                Sil
+              </Text>
+            </TouchableOpacity>
+            {post.archived ? (
+              <TouchableOpacity
+                onPress={handleUnarchive}
+                style={{ paddingVertical: 10, width: "100%" }}
+              >
+                <Text
+                  style={{
+                    color: "#2196F3",
+                    fontWeight: "bold",
+                    fontSize: 17,
+                    textAlign: "center",
+                  }}
+                >
+                  Arşivden Çıkar
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={handleArchive}
+                style={{ paddingVertical: 10, width: "100%" }}
+              >
+                <Text
+                  style={{
+                    color: "#2196F3",
+                    fontWeight: "bold",
+                    fontSize: 17,
+                    textAlign: "center",
+                  }}
+                >
+                  Arşivle
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={() => setShowOptionsModal(false)}
+              style={{ paddingVertical: 10, width: "100%" }}
+            >
+              <Text
+                style={{
+                  color: colors.text,
+                  fontSize: 16,
+                  textAlign: "center",
+                }}
+              >
+                İptal
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };

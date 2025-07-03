@@ -20,6 +20,7 @@ import { mockUsers, mockPosts } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getUserPosts, getProfile, getSavedPosts } from "../services/api";
+import PostCard from "../components/PostCard";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -42,6 +43,7 @@ const ProfileScreen: React.FC = () => {
   const [followingCount, setFollowingCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [savedPosts, setSavedPosts] = useState<any[]>([]);
+  const [stories, setStories] = useState<any[]>([]);
 
   const fetchUserData = async () => {
     setLoading(true);
@@ -67,6 +69,7 @@ const ProfileScreen: React.FC = () => {
   useFocusEffect(
     React.useCallback(() => {
       fetchUserData();
+      fetchUserPosts();
       const fetchSaved = async () => {
         const userStr = await AsyncStorage.getItem("user");
         const userObj = userStr ? JSON.parse(userStr) : null;
@@ -82,29 +85,24 @@ const ProfileScreen: React.FC = () => {
     }, [activeTab])
   );
 
-  useEffect(() => {
-    const fetchUserPosts = async () => {
-      setLoading(true);
-      const userStr = await AsyncStorage.getItem("user");
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      const userId = userObj?._id || userObj?.id;
-      const endpoint = `/posts/user/${userId}`;
-
-      try {
-        const posts = await getUserPosts(userId);
-
-        setUserPosts(posts);
-      } catch (err: any) {
-        console.log(
-          "[PROFILE] Profilde post çekme hatası:",
-          err,
-          err?.response?.data
-        );
-      }
-      setLoading(false);
-    };
-    fetchUserPosts();
-  }, []);
+  const fetchUserPosts = async () => {
+    setLoading(true);
+    const userStr = await AsyncStorage.getItem("user");
+    const userObj = userStr ? JSON.parse(userStr) : null;
+    const userId = userObj?._id || userObj?.id;
+    const endpoint = `/posts/user/${userId}`;
+    try {
+      const posts = await getUserPosts(userId);
+      setUserPosts(posts);
+    } catch (err: any) {
+      console.log(
+        "[PROFILE] Profilde post çekme hatası:",
+        err,
+        err?.response?.data
+      );
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
     if (activeTab === "saved") {
@@ -121,49 +119,26 @@ const ProfileScreen: React.FC = () => {
     }
   }, [activeTab]);
 
-  const renderPostItem = ({ item }: { item: any }) => {
-    if (activeTab === "reels") {
-      return (
-        <TouchableOpacity
-          style={styles.postItem}
-          onPress={() => navigation.navigate("ReelDetail", { reel: item })}
-        >
-          <Image source={{ uri: item.image }} style={styles.postImage} />
-        </TouchableOpacity>
-      );
-    }
-    if (activeTab === "saved") {
-      return (
-        <TouchableOpacity
-          style={styles.postItem}
-          onPress={() => {
-            const index = savedPosts.findIndex(
-              (post) => post._id === item._id || post.id === item.id
-            );
-            navigation.navigate("SavedDetail", {
-              savedPosts: savedPosts,
-              initialIndex: index >= 0 ? index : 0,
-            });
-          }}
-        >
-          <Image source={{ uri: item.image }} style={styles.postImage} />
-        </TouchableOpacity>
-      );
-    }
-    return (
-      <TouchableOpacity
-        style={styles.postItem}
-        onPress={() => navigation.navigate("PostDetail", { post: item })}
-      >
-        <Image source={{ uri: item.image }} style={styles.postImage} />
-      </TouchableOpacity>
-    );
+  const handleDeletePost = (postId: string) => {
+    setUserPosts((prev) => prev.filter((p) => (p._id || p.id) !== postId));
   };
 
-  let tabData = userPosts;
-  if (activeTab === "reels") tabData = mockReels;
-  if (activeTab === "saved") tabData = savedPosts;
-  if (activeTab === "tagged") tabData = mockTagged;
+  const renderPostItem = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      style={styles.postItem}
+      onPress={() => navigation.navigate("PostDetail", { post: item })}
+    >
+      <Image
+        source={{ uri: item.image }}
+        style={[styles.postImage, { backgroundColor: colors.background }]}
+      />
+    </TouchableOpacity>
+  );
+
+  let tabData = userPosts.filter((p) => !p.archived);
+  if (activeTab === "reels") tabData = mockReels.filter((p) => !p.archived);
+  if (activeTab === "saved") tabData = savedPosts.filter((p) => !p.archived);
+  if (activeTab === "tagged") tabData = mockTagged.filter((p) => !p.archived);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -171,12 +146,15 @@ const ProfileScreen: React.FC = () => {
     setRefreshing(false);
   };
 
+  const userReels = userPosts.filter((p) => p.type === "reel" || p.isReel);
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background }}
       edges={["top", "bottom"]}
     >
       <ScrollView
+        style={{ backgroundColor: colors.background }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -194,7 +172,7 @@ const ProfileScreen: React.FC = () => {
               <Ionicons name="checkmark-circle" size={20} color="#1DA1F2" />
             )}
           </View>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate("Settings")}>
             <Ionicons name="menu-outline" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
@@ -204,12 +182,15 @@ const ProfileScreen: React.FC = () => {
           <View style={styles.profileHeader}>
             <Image
               source={{ uri: profile?.avatar || "" }}
-              style={styles.profileImage}
+              style={[
+                styles.profileImage,
+                { backgroundColor: colors.background },
+              ]}
             />
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                 <Text style={[styles.statNumber, { color: colors.text }]}>
-                  {userPosts.length}
+                  {userPosts.filter((p) => !p.archived).length}
                 </Text>
                 <Text
                   style={[styles.statLabel, { color: colors.textSecondary }]}
@@ -293,6 +274,27 @@ const ProfileScreen: React.FC = () => {
                 New
               </Text>
             </TouchableOpacity>
+            {stories &&
+              stories.length > 0 &&
+              stories.map((story: any) => (
+                <TouchableOpacity
+                  key={story._id || story.id}
+                  style={styles.addHighlight}
+                >
+                  <Image
+                    source={{ uri: story.image }}
+                    style={styles.profileImage}
+                  />
+                  <Text
+                    style={[
+                      styles.highlightText,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {story.user?.username || "Story"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
           </ScrollView>
         </View>
 
@@ -354,80 +356,42 @@ const ProfileScreen: React.FC = () => {
               }
             />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === "tagged" && [
-                styles.activeTab,
-                { borderBottomColor: colors.primary },
-              ],
-            ]}
-            onPress={() => setActiveTab("tagged")}
-          >
-            <Ionicons
-              name="person-outline"
-              size={24}
-              color={
-                activeTab === "tagged" ? colors.primary : colors.textSecondary
-              }
-            />
-          </TouchableOpacity>
         </View>
 
         {/* Tab Content */}
         <View style={styles.postsContainer}>
-          {/* Grid: Kullanıcının kendi postları */}
-          {activeTab === "grid" && (
-            <FlatList
-              data={userPosts}
-              renderItem={renderPostItem}
-              keyExtractor={(item) => item._id || item.id}
-              numColumns={3}
-              scrollEnabled={false}
-              contentContainerStyle={{
-                paddingBottom: 24,
-                paddingHorizontal: 0,
+          {activeTab === "reels" &&
+          userPosts.filter(
+            (p) => (p.type === "reel" || p.isReel) && !p.archived
+          ).length === 0 ? (
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 32,
               }}
-              columnWrapperStyle={{ gap: 0 }}
-            />
-          )}
-          {/* Diğer tablar için eski FlatList veya içerik */}
-          {activeTab === "reels" && (
-            <FlatList
-              data={mockReels}
-              renderItem={renderPostItem}
-              keyExtractor={(item) => item.id}
-              numColumns={3}
-              scrollEnabled={false}
-              contentContainerStyle={{
-                paddingBottom: 24,
-                paddingHorizontal: 0,
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
+                Hiç reels yok
+              </Text>
+            </View>
+          ) : tabData.length === 0 ? (
+            <View
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 32,
               }}
-              columnWrapperStyle={{ gap: 0 }}
-            />
-          )}
-          {activeTab === "saved" && (
+            >
+              <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
+                Hiç gönderi yok
+              </Text>
+            </View>
+          ) : (
             <FlatList
               data={tabData}
               renderItem={renderPostItem}
               keyExtractor={(item) => item._id || item.id}
-              numColumns={3}
-              scrollEnabled={false}
-              contentContainerStyle={{
-                paddingBottom: 24,
-                paddingHorizontal: 0,
-              }}
-              columnWrapperStyle={{ gap: 0 }}
-              ListHeaderComponent={() => {
-                return null;
-              }}
-            />
-          )}
-          {activeTab === "tagged" && (
-            <FlatList
-              data={mockTagged}
-              renderItem={renderPostItem}
-              keyExtractor={(item) => item.id}
               numColumns={3}
               scrollEnabled={false}
               contentContainerStyle={{

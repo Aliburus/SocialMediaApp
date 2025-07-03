@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
@@ -38,6 +38,10 @@ import UserProfileScreen from "./src/screens/UserProfileScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import RegisterScreen from "./src/screens/RegisterScreen";
 import AddPostScreen from "./src/screens/AddPostScreen";
+import UserSearchScreen from "./src/screens/UserSearchScreen";
+import SettingsScreen from "./src/screens/SettingsScreen";
+import ChangePasswordScreen from "./src/screens/ChangePasswordScreen";
+import ArchiveScreen from "./src/screens/ArchiveScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -263,8 +267,16 @@ function AppContent() {
 
   if (!isLoggedIn) {
     return (
-      <SafeAreaProvider>
-        <NavigationContainer>
+      <SafeAreaProvider style={{ backgroundColor: colors.background }}>
+        <NavigationContainer
+          theme={{
+            ...DefaultTheme,
+            colors: {
+              ...DefaultTheme.colors,
+              background: colors.background,
+            },
+          }}
+        >
           {showRegister ? (
             <RegisterScreen onGoToLogin={() => setShowRegister(false)} />
           ) : (
@@ -279,8 +291,16 @@ function AppContent() {
   }
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer>
+    <SafeAreaProvider style={{ backgroundColor: colors.background }}>
+      <NavigationContainer
+        theme={{
+          ...DefaultTheme,
+          colors: {
+            ...DefaultTheme.colors,
+            background: colors.background,
+          },
+        }}
+      >
         <StatusBar
           style={isDark ? "light" : "dark"}
           backgroundColor={colors.background}
@@ -296,20 +316,20 @@ function AppContent() {
           <Stack.Screen name="Following" component={FollowingScreen} />
           <Stack.Screen name="Comment" component={CommentScreen} />
           <Stack.Screen name="Story" component={StoryScreen} />
-          <Stack.Screen
-            name="DMList"
-            component={DMListScreen}
-            options={{
-              presentation: "transparentModal",
-              cardStyle: { backgroundColor: "rgba(0,0,0,0.7)" },
-            }}
-          />
+          <Stack.Screen name="DMList" component={DMListScreen} />
           <Stack.Screen name="DMChat" component={DMChatScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="AddStory" component={AddStoryScreen} />
           <Stack.Screen name="ReelDetail" component={ReelDetailScreen} />
           <Stack.Screen name="SavedDetail" component={SavedDetailScreen} />
           <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+          <Stack.Screen name="UserSearchScreen" component={UserSearchScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen
+            name="ChangePassword"
+            component={ChangePasswordScreen}
+          />
+          <Stack.Screen name="Archive" component={ArchiveScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

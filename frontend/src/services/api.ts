@@ -173,3 +173,67 @@ export const getNotifications = async (userId: string) => {
   const res = await api.get(`/users/notifications/${userId}`);
   return res.data;
 };
+
+// Postu sil
+export const deletePost = async (postId: string) => {
+  const res = await api.delete(`/posts/${postId}`);
+  return res.data;
+};
+
+// Kullanıcının DM listesini getir
+export const getUserConversations = async (userId: string) => {
+  const res = await api.get(`/users/${userId}/conversations`);
+  return res.data;
+};
+
+// İki kullanıcı arasındaki conversation ve mesajları getir
+export const getConversationMessages = async (
+  userId: string,
+  otherUserId: string
+) => {
+  const res = await api.get(
+    `/users/${userId}/conversations/${otherUserId}/messages`
+  );
+  return res.data;
+};
+
+// Kullanıcının arkadaş listesini getir
+export const getUserFriends = async (userId: string) => {
+  const res = await api.get(`/users/${userId}/friends`);
+  return res.data;
+};
+
+// Şifre değiştirme
+export const changePassword = async (
+  userId: string,
+  oldPassword: string,
+  newPassword: string
+) => {
+  const res = await api.post("/users/change-password", {
+    userId,
+    oldPassword,
+    newPassword,
+  });
+  return res.data;
+};
+
+export const getNotificationSettings = async (userId: string) => {
+  const res = await api.get(`/users/${userId}/notification-settings`);
+  return res.data;
+};
+
+export const updateNotificationSettings = async (
+  userId: string,
+  settings: { push: boolean; comment: boolean; follow: boolean }
+) => {
+  const res = await api.post(
+    `/users/${userId}/notification-settings`,
+    settings
+  );
+  return res.data;
+};
+
+export const archivePost = async (postId: string, archived: boolean = true) => {
+  const res = await api.post(`/posts/${postId}/archive`, { archived });
+  return res.data;
+};

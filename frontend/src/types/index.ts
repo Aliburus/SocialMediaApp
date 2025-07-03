@@ -10,6 +10,8 @@ export interface User {
   isFollowing?: boolean;
   isVerified?: boolean;
   isFollower?: boolean;
+  archived?: boolean;
+  archivedAt?: string;
 }
 
 export interface Post {
@@ -26,6 +28,8 @@ export interface Post {
   location?: string;
   savedBy?: string[];
   createdAt?: string;
+  archived?: boolean;
+  archivedAt?: string;
 }
 
 export interface Comment {
@@ -49,9 +53,14 @@ export interface Notification {
 }
 
 export interface Story {
-  id: string;
+  id?: string;
+  _id?: string;
   user: User;
   image: string;
-  timestamp: string;
-  isViewed: boolean;
+  timestamp?: Date;
+  createdAt?: string;
+  viewers?: string[];
+  archived?: boolean;
+  archivedAt?: string;
+  isViewed?: boolean;
 }

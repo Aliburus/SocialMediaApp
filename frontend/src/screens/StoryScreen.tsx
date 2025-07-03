@@ -41,7 +41,7 @@ function timeAgo(dateString: string) {
 }
 
 const StoryScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const route = useRoute();
   const { stories } = route.params as { stories: any[] };
   const [current, setCurrent] = React.useState(0);
@@ -61,7 +61,8 @@ const StoryScreen: React.FC = () => {
       }),
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dy > 100) {
-          navigation.goBack();
+          if (navigation.canGoBack()) navigation.goBack();
+          else navigation.navigate("Home");
         } else {
           Animated.spring(translateY, {
             toValue: 0,
@@ -76,28 +77,19 @@ const StoryScreen: React.FC = () => {
 
   const progress = useRef(new Animated.Value(0)).current;
 
+  const pressStartRef = useRef<number | null>(null);
+
   useEffect(() => {
-    let anim: Animated.CompositeAnimation | undefined;
+    let timer: NodeJS.Timeout | null = null;
     if (!isPaused) {
-      progress.setValue(progressValue);
-      anim = Animated.timing(progress, {
-        toValue: 1,
-        duration: remainingDuration,
-        useNativeDriver: false,
-      });
-      anim.start(({ finished }) => {
-        if (finished) handleNext();
-      });
-    } else {
-      progress.stopAnimation((value) => {
-        setProgressValue(value);
-        setRemainingDuration((1 - value) * 8000);
-      });
+      timer = setTimeout(() => {
+        handleNext();
+      }, remainingDuration);
     }
     return () => {
-      if (anim && anim.stop) anim.stop();
+      if (timer) clearTimeout(timer);
     };
-  }, [current, isPaused]);
+  }, [current, isPaused, remainingDuration]);
 
   useEffect(() => {
     setProgressValue(0);
@@ -125,17 +117,43 @@ const StoryScreen: React.FC = () => {
     }
   }, [current, userId]);
 
+  useEffect(() => {
+    let anim: Animated.CompositeAnimation | undefined;
+    if (!isPaused) {
+      progress.setValue(progressValue);
+      anim = Animated.timing(progress, {
+        toValue: 1,
+        duration: remainingDuration,
+        useNativeDriver: false,
+      });
+      anim.start();
+    } else {
+      progress.stopAnimation((value) => {
+        setProgressValue(value);
+        setRemainingDuration((1 - value) * 8000);
+      });
+    }
+    return () => {
+      if (anim && anim.stop) anim.stop();
+    };
+  }, [current, isPaused, remainingDuration]);
+
   const handleNext = () => {
     if (current < stories.length - 1) {
       setCurrent((c) => c + 1);
     } else {
-      navigation.goBack();
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate("Home");
+      }
     }
   };
 
   const handlePrev = () => {
     if (current > 0) setCurrent((c) => c - 1);
-    else navigation.goBack();
+    else if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate("Home");
   };
 
   return (
@@ -180,9 +198,18 @@ const StoryScreen: React.FC = () => {
             <TouchableOpacity
               style={{ flex: 1 }}
               activeOpacity={1}
-              onPress={handleNext}
-              onPressIn={() => setIsPaused(true)}
-              onPressOut={() => setIsPaused(false)}
+              onPressIn={() => {
+                setIsPaused(true);
+                pressStartRef.current = Date.now();
+              }}
+              onPressOut={() => {
+                setIsPaused(false);
+                const pressDuration = Date.now() - (pressStartRef.current || 0);
+                if (pressDuration < 300) {
+                  handleNext();
+                }
+                pressStartRef.current = null;
+              }}
             >
               {/* Boş, sadece tıklama alanı */}
             </TouchableOpacity>

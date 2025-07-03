@@ -16,16 +16,15 @@ const StoryItem: React.FC<StoryItemProps> = ({
   isActive,
   isViewed,
 }) => {
+  const avatar = story.user?.avatar || "https://ui-avatars.com/api/?name=User";
+  const username = story.user?.username || "Kullanıcı";
   return (
     <TouchableOpacity onPress={onPress} style={styles.container}>
       <View style={styles.imageContainer}>
-        {isViewed ? (
+        {isViewed ?? false ? (
           <View style={styles.outerBorderGray}>
             <View style={styles.innerBlackCircle}>
-              <Image
-                source={{ uri: story.user.avatar }}
-                style={styles.avatar}
-              />
+              <Image source={{ uri: avatar }} style={styles.avatar} />
             </View>
           </View>
         ) : (
@@ -36,16 +35,13 @@ const StoryItem: React.FC<StoryItemProps> = ({
             style={styles.outerBorderGradient}
           >
             <View style={styles.innerBlackCircle}>
-              <Image
-                source={{ uri: story.user.avatar }}
-                style={styles.avatar}
-              />
+              <Image source={{ uri: avatar }} style={styles.avatar} />
             </View>
           </LinearGradient>
         )}
       </View>
       <Text style={styles.username} numberOfLines={1}>
-        {story.user.username}
+        {username}
       </Text>
     </TouchableOpacity>
   );

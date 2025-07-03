@@ -18,9 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import PostCard from "../components/PostCard";
 import StoryItem from "../components/StoryItem";
-import { mockPosts, mockStories } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
-import { ThemeToggle } from "../components/ThemeToggle";
 import { StatusBar } from "expo-status-bar";
 import {
   getAllPosts,
@@ -83,6 +81,7 @@ const HomeScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
       const data = await getStories(userId);
+      console.log("[STORY API] Gelen storyler:", data);
       setStories(data);
     } catch (err) {
       console.log("[STORY] Hata:", err);
@@ -146,6 +145,23 @@ const HomeScreen: React.FC = () => {
     }, [])
   );
 
+  // navigation focus olduğunda postları tekrar fetch et
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      fetchPosts();
+      fetchMyPosts();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  // Story ekleme veya Story ekranından çıkınca story'leri güncelle
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      fetchStories();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     InteractionManager.runAfterInteractions(async () => {
@@ -158,18 +174,18 @@ const HomeScreen: React.FC = () => {
   // Post ve story'leri sadece takip edilenlerden filtrele
   const filteredPosts = React.useMemo(() => {
     const safeMyPosts = myPosts || [];
-    const followingPosts = posts.filter((post) =>
-      followingIds.includes(post.user._id || post.user.id)
-    );
+    const followingPosts = posts
+      .filter((post) => followingIds.includes(post.user._id || post.user.id))
+      .filter((post) => !post.archived);
     // Kendi postlarını ekle, tekrar olmasın
     const myUniquePosts = safeMyPosts.filter(
       (post) =>
         !followingPosts.some(
           (fp) => (fp._id || fp.id) === (post._id || post.id)
-        )
+        ) && !post.archived
     );
     if (followingPosts.length === 0 && safeMyPosts.length > 0) {
-      return safeMyPosts;
+      return safeMyPosts.filter((p) => !p.archived);
     }
     if (followingPosts.length > 0 && safeMyPosts.length > 0) {
       return [...followingPosts, ...myUniquePosts];
@@ -240,7 +256,7 @@ const HomeScreen: React.FC = () => {
       map.get(userId).push(story);
     });
     return Array.from(map.values()).map((userStories) => userStories[0]);
-  }, [stories]);
+  }, [filteredStories]);
 
   // StoryScreen açıksa story barı gösterme
   const isStoryOpen = navigation
@@ -271,21 +287,28 @@ const HomeScreen: React.FC = () => {
     >
       <FlatList
         data={groupedStories}
-        renderItem={({ item }) => (
-          <StoryItem
-            story={item}
-            isActive={activeUserId === (item.user._id || item.user.id)}
-            isViewed={viewedUserIds.has(item.user._id || item.user.id)}
-            onPress={() => handleStoryPress(item)}
-          />
-        )}
-        keyExtractor={(item) => item.user._id || item.user.id}
+        renderItem={({ item }) =>
+          item.user ? (
+            <StoryItem
+              story={item}
+              isActive={activeUserId === (item.user._id || item.user.id)}
+              isViewed={viewedUserIds.has(item.user._id || item.user.id)}
+              onPress={() => handleStoryPress(item)}
+            />
+          ) : null
+        }
+        keyExtractor={(item) => item._id || item.id}
         horizontal
         showsHorizontalScrollIndicator={false}
         ListHeaderComponent={renderMyStory()}
         contentContainerStyle={styles.storiesContent}
         style={styles.storiesList}
       />
+      {/* {groupedStories.length === 0 && (
+        <Text style={{ color: colors.textSecondary, padding: 16, textAlign: "center" }}>
+          Henüz hiç hikaye yok.
+        </Text>
+      )} */}
     </View>
   );
 
@@ -330,9 +353,6 @@ const HomeScreen: React.FC = () => {
               color={colors.text}
             />
           </TouchableOpacity>
-          <View style={styles.themeToggleContainer}>
-            <ThemeToggle size={26} />
-          </View>
         </View>
       </View>
     </View>
@@ -346,6 +366,10 @@ const HomeScreen: React.FC = () => {
     </>
   );
 
+  const handleDeletePost = (postId: string) => {
+    setPosts((prev) => prev.filter((p) => (p._id || p.id) !== postId));
+  };
+
   const renderPost = ({ item }: { item: any }) => (
     <PostCard
       post={item}
@@ -355,22 +379,20 @@ const HomeScreen: React.FC = () => {
         navigation.navigate("Comment", { postId: item._id || item.id })
       }
       onShare={() => setShowShareModal(true)}
+      onDelete={() => handleDeletePost(item._id || item.id)}
     />
   );
 
   return (
-    <>
-      {/* Sadece StatusBar sabit */}
-      <SafeAreaView
-        edges={["top"]}
-        style={{ backgroundColor: colors.background }}
-      >
-        <StatusBar
-          style={isDark ? "light" : "dark"}
-          backgroundColor={colors.background}
-          translucent={false}
-        />
-      </SafeAreaView>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={["top", "bottom"]}
+    >
+      <StatusBar
+        style={isDark ? "light" : "dark"}
+        backgroundColor={colors.background}
+        translucent={false}
+      />
       <View
         style={[styles.container, { backgroundColor: colors.background }]}
         {...panResponder.panHandlers}
@@ -396,24 +418,28 @@ const HomeScreen: React.FC = () => {
             </Text>
           </View>
         ) : filteredPosts.length === 0 ? (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              padding: 32,
-            }}
-          >
-            <Text
+          <>
+            {renderListHeader()}
+            <View
               style={{
-                color: colors.textSecondary,
-                fontSize: 18,
-                textAlign: "center",
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+                padding: 32,
+                backgroundColor: colors.background,
               }}
             >
-              Hiç post yok. Arkadaş bul!
-            </Text>
-          </View>
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: 18,
+                  textAlign: "center",
+                }}
+              >
+                Gösterilecek gönderi yok
+              </Text>
+            </View>
+          </>
         ) : (
           <FlatList
             ref={flatListRef}
@@ -439,7 +465,7 @@ const HomeScreen: React.FC = () => {
           onClose={() => setShowShareModal(false)}
         />
       </View>
-    </>
+    </SafeAreaView>
   );
 };
 
@@ -478,9 +504,6 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
     marginHorizontal: 2,
-  },
-  themeToggleContainer: {
-    marginLeft: 4,
   },
 
   // Stories Section Styles - Optimized spacing

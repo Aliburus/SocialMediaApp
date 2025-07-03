@@ -16,7 +16,7 @@ import { useTheme } from "../context/ThemeContext";
 import { getComments, addComment } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import { useRoute } from "@react-navigation/native";
+import { useRoute, useNavigation } from "@react-navigation/native";
 
 const timeAgo = (dateString: string) => {
   const now = new Date();
@@ -39,6 +39,7 @@ const CommentScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const navigation = useNavigation<any>();
 
   const fetchComments = useCallback(async () => {
     setLoading(true);
@@ -84,7 +85,12 @@ const CommentScreen: React.FC = () => {
       <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
       <View style={styles.commentContent}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text style={[styles.username, { color: colors.text }]}>
+          <Text
+            style={{ fontWeight: "bold", color: colors.text }}
+            onPress={() =>
+              navigation.navigate("UserProfile", { user: item.user })
+            }
+          >
             {item.user.username}
           </Text>
           <Text style={[styles.time, { color: colors.textSecondary }]}>

@@ -236,107 +236,31 @@ const SearchScreen: React.FC = () => {
             color={colors.textSecondary}
             style={styles.searchIcon}
           />
-          <TextInput
-            ref={searchInputRef}
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Kullanıcı ara..."
-            value={searchQuery}
-            onChangeText={handleSearch}
-            placeholderTextColor={colors.textSecondary}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => handleSearch("")}>
-              <Ionicons
-                name="close-circle"
-                size={20}
-                color={colors.textSecondary}
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => navigation.navigate("UserSearchScreen")}
+          >
+            <View pointerEvents="none">
+              <TextInput
+                style={[styles.searchInput, { color: colors.text }]}
+                placeholder="Kullanıcı ara..."
+                value={searchQuery}
+                editable={false}
+                placeholderTextColor={colors.textSecondary}
               />
-            </TouchableOpacity>
-          )}
+            </View>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={{ marginLeft: 12 }}
-          onPress={() => {
-            searchInputRef.current?.focus();
-            setActiveTab("users");
-          }}
-        >
-          <Ionicons name="search" size={24} color={colors.primary} />
-        </TouchableOpacity>
       </View>
-
-      {/* Tabs */}
-      <View style={[styles.tabContainer, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            activeTab === "posts" && [
-              styles.activeTab,
-              { borderBottomColor: colors.primary },
-            ],
-          ]}
-          onPress={() => setActiveTab("posts")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              { color: colors.textSecondary },
-              activeTab === "posts" && [
-                styles.activeTabText,
-                { color: colors.primary },
-              ],
-            ]}
-          >
-            Posts
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            activeTab === "users" && [
-              styles.activeTab,
-              { borderBottomColor: colors.primary },
-            ],
-          ]}
-          onPress={() => setActiveTab("users")}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              { color: colors.textSecondary },
-              activeTab === "users" && [
-                styles.activeTabText,
-                { color: colors.primary },
-              ],
-            ]}
-          >
-            Users
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Content */}
-      {activeTab === "users" ? (
-        <FlatList
-          data={searchQuery.length > 0 ? searchResults : []}
-          renderItem={renderUserItem}
-          keyExtractor={(item) => item._id || item.id}
-          showsVerticalScrollIndicator={false}
-          key={"users"}
-        />
-      ) : (
-        <FlatList
-          data={mockPosts}
-          renderItem={renderPostItem}
-          keyExtractor={(item) => item.id}
-          numColumns={3}
-          showsVerticalScrollIndicator={false}
-          key={"posts-3-cols"}
-        />
-      )}
+      {/* Sadece postlar listelensin */}
+      <FlatList
+        data={mockPosts}
+        renderItem={renderPostItem}
+        keyExtractor={(item) => item.id}
+        numColumns={3}
+        showsVerticalScrollIndicator={false}
+        key={"posts-3-cols"}
+      />
     </SafeAreaView>
   );
 };

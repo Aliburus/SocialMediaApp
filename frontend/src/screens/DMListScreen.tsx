@@ -6,6 +6,7 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
+  TextInput,
 } from "react-native";
 import {
   SafeAreaView,
@@ -14,34 +15,45 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
-
-const mockDMs = [
-  {
-    id: "1",
-    user: {
-      username: "alice_wonder",
-      avatar:
-        "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150",
-    },
-    lastMessage: "Naber?",
-    time: "2d",
-  },
-  {
-    id: "2",
-    user: {
-      username: "bob_photographer",
-      avatar:
-        "https://images.pexels.com/photos/91227/pexels-photo-91227.jpeg?auto=compress&cs=tinysrgb&w=150",
-    },
-    lastMessage: "Fotoğraflar harika!",
-    time: "1d",
-  },
-];
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getUserConversations, getUserFriends } from "../services/api";
 
 const DMListScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const [dmList, setDmList] = React.useState<any[]>([]);
+  const [showFriendsModal, setShowFriendsModal] = React.useState(false);
+  const [friendSearch, setFriendSearch] = React.useState("");
+  const [friends, setFriends] = React.useState<any[]>([]);
+  const filteredFriends = friends.filter((u) =>
+    u.username.toLowerCase().includes(friendSearch.toLowerCase())
+  );
+  React.useEffect(() => {
+    (async () => {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      if (userObj?._id || userObj?.id) {
+        const list = await getUserConversations(userObj._id || userObj.id);
+        const filtered = list.filter(
+          (item: any) => item.lastMessage && item.lastMessage.trim() !== ""
+        );
+        setDmList(filtered);
+      }
+    })();
+  }, []);
+  React.useEffect(() => {
+    if (showFriendsModal) {
+      (async () => {
+        const userStr = await AsyncStorage.getItem("user");
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        if (userObj?._id || userObj?.id) {
+          const list = await getUserFriends(userObj._id || userObj.id);
+          setFriends(list);
+        }
+      })();
+    }
+  }, [showFriendsModal]);
   const renderItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={[styles.dmItem, { borderBottomColor: colors.border }]}
@@ -57,7 +69,7 @@ const DMListScreen: React.FC = () => {
         </Text>
       </View>
       <Text style={[styles.time, { color: colors.textSecondary }]}>
-        {item.time}
+        {item.time ? new Date(item.time).toLocaleDateString() : ""}
       </Text>
     </TouchableOpacity>
   );
@@ -77,21 +89,134 @@ const DMListScreen: React.FC = () => {
         >
           Direct
         </Text>
-        <TouchableOpacity style={{ marginLeft: 12 }}>
+        <TouchableOpacity
+          style={{ marginLeft: 12 }}
+          onPress={() => setShowFriendsModal(true)}
+        >
           <Ionicons name="create-outline" size={28} color={colors.text} />
         </TouchableOpacity>
       </View>
       {/* DM Listesi */}
-      <FlatList
-        data={mockDMs}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{
-          paddingBottom: insets.bottom + 16,
-          paddingHorizontal: 8,
-        }}
-        showsVerticalScrollIndicator={false}
-      />
+      {dmList.length === 0 ? (
+        <View
+          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+        >
+          <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
+            Henüz mesajlaşman yok
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={dmList}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id || item._id || item.username}
+          contentContainerStyle={{
+            paddingBottom: insets.bottom + 16,
+            paddingHorizontal: 8,
+          }}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+      {/* Arkadaşlar Modalı */}
+      {showFriendsModal && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.3)",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 100,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.background,
+              borderRadius: 16,
+              width: "90%",
+              maxHeight: "80%",
+              padding: 16,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <TextInput
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.surface,
+                  borderRadius: 20,
+                  paddingHorizontal: 16,
+                  color: colors.text,
+                  fontSize: 16,
+                  height: 40,
+                }}
+                placeholder="Arkadaş ara..."
+                placeholderTextColor={colors.textSecondary}
+                value={friendSearch}
+                onChangeText={setFriendSearch}
+              />
+              <TouchableOpacity
+                onPress={() => setShowFriendsModal(false)}
+                style={{ marginLeft: 8 }}
+              >
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={filteredFriends}
+              keyExtractor={(item) => item.id || item._id || item.username}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowFriendsModal(false);
+                    setTimeout(() => {
+                      navigation.navigate("DMChat", { user: item });
+                    }, 0);
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 10,
+                  }}
+                >
+                  <Image
+                    source={{ uri: item.avatar }}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      marginRight: 12,
+                    }}
+                  />
+                  <Text style={{ color: colors.text, fontSize: 16 }}>
+                    {item.username}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              style={{ maxHeight: 300 }}
+              ListEmptyComponent={
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    textAlign: "center",
+                    marginTop: 16,
+                  }}
+                >
+                  Arkadaş bulunamadı
+                </Text>
+              }
+            />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 };

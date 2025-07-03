@@ -30,6 +30,7 @@ import {
   UserX,
   X,
 } from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -272,7 +273,10 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
               <View style={styles.profileHeader}>
                 <Image
                   source={{ uri: profile?.avatar || "" }}
-                  style={styles.profileImage}
+                  style={[
+                    styles.profileImage,
+                    { backgroundColor: colors.background },
+                  ]}
                 />
                 <View style={styles.statsContainer}>
                   <View style={styles.statItem}>
@@ -352,7 +356,8 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                 ]}
                 onPress={() => setActiveTab("grid")}
               >
-                <Grid3X3
+                <Ionicons
+                  name="grid-outline"
                   size={24}
                   color={
                     activeTab === "grid" ? colors.primary : colors.textSecondary
@@ -369,7 +374,8 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                 ]}
                 onPress={() => setActiveTab("reels")}
               >
-                <Play
+                <Ionicons
+                  name="play-outline"
                   size={24}
                   color={
                     activeTab === "reels"
@@ -381,7 +387,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
             </View>
 
             {/* Empty state for reels */}
-            {activeTab === "reels" && (
+            {/* {activeTab === "reels" && (
               <View style={styles.emptyStateContainer}>
                 <Play size={48} color={colors.textSecondary} />
                 <Text
@@ -393,6 +399,23 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                   Reels feature coming soon!
                 </Text>
               </View>
+            )} */}
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyStateContainer}>
+            {activeTab === "grid" ? (
+              <Text
+                style={[styles.emptyStateText, { color: colors.textSecondary }]}
+              >
+                Henüz gönderi yok
+              </Text>
+            ) : (
+              <Text
+                style={[styles.emptyStateText, { color: colors.textSecondary }]}
+              >
+                Henüz reels yok
+              </Text>
             )}
           </View>
         }

@@ -6,6 +6,8 @@ const {
   validateLoginInput,
 } = require("../utils/validate");
 const Post = require("../models/Post");
+const Conversation = require("../models/Conversation");
+const Message = require("../models/Message");
 
 function validateEmail(email) {
   return /^\S+@\S+\.\S+$/.test(email);
@@ -519,5 +521,155 @@ exports.rejectFollowRequest = async (req, res) => {
     res
       .status(500)
       .json({ message: "Takip isteği reddedilemedi", error: err.message });
+  }
+};
+
+// Kullanıcının DM listesini getir
+exports.getUserConversations = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const conversations = await Conversation.find({ users: userId })
+      .populate({
+        path: "users",
+        select: "_id username avatar",
+      })
+      .populate({
+        path: "lastMessage",
+        populate: { path: "sender receiver", select: "_id username avatar" },
+      })
+      .sort({ updatedAt: -1 });
+    // Karşıdaki kullanıcıyı bul
+    const result = conversations.map((conv) => {
+      const otherUser = conv.users.find((u) => u._id.toString() !== userId);
+      return {
+        id: conv._id,
+        user: otherUser,
+        lastMessage: conv.lastMessage?.text || "",
+        time: conv.lastMessage?.createdAt || conv.updatedAt,
+      };
+    });
+    res.json(result);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "DM listesi getirilemedi", error: err.message });
+  }
+};
+
+// İki kullanıcı arasındaki conversation'ı ve mesajları getir
+exports.getConversationMessages = async (req, res) => {
+  try {
+    const { userId, otherUserId } = req.params;
+    // Conversation bul veya oluştur
+    let conversation = await Conversation.findOne({
+      users: { $all: [userId, otherUserId] },
+    });
+    if (!conversation) {
+      conversation = await Conversation.create({
+        users: [userId, otherUserId],
+      });
+    }
+    // Mesajları getir
+    const messages = await Message.find({ conversation: conversation._id })
+      .sort({ createdAt: -1 })
+      .populate("sender receiver", "_id username avatar");
+    res.json({ conversationId: conversation._id, messages });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Mesajlar getirilemedi", error: err.message });
+  }
+};
+
+// Kullanıcının arkadaş listesini getir (takip ettikleri ve edenler birleşimi)
+exports.getUserFriends = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findById(userId)
+      .populate("following", "_id username avatar")
+      .populate("followers", "_id username avatar");
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    // Arkadaşlar: takip ettiklerin ve edenlerin birleşimi (tekrar edenler tek)
+    const all = [...user.following, ...user.followers];
+    const unique = [];
+    const seen = new Set();
+    for (const u of all) {
+      if (!seen.has(u._id.toString())) {
+        unique.push(u);
+        seen.add(u._id.toString());
+      }
+    }
+    res.json(unique);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Arkadaşlar getirilemedi", error: err.message });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  try {
+    const { userId, oldPassword, newPassword } = req.body;
+    if (!userId || !oldPassword || !newPassword) {
+      return res.status(400).json({ message: "Eksik veri" });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Eski şifre yanlış" });
+    }
+    if (newPassword.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "Yeni şifre en az 6 karakter olmalı" });
+    }
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    res.json({ message: "Şifre başarıyla değiştirildi" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Şifre değiştirilemedi", error: err.message });
+  }
+};
+
+exports.getNotificationSettings = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    res.json(
+      user.notificationSettings || {
+        push: true,
+        comment: true,
+        follow: true,
+      }
+    );
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Bildirim ayarları getirilemedi", error: err.message });
+  }
+};
+
+exports.updateNotificationSettings = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const { push, comment, follow } = req.body;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    user.notificationSettings = { push, comment, follow };
+    await user.save();
+    res.json({ message: "Bildirim ayarları güncellendi" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({
+        message: "Bildirim ayarları güncellenemedi",
+        error: err.message,
+      });
   }
 };

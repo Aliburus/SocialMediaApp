@@ -15,6 +15,12 @@ const {
   getNotifications,
   acceptFollowRequest,
   rejectFollowRequest,
+  getUserConversations,
+  getConversationMessages,
+  getUserFriends,
+  changePassword,
+  getNotificationSettings,
+  updateNotificationSettings,
 } = require("../controllers/userController");
 const storyController = require("../controllers/storyController");
 
@@ -35,5 +41,14 @@ router.post("/cancel-follow-request", cancelFollowRequest);
 router.get("/notifications/:userId", getNotifications);
 router.post("/accept-follow-request", acceptFollowRequest);
 router.post("/reject-follow-request", rejectFollowRequest);
+router.get("/:userId/conversations", getUserConversations);
+router.get("/:userId/friends", getUserFriends);
+router.get(
+  "/:userId/conversations/:otherUserId/messages",
+  getConversationMessages
+);
+router.post("/change-password", changePassword);
+router.get("/:userId/notification-settings", getNotificationSettings);
+router.post("/:userId/notification-settings", updateNotificationSettings);
 
 module.exports = router;

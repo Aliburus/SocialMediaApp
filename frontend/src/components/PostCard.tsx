@@ -17,7 +17,14 @@ import {
 } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { toggleLike, savePost, getComments } from "../services/api";
+import {
+  toggleLike,
+  savePost,
+  getComments,
+  deletePost,
+  archivePost,
+} from "../services/api";
+import { useNavigation } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
 
@@ -27,6 +34,7 @@ interface PostCardProps {
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
+  onDelete?: () => void;
 }
 
 // Mock arkadaş listesi
@@ -113,6 +121,7 @@ const PostCard: React.FC<PostCardProps> = ({
   onLike,
   onComment,
   onShare,
+  onDelete,
 }) => {
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(
@@ -129,6 +138,8 @@ const PostCard: React.FC<PostCardProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const [comments, setComments] = useState<any[]>([]);
   const [showFullCaption, setShowFullCaption] = useState(false);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const navigation = useNavigation<any>();
 
   // Like işlemi için debounce
   const likeTimeout = React.useRef<NodeJS.Timeout | null>(null);
@@ -245,6 +256,26 @@ const PostCard: React.FC<PostCardProps> = ({
     onShare?.();
   };
 
+  const handleDelete = async () => {
+    setShowOptionsModal(false);
+    try {
+      await deletePost(post._id || post.id);
+      if (onDelete) onDelete();
+    } catch (err) {
+      alert("Silme işlemi başarısız!");
+    }
+  };
+
+  const handleArchive = async () => {
+    setShowOptionsModal(false);
+    try {
+      await archivePost(post._id || post.id);
+      if (onDelete) onDelete();
+    } catch (err) {
+      alert("Arşivleme işlemi başarısız!");
+    }
+  };
+
   const renderFriendItem = ({ item }: { item: any }) => (
     <TouchableOpacity style={styles.friendItem}>
       <View style={styles.friendAvatarContainer}>
@@ -268,35 +299,46 @@ const PostCard: React.FC<PostCardProps> = ({
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
-          <Image source={{ uri: post.user.avatar }} style={styles.avatar} />
-          <View>
-            <View style={styles.usernameContainer}>
-              <Text style={[styles.username, { color: colors.text }]}>
-                {post.user.username}
-              </Text>
-              {post.user.isVerified && (
-                <Ionicons name="checkmark-circle" size={14} color="#1DA1F2" />
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate("UserProfile", { user: post.user })
+            }
+            style={styles.userInfo}
+          >
+            <Image source={{ uri: post.user.avatar }} style={styles.avatar} />
+            <View>
+              <View style={styles.usernameContainer}>
+                <Text style={[styles.username, { color: colors.text }]}>
+                  {post.user.username}
+                </Text>
+                {post.user.isVerified && (
+                  <Ionicons name="checkmark-circle" size={14} color="#1DA1F2" />
+                )}
+              </View>
+              {post.location && (
+                <Text
+                  style={[styles.location, { color: colors.textSecondary }]}
+                >
+                  {post.location}
+                </Text>
               )}
             </View>
-            {post.location && (
-              <Text style={[styles.location, { color: colors.textSecondary }]}>
-                {post.location}
-              </Text>
-            )}
-          </View>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
-          <Ionicons
-            name={isSaved ? "bookmark" : "bookmark-outline"}
-            size={24}
-            color={isSaved ? colors.primary : colors.text}
-          />
+        <TouchableOpacity
+          onPress={() => setShowOptionsModal(true)}
+          style={styles.saveButton}
+        >
+          <Ionicons name="ellipsis-vertical" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
       {/* Image */}
       <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
-        <Image source={{ uri: post.image }} style={styles.postImage} />
+        <Image
+          source={{ uri: post.image }}
+          style={[styles.postImage, { backgroundColor: colors.background }]}
+        />
       </TouchableOpacity>
 
       {/* Actions */}
@@ -332,6 +374,13 @@ const PostCard: React.FC<PostCardProps> = ({
             />
           </TouchableOpacity>
         </View>
+        <TouchableOpacity onPress={handleSave} style={styles.actionButton}>
+          <Ionicons
+            name={isSaved ? "bookmark" : "bookmark-outline"}
+            size={24}
+            color={isSaved ? colors.primary : colors.text}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Post Info */}
@@ -378,7 +427,12 @@ const PostCard: React.FC<PostCardProps> = ({
                 key={comment._id || comment.id}
                 style={{ flexDirection: "row", flexWrap: "wrap" }}
               >
-                <Text style={{ fontWeight: "bold", color: colors.text }}>
+                <Text
+                  style={{ fontWeight: "bold", color: colors.text }}
+                  onPress={() =>
+                    navigation.navigate("UserProfile", { user: comment.user })
+                  }
+                >
                   {comment.user?.username}
                 </Text>
                 <Text style={{ color: colors.text }}> {comment.text}</Text>
@@ -403,56 +457,35 @@ const PostCard: React.FC<PostCardProps> = ({
         )}
       </View>
 
-      {/* Share Modal */}
+      {/* Silme işlemi için modal */}
       <Modal
-        visible={showShareModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowShareModal(false)}
+        visible={showOptionsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOptionsModal(false)}
       >
-        <SafeAreaView style={styles.modalContainer} edges={["bottom"]}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowShareModal(false)}>
-              <Ionicons name="close" size={24} color="#000" />
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowOptionsModal(false)}
+        >
+          <View style={[styles.optionsModal, { backgroundColor: colors.card }]}>
+            <TouchableOpacity
+              onPress={handleDelete}
+              style={styles.optionButton}
+            >
+              <Text style={[styles.optionText, { color: "red" }]}>Sil</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Paylaş</Text>
-            <View style={{ width: 24 }} />
-          </View>
-
-          <View style={styles.shareOptions}>
-            <TouchableOpacity style={styles.shareOption}>
-              <View style={styles.shareOptionIcon}>
-                <Ionicons name="add-circle" size={32} color="#007AFF" />
-              </View>
-              <Text style={styles.shareOptionText}>Hikaye</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.shareOption}>
-              <View style={styles.shareOptionIcon}>
-                <Ionicons name="chatbubble" size={32} color="#007AFF" />
-              </View>
-              <Text style={styles.shareOptionText}>Mesaj</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.shareOption}>
-              <View style={styles.shareOptionIcon}>
-                <Ionicons name="copy" size={32} color="#007AFF" />
-              </View>
-              <Text style={styles.shareOptionText}>Bağlantıyı Kopyala</Text>
+            <TouchableOpacity
+              onPress={handleArchive}
+              style={styles.optionButton}
+            >
+              <Text style={[styles.optionText, { color: "blue" }]}>
+                Arşivle
+              </Text>
             </TouchableOpacity>
           </View>
-
-          <View style={styles.friendsSection}>
-            <Text style={styles.friendsSectionTitle}>Arkadaşlar</Text>
-            <FlatList
-              data={friendsList}
-              renderItem={renderFriendItem}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-            />
-          </View>
-        </SafeAreaView>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -505,7 +538,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: 8,
     paddingVertical: 10,
   },
   leftActions: {
@@ -627,6 +660,26 @@ const styles = StyleSheet.create({
   },
   sendButton: {
     padding: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  optionsModal: {
+    minWidth: 120,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+  },
+  optionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  optionText: {
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });
 

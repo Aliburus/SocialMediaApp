@@ -31,6 +31,11 @@ const userSchema = new mongoose.Schema(
         read: { type: Boolean, default: false },
       },
     ],
+    notificationSettings: {
+      push: { type: Boolean, default: true },
+      comment: { type: Boolean, default: true },
+      follow: { type: Boolean, default: true },
+    },
   },
   { timestamps: true }
 );
