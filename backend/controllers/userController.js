@@ -315,6 +315,25 @@ exports.sendFollowRequest = async (req, res) => {
     if (!targetUser || !user) {
       return res.status(404).json({ message: "Kullanıcı bulunamadı" });
     }
+    if (targetUser.privateAccount === false) {
+      // Hesap açık, direkt takip et
+      if (!user.following.includes(targetUserId)) {
+        user.following.push(targetUserId);
+      }
+      if (!targetUser.followers.includes(userId)) {
+        targetUser.followers.push(userId);
+      }
+      // Bildirim ekle
+      targetUser.notifications.push({ type: "follow", from: userId });
+      await user.save();
+      await targetUser.save();
+      return res.json({
+        following: user.following,
+        followers: targetUser.followers,
+        message: "Takip edildi (açık hesap)",
+      });
+    }
+    // Gizli hesap, eski mantıkla istek gönder
     if (!targetUser.pendingFollowRequests.includes(userId)) {
       targetUser.pendingFollowRequests.push(userId);
       // Bildirim ekle
@@ -665,11 +684,26 @@ exports.updateNotificationSettings = async (req, res) => {
     await user.save();
     res.json({ message: "Bildirim ayarları güncellendi" });
   } catch (err) {
+    res.status(500).json({
+      message: "Bildirim ayarları güncellenemedi",
+      error: err.message,
+    });
+  }
+};
+
+// Mesaj gizliliği güncelle
+exports.updateMessagePrivacy = async (req, res) => {
+  try {
+    const { userId, onlyFollowersCanMessage } = req.body;
+    if (!userId) return res.status(400).json({ message: "Eksik veri" });
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    user.onlyFollowersCanMessage = !!onlyFollowersCanMessage;
+    await user.save();
+    res.json({ onlyFollowersCanMessage: user.onlyFollowersCanMessage });
+  } catch (err) {
     res
       .status(500)
-      .json({
-        message: "Bildirim ayarları güncellenemedi",
-        error: err.message,
-      });
+      .json({ message: "Mesaj gizliliği güncellenemedi", error: err.message });
   }
 };

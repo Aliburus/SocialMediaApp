@@ -22,7 +22,7 @@ import {
   useFocusEffect,
 } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
-import axios from "axios";
+import { viewStory, deleteStory, archiveStory } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width, height } = Dimensions.get("window");
@@ -43,13 +43,17 @@ function timeAgo(dateString: string) {
 const StoryScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const { stories } = route.params as { stories: any[] };
+  const { stories, fromArchive } = route.params as {
+    stories: any[];
+    fromArchive?: boolean;
+  };
   const [current, setCurrent] = React.useState(0);
   const { colors } = useTheme();
   const [userId, setUserId] = React.useState<string | null>(null);
   const [isPaused, setIsPaused] = React.useState(false);
   const [progressValue, setProgressValue] = React.useState(0);
   const [remainingDuration, setRemainingDuration] = React.useState(8000);
+  const [showOptions, setShowOptions] = React.useState(false);
 
   const translateY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
@@ -61,7 +65,8 @@ const StoryScreen: React.FC = () => {
       }),
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dy > 100) {
-          if (navigation.canGoBack()) navigation.goBack();
+          if (fromArchive) navigation.navigate("Archive");
+          else if (navigation.canGoBack()) navigation.goBack();
           else navigation.navigate("Home");
         } else {
           Animated.spring(translateY, {
@@ -91,6 +96,30 @@ const StoryScreen: React.FC = () => {
     };
   }, [current, isPaused, remainingDuration]);
 
+  // Story süresi bittiğinde otomatik kapat
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+
+    if (!isPaused) {
+      // Tek story varsa 8 saniye sonra kapat
+      if (stories.length === 1) {
+        timer = setTimeout(() => {
+          if (fromArchive) {
+            navigation.navigate("Archive");
+          } else if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.navigate("Home");
+          }
+        }, 8000);
+      }
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [stories.length, isPaused, navigation]);
+
   useEffect(() => {
     setProgressValue(0);
     setRemainingDuration(8000);
@@ -108,14 +137,29 @@ const StoryScreen: React.FC = () => {
   useEffect(() => {
     // Story izlenmiş olarak işaretle
     if (stories[current]?._id && userId) {
-      axios.post(
-        `${
-          process.env.EXPO_PUBLIC_BACKEND_URL || "http://localhost:5000"
-        }/api/stories/${stories[current]._id}/view`,
-        { userId }
-      );
+      viewStory(stories[current]._id, userId).catch((err: any) => {
+        console.log("Story view error:", err);
+      });
     }
   }, [current, userId]);
+
+  // StoryScreen'den çıkıldığında tüm story'leri görüldü olarak işaretle
+  useFocusEffect(
+    React.useCallback(() => {
+      return () => {
+        // Screen'den çıkıldığında tüm story'leri görüldü olarak işaretle
+        if (userId && stories.length > 0) {
+          stories.forEach((story) => {
+            if (story._id) {
+              viewStory(story._id, userId).catch((err: any) => {
+                console.log("Story view error:", err);
+              });
+            }
+          });
+        }
+      };
+    }, [userId, stories])
+  );
 
   useEffect(() => {
     let anim: Animated.CompositeAnimation | undefined;
@@ -126,7 +170,12 @@ const StoryScreen: React.FC = () => {
         duration: remainingDuration,
         useNativeDriver: false,
       });
-      anim.start();
+      anim.start((result) => {
+        if (result.finished) {
+          // Progress tamamlandığında otomatik olarak handleNext çağır
+          handleNext();
+        }
+      });
     } else {
       progress.stopAnimation((value) => {
         setProgressValue(value);
@@ -142,18 +191,88 @@ const StoryScreen: React.FC = () => {
     if (current < stories.length - 1) {
       setCurrent((c) => c + 1);
     } else {
-      if (navigation.canGoBack()) {
-        navigation.goBack();
+      // Son story'den sonra otomatik kapat
+      // Eğer tüm story'ler görüldüyse kapat
+      const allViewed = stories.every((s) => s.isViewed);
+      if (allViewed) {
+        if (fromArchive) {
+          navigation.navigate("Archive");
+        } else if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate("Home");
+        }
       } else {
-        navigation.navigate("Home");
+        // Hala görülmemiş story'ler varsa kapat
+        if (fromArchive) {
+          navigation.navigate("Archive");
+        } else if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate("Home");
+        }
       }
     }
   };
 
   const handlePrev = () => {
     if (current > 0) setCurrent((c) => c - 1);
+    else if (fromArchive) navigation.navigate("Archive");
     else if (navigation.canGoBack()) navigation.goBack();
     else navigation.navigate("Home");
+  };
+
+  // Kullanıcının kendi story'si olup olmadığını kontrol et
+  const isOwnStory =
+    stories[current]?.user?._id === userId ||
+    stories[current]?.user?.id === userId;
+
+  // Story silme fonksiyonu
+  const handleDeleteStory = async () => {
+    try {
+      console.log("Story silme başlatılıyor:", stories[current]?._id, userId);
+      if (stories[current]?._id && userId) {
+        const result = await deleteStory(stories[current]._id, userId);
+        console.log("Story silme sonucu:", result);
+        setShowOptions(false);
+        // Story silindikten sonra HomeScreen'e dön ve story'leri yenile
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate("Home");
+        }
+      }
+    } catch (error) {
+      console.log("Story silme hatası:", error);
+      // Hata durumunda da kapat
+      setShowOptions(false);
+    }
+  };
+
+  // Story arşivleme fonksiyonu
+  const handleArchiveStory = async () => {
+    try {
+      console.log(
+        "Story arşivleme başlatılıyor:",
+        stories[current]?._id,
+        userId
+      );
+      if (stories[current]?._id && userId) {
+        const result = await archiveStory(stories[current]._id, userId);
+        console.log("Story arşivleme sonucu:", result);
+        setShowOptions(false);
+        // Story arşivlendikten sonra HomeScreen'e dön ve story'leri yenile
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate("Home");
+        }
+      }
+    } catch (error) {
+      console.log("Story arşivleme hatası:", error);
+      // Hata durumunda da kapat
+      setShowOptions(false);
+    }
   };
 
   return (
@@ -217,28 +336,57 @@ const StoryScreen: React.FC = () => {
 
           {/* Üst progress bar */}
           <View style={styles.progressContainer}>
-            <View style={{ flexDirection: "row", gap: 4 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
               {stories.map((_, i) => (
                 <View
                   key={i}
-                  style={[styles.progressBar, { flex: 1, marginHorizontal: 2 }]}
+                  style={{
+                    flex: 1,
+                    marginLeft: i === 0 ? 0 : 2,
+                    marginRight: i === stories.length - 1 ? 0 : 2,
+                  }}
                 >
                   {i < current ? (
-                    <View style={[styles.progressFill, { width: "100%" }]} />
+                    <View
+                      style={[
+                        styles.progressBar,
+                        styles.progressFill,
+                        { width: "100%" },
+                      ]}
+                    />
                   ) : i === current ? (
                     <Animated.View
                       style={[
+                        styles.progressBar,
                         styles.progressFill,
                         {
                           width: progress.interpolate({
                             inputRange: [0, 1],
-                            outputRange: [0, width - 24],
+                            outputRange: [
+                              0,
+                              (width - (stories.length - 1) * 4 - 24) /
+                                stories.length,
+                            ],
                           }),
                         },
                       ]}
                     />
                   ) : (
-                    <View style={[styles.progressFill, { width: 0 }]} />
+                    <View
+                      style={[
+                        styles.progressBar,
+                        {
+                          backgroundColor: "rgba(255,255,255,0.3)",
+                          width: "100%",
+                        },
+                      ]}
+                    />
                   )}
                 </View>
               ))}
@@ -275,12 +423,21 @@ const StoryScreen: React.FC = () => {
                   : ""}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.moreButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="close" size={28} color="#fff" />
-            </TouchableOpacity>
+            {isOwnStory ? (
+              <TouchableOpacity
+                style={styles.moreButton}
+                onPress={() => setShowOptions(!showOptions)}
+              >
+                <Ionicons name="ellipsis-horizontal" size={28} color="#fff" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.moreButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Alt bar */}
@@ -299,6 +456,42 @@ const StoryScreen: React.FC = () => {
             </View>
           </View>
         </Animated.View>
+
+        {/* Options Menu */}
+        {showOptions && isOwnStory && (
+          <View style={styles.optionsOverlay}>
+            <TouchableOpacity
+              style={styles.optionsBackground}
+              onPress={() => setShowOptions(false)}
+              activeOpacity={1}
+            />
+            <View style={styles.optionsContainer}>
+              <TouchableOpacity
+                style={styles.optionButton}
+                onPress={handleDeleteStory}
+              >
+                <Ionicons name="trash-outline" size={24} color="#ff3b30" />
+                <Text style={[styles.optionText, { color: "#ff3b30" }]}>
+                  Story'yi Sil
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.optionButton}
+                onPress={handleArchiveStory}
+              >
+                <Ionicons name="archive-outline" size={24} color="#fff" />
+                <Text style={styles.optionText}>Arşivle</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.optionButton, { borderBottomWidth: 0 }]}
+                onPress={() => setShowOptions(false)}
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+                <Text style={styles.optionText}>İptal</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </SafeAreaView>
     </>
   );
@@ -325,10 +518,10 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: "rgba(255,255,255,0.3)",
     borderRadius: 1,
+    overflow: "hidden",
   },
   progressFill: {
     height: 2,
-    width: "60%",
     backgroundColor: "#fff",
     borderRadius: 1,
   },
@@ -394,6 +587,46 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     padding: 8,
+  },
+  optionsOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+  },
+  optionsBackground: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  optionsContainer: {
+    position: "absolute",
+    top: "50%",
+    left: 20,
+    right: 20,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    padding: 16,
+    transform: [{ translateY: -100 }],
+  },
+  optionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+  },
+  optionText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+    marginLeft: 12,
   },
 });
 

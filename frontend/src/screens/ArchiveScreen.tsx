@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -7,13 +7,23 @@ import {
   FlatList,
   StyleSheet,
   Dimensions,
+  ScrollView,
+  PanResponder,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
-import { getUserPosts, getStories, archivePost } from "../services/api";
+import {
+  getUserPosts,
+  archivePost,
+  getArchivedStories,
+  unarchiveStory,
+} from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+
+const tabList = ["posts", "stories", "reels"];
 
 const ArchiveScreen: React.FC = () => {
   const { colors } = useTheme();
@@ -23,6 +33,36 @@ const ArchiveScreen: React.FC = () => {
   const [archivedReels, setArchivedReels] = useState<any[]>([]);
   const { width } = Dimensions.get("window");
   const imageSize = (width - 6) / 3;
+
+  const scrollViewRef = useRef<ScrollView>(null);
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 10,
+        onPanResponderMove: Animated.event([null, { dx: translateX }], {
+          useNativeDriver: false,
+        }),
+        onPanResponderRelease: (_, gestureState) => {
+          const currentIndex = tabList.indexOf(tab);
+          if (gestureState.dx > 50 && currentIndex > 0) {
+            setTab(tabList[currentIndex - 1] as any);
+          } else if (
+            gestureState.dx < -50 &&
+            currentIndex < tabList.length - 1
+          ) {
+            setTab(tabList[currentIndex + 1] as any);
+          }
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        },
+      }),
+    [tab]
+  );
 
   useFocusEffect(
     React.useCallback(() => {
@@ -41,8 +81,8 @@ const ArchiveScreen: React.FC = () => {
           )
         );
         // Storyler
-        const stories = await getStories(userId);
-        setArchivedStories(stories.filter((s: any) => s.archived));
+        const archivedStoriesData = await getArchivedStories(userId);
+        setArchivedStories(archivedStoriesData);
       })();
     }, [])
   );
@@ -53,6 +93,14 @@ const ArchiveScreen: React.FC = () => {
   if (tab === "reels") data = archivedReels;
 
   const navigation = useNavigation() as any;
+
+  React.useEffect(() => {
+    translateX.setValue(0);
+    // PanResponder gesture değerlerini sıfırla
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ x: 0, animated: false });
+    }
+  }, [tab]);
 
   return (
     <SafeAreaView
@@ -134,80 +182,104 @@ const ArchiveScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
       </View>
-      <FlatList
-        data={data}
-        keyExtractor={(item) => item.id || item._id}
-        numColumns={3}
-        contentContainerStyle={{ padding: 2 }}
-        renderItem={({ item }) => (
-          <View style={{ flex: 1 / 3, aspectRatio: 1, padding: 2 }}>
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate("PostDetail", {
-                  post: item,
-                  fromArchive: true,
-                })
-              }
-            >
-              <Image
-                source={{ uri: item.image }}
-                style={{
-                  width: imageSize,
-                  height: imageSize,
-                  borderRadius: 8,
-                  backgroundColor: colors.background,
-                }}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{
-                marginTop: 4,
-                backgroundColor: colors.primary,
-                borderRadius: 6,
-                paddingVertical: 4,
-                alignItems: "center",
-              }}
-              onPress={async () => {
-                await archivePost(item._id || item.id, false);
-                if (tab === "posts") {
-                  setArchivedPosts((prev) =>
-                    prev.filter(
-                      (p) => (p._id || p.id) !== (item._id || item.id)
-                    )
-                  );
-                } else if (tab === "stories") {
-                  setArchivedStories((prev) =>
-                    prev.filter(
-                      (s) => (s._id || s.id) !== (item._id || item.id)
-                    )
-                  );
-                } else if (tab === "reels") {
-                  setArchivedReels((prev) =>
-                    prev.filter(
-                      (r) => (r._id || r.id) !== (item._id || item.id)
-                    )
-                  );
+      <Animated.View style={{ flex: 1 }} {...panResponder.panHandlers}>
+        <FlatList
+          data={data}
+          keyExtractor={(item) => item.id || item._id}
+          numColumns={3}
+          contentContainerStyle={{ padding: 2 }}
+          scrollEnabled={true}
+          renderItem={({ item }) => (
+            <View style={{ flex: 1 / 3, aspectRatio: 1, padding: 2 }}>
+              <TouchableOpacity
+                onPress={() =>
+                  tab === "stories"
+                    ? navigation.navigate("Story", {
+                        stories: [item],
+                        fromArchive: true,
+                      })
+                    : navigation.navigate("PostDetail", {
+                        post: item,
+                        fromArchive: true,
+                      })
                 }
+              >
+                <Image
+                  source={{ uri: item.image }}
+                  style={{
+                    width: imageSize,
+                    height: imageSize,
+                    borderRadius: 8,
+                    backgroundColor: colors.background,
+                  }}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  marginTop: 4,
+                  backgroundColor: colors.primary,
+                  borderRadius: 6,
+                  paddingVertical: 4,
+                  alignItems: "center",
+                }}
+                onPress={async () => {
+                  if (tab === "stories") {
+                    try {
+                      const userStr = await AsyncStorage.getItem("user");
+                      const userObj = userStr ? JSON.parse(userStr) : null;
+                      const userId = userObj?._id || userObj?.id;
+                      await unarchiveStory(item._id || item.id, userId);
+                      setArchivedStories((prev) =>
+                        prev.filter(
+                          (s) => (s._id || s.id) !== (item._id || item.id)
+                        )
+                      );
+                    } catch (err: any) {
+                      alert(
+                        err?.response?.data?.message ||
+                          "Arşivden çıkarılamadı. 24 saatten eski olabilir."
+                      );
+                    }
+                  } else if (tab === "posts") {
+                    await archivePost(item._id || item.id, false);
+                    setArchivedPosts((prev) =>
+                      prev.filter(
+                        (p) => (p._id || p.id) !== (item._id || item.id)
+                      )
+                    );
+                  } else if (tab === "reels") {
+                    await archivePost(item._id || item.id, false);
+                    setArchivedReels((prev) =>
+                      prev.filter(
+                        (r) => (r._id || r.id) !== (item._id || item.id)
+                      )
+                    );
+                  }
+                }}
+              >
+                <Text style={{ color: "#fff", fontSize: 13 }}>
+                  {tab === "stories"
+                    ? "Arşivden Çıkar"
+                    : item.archived
+                    ? "Arşivden Çıkar"
+                    : "Arşivle"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          ListEmptyComponent={
+            <Text
+              style={{
+                color: colors.textSecondary,
+                textAlign: "center",
+                marginTop: 32,
               }}
             >
-              <Text style={{ color: "#fff", fontSize: 13 }}>
-                Arşivden Çıkar
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text
-            style={{
-              color: colors.textSecondary,
-              textAlign: "center",
-              marginTop: 32,
-            }}
-          >
-            Arşiv boş
-          </Text>
-        }
-      />
+              Arşiv boş
+            </Text>
+          }
+        />
+      </Animated.View>
     </SafeAreaView>
   );
 };

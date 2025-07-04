@@ -420,75 +420,11 @@ function NotificationsScreen() {
     return renderNotificationItem({ item });
   };
 
-  useEffect(() => {
-    (async () => {
-      const userStr = await AsyncStorage.getItem("user");
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      const userId = userObj?._id || userObj?.id;
-      if (!userId) return;
-      const settings = await getNotificationSettings(userId);
-      setPushEnabled(settings.push);
-      setCommentEnabled(settings.comment);
-      setFollowEnabled(settings.follow);
-    })();
-  }, []);
-
-  const handleUpdate = async (
-    key: "push" | "comment" | "follow",
-    value: boolean
-  ) => {
-    const userStr = await AsyncStorage.getItem("user");
-    const userObj = userStr ? JSON.parse(userStr) : null;
-    const userId = userObj?._id || userObj?.id;
-    if (!userId) return;
-    const newSettings = {
-      push: key === "push" ? value : pushEnabled,
-      comment: key === "comment" ? value : commentEnabled,
-      follow: key === "follow" ? value : followEnabled,
-    };
-    setPushEnabled(newSettings.push);
-    setCommentEnabled(newSettings.comment);
-    setFollowEnabled(newSettings.follow);
-    await updateNotificationSettings(userId, newSettings);
-  };
-
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background }}
       edges={["top", "bottom"]}
     >
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Bildirim Ayarları
-        </Text>
-        <View style={styles.item}>
-          <Text style={[styles.text, { color: colors.text }]}>
-            Push Bildirimleri
-          </Text>
-          <Switch
-            value={pushEnabled}
-            onValueChange={(v) => handleUpdate("push", v)}
-          />
-        </View>
-        <View style={styles.item}>
-          <Text style={[styles.text, { color: colors.text }]}>
-            Yorum Bildirimleri
-          </Text>
-          <Switch
-            value={commentEnabled}
-            onValueChange={(v) => handleUpdate("comment", v)}
-          />
-        </View>
-        <View style={styles.item}>
-          <Text style={[styles.text, { color: colors.text }]}>
-            Takipçi Bildirimleri
-          </Text>
-          <Switch
-            value={followEnabled}
-            onValueChange={(v) => handleUpdate("follow", v)}
-          />
-        </View>
-      </View>
       <View
         style={{
           padding: 16,

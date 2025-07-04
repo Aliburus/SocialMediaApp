@@ -14,7 +14,6 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { mockUsers, mockPosts } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
 import {
   searchUsers as searchUsersApi,
@@ -43,6 +42,10 @@ const SearchScreen: React.FC = () => {
     {}
   );
   const navigation = useNavigation<any>();
+
+  // Boş array kullan
+  const posts: any[] = [];
+  console.log("SearchScreen: posts length:", posts.length);
 
   useEffect(() => {
     (async () => {
@@ -81,9 +84,7 @@ const SearchScreen: React.FC = () => {
     }
   };
 
-  const filteredUsers = mockUsers.filter((user) =>
-    user.username.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers: any[] = [];
 
   const handleSendRequest = async (userId: string) => {
     setLoadingMap((prev) => ({ ...prev, [userId]: true }));
@@ -254,12 +255,21 @@ const SearchScreen: React.FC = () => {
       </View>
       {/* Sadece postlar listelensin */}
       <FlatList
-        data={mockPosts}
+        data={posts}
         renderItem={renderPostItem}
         keyExtractor={(item) => item.id}
         numColumns={3}
         showsVerticalScrollIndicator={false}
         key={"posts-3-cols"}
+        ListEmptyComponent={
+          <View style={styles.emptyStateContainer}>
+            <Text
+              style={[styles.emptyStateText, { color: colors.textSecondary }]}
+            >
+              Henüz post yok
+            </Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
@@ -360,6 +370,17 @@ const styles = StyleSheet.create({
   postImage: {
     width: imageSize,
     height: imageSize,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    minHeight: 200,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    textAlign: "center",
   },
 });
 

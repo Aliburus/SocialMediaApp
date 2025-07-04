@@ -36,6 +36,9 @@ const userSchema = new mongoose.Schema(
       comment: { type: Boolean, default: true },
       follow: { type: Boolean, default: true },
     },
+    gender: { type: String, enum: ["male", "female", ""], default: "" },
+    privateAccount: { type: Boolean, default: false },
+    onlyFollowersCanMessage: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

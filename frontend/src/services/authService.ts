@@ -5,6 +5,7 @@ export const register = async (data: {
   username: string;
   email: string;
   password: string;
+  gender?: string;
 }) => {
   const res = await api.post("/users/register", data);
   return res.data;

@@ -35,13 +35,20 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [gender, setGender] = useState<string>("");
 
   const handleRegister = async () => {
     setError(null);
     setSuccess(null);
     setLoading(true);
     try {
-      await registerService({ name: fullName, username, email, password });
+      await registerService({
+        name: fullName,
+        username,
+        email,
+        password,
+        gender,
+      });
       setLoading(false);
       setSuccess(messages.registerSuccess);
       setTimeout(() => {
@@ -190,6 +197,73 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                       color={colors.textSecondary}
                     />
                   </TouchableOpacity>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text
+                    style={{ color: colors.textSecondary, marginBottom: 4 }}
+                  >
+                    Cinsiyet
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 16 }}>
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginRight: 16,
+                      }}
+                      onPress={() => setGender("male")}
+                    >
+                      <Ionicons
+                        name={
+                          gender === "male"
+                            ? "radio-button-on"
+                            : "radio-button-off"
+                        }
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <Text style={{ color: colors.text, marginLeft: 6 }}>
+                        Erkek
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginRight: 16,
+                      }}
+                      onPress={() => setGender("female")}
+                    >
+                      <Ionicons
+                        name={
+                          gender === "female"
+                            ? "radio-button-on"
+                            : "radio-button-off"
+                        }
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <Text style={{ color: colors.text, marginLeft: 6 }}>
+                        Kadın
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flexDirection: "row", alignItems: "center" }}
+                      onPress={() => setGender("")}
+                    >
+                      <Ionicons
+                        name={
+                          gender === "" ? "radio-button-on" : "radio-button-off"
+                        }
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <Text style={{ color: colors.text, marginLeft: 6 }}>
+                        Belirtmek istemiyorum
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <TouchableOpacity

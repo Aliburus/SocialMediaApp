@@ -8,6 +8,8 @@ interface StoryItemProps {
   onPress?: () => void;
   isActive?: boolean;
   isViewed?: boolean;
+  totalStories?: number;
+  viewedStories?: number;
 }
 
 const StoryItem: React.FC<StoryItemProps> = ({
@@ -15,15 +17,28 @@ const StoryItem: React.FC<StoryItemProps> = ({
   onPress,
   isActive,
   isViewed,
+  totalStories,
+  viewedStories,
 }) => {
   const avatar = story.user?.avatar || "https://ui-avatars.com/api/?name=User";
   const username = story.user?.username || "Kullanıcı";
+
+  // isViewed prop'u veya story'nin kendi viewed durumu
+  const hasBeenViewed = isViewed || story.isViewed;
+
+  // Kısmi görüntüleme durumu (bazı story'ler görülmüş)
+  const isPartiallyViewed =
+    totalStories &&
+    viewedStories &&
+    viewedStories > 0 &&
+    viewedStories < totalStories;
+
   return (
     <TouchableOpacity onPress={onPress} style={styles.container}>
       <View style={styles.imageContainer}>
-        {isViewed ?? false ? (
+        {hasBeenViewed ? (
           <View style={styles.outerBorderGray}>
-            <View style={styles.innerBlackCircle}>
+            <View style={styles.innerWhiteCircle}>
               <Image source={{ uri: avatar }} style={styles.avatar} />
             </View>
           </View>
@@ -34,7 +49,7 @@ const StoryItem: React.FC<StoryItemProps> = ({
             end={{ x: 1, y: 1 }}
             style={styles.outerBorderGradient}
           >
-            <View style={styles.innerBlackCircle}>
+            <View style={styles.innerWhiteCircle}>
               <Image source={{ uri: avatar }} style={styles.avatar} />
             </View>
           </LinearGradient>
@@ -69,16 +84,16 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     borderWidth: 3,
-    borderColor: "#333333",
+    borderColor: "#bbb",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#000",
+    backgroundColor: "#fff",
   },
-  innerBlackCircle: {
+  innerWhiteCircle: {
     width: 66,
     height: 66,
     borderRadius: 33,
-    backgroundColor: "#000",
+    backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
   },

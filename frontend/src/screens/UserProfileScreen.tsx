@@ -225,6 +225,33 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     );
   };
 
+  // Mesaj butonu render fonksiyonu
+  const renderMessageButton = () => {
+    if (currentUserId === (profile._id || profile.id)) return null;
+    // Eğer sadece takipçiler mesaj gönderebilir ve takipçi değilse gösterme
+    if (profile.onlyFollowersCanMessage && !isFollowing && !followed)
+      return null;
+    return (
+      <TouchableOpacity
+        style={[
+          styles.followButton,
+          { backgroundColor: colors.primary, marginTop: 8 },
+        ]}
+        onPress={() => navigation.navigate("DMChat", { user: profile })}
+      >
+        <Ionicons
+          name="chatbubble-ellipses-outline"
+          size={18}
+          color="#fff"
+          style={{ marginRight: 6 }}
+        />
+        <Text style={[styles.followButtonText, { color: "#fff" }]}>
+          Mesaj Gönder
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView
@@ -271,13 +298,29 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
             {/* Profile Info */}
             <View style={styles.profileInfo}>
               <View style={styles.profileHeader}>
-                <Image
-                  source={{ uri: profile?.avatar || "" }}
-                  style={[
-                    styles.profileImage,
-                    { backgroundColor: colors.background },
-                  ]}
-                />
+                {/* Story bar: sadece hikaye varsa ve hesap gizli değilse */}
+                {userPosts.some((p) => p.type === "story" || p.isStory) &&
+                !profile?.isPrivate ? (
+                  <View
+                    style={[styles.storyBar, { borderColor: colors.primary }]}
+                  >
+                    <Image
+                      source={{ uri: profile?.avatar || "" }}
+                      style={[
+                        styles.profileImage,
+                        { backgroundColor: colors.background },
+                      ]}
+                    />
+                  </View>
+                ) : (
+                  <Image
+                    source={{ uri: profile?.avatar || "" }}
+                    style={[
+                      styles.profileImage,
+                      { backgroundColor: colors.background },
+                    ]}
+                  />
+                )}
                 <View style={styles.statsContainer}>
                   <View style={styles.statItem}>
                     <Text style={[styles.statNumber, { color: colors.text }]}>
@@ -337,6 +380,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
               </View>
 
               {renderFollowButton()}
+              {renderMessageButton()}
             </View>
 
             {/* Tabs */}
@@ -560,6 +604,14 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     textAlign: "center",
+  },
+  storyBar: {
+    borderWidth: 3,
+    borderRadius: 999,
+    padding: 2,
+    marginBottom: 4,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
 

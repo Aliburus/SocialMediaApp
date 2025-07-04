@@ -17,6 +17,7 @@ const AddStoryScreen: React.FC = () => {
   const cameraRef = useRef<any>(null);
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
+  const [lastTap, setLastTap] = useState<number>(0);
 
   if (!permission) {
     return <View style={{ flex: 1, backgroundColor: "#000" }} />;
@@ -73,26 +74,42 @@ const AddStoryScreen: React.FC = () => {
   }
 
   const pickFromGallery = async () => {
+    console.log("Galeri butonuna tıklandı");
     try {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log("Galeri izni durumu:", status);
       if (status !== "granted") {
         alert("Galeriye erişim izni vermeniz gerekiyor.");
         return;
       }
+      console.log("Galeri açılıyor...");
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
+      console.log("Galeri sonucu:", result);
       if (!result.canceled && result.assets && result.assets.length > 0) {
+        console.log("Fotoğraf seçildi:", result.assets[0].uri);
         setPreview(result.assets[0].uri);
       }
     } catch (err) {
       console.log("[STORY GALERİ HATASI]", err);
       alert("Galeri açılırken bir hata oluştu.");
     }
+  };
+
+  const handleDoubleTap = () => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+
+    if (lastTap && now - lastTap < DOUBLE_TAP_DELAY) {
+      // Çift tık algılandı
+      toggleCameraFacing();
+    }
+    setLastTap(now);
   };
 
   if (preview) {
@@ -173,6 +190,17 @@ const AddStoryScreen: React.FC = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "black" }}>
       <CameraView style={{ flex: 1 }} facing={facing} ref={cameraRef}>
+        <TouchableOpacity
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "transparent",
+          }}
+          onPress={handleDoubleTap}
+        />
         <TouchableOpacity
           style={styles.flipButton}
           onPress={toggleCameraFacing}

@@ -1,5 +1,11 @@
 {
   "dependencies": {
-    "expo-status-bar": "~2.2.3"
+    "@react-native-community/slider": "^4.5.7",
+    "expo-status-bar": "~2.2.3",
+    "react-native-maps": "^1.24.3",
+    "react-native-modal": "^14.0.0-rc.1"
+  },
+  "devDependencies": {
+    "@types/react-native-maps": "^0.24.1"
   }
 }

@@ -67,3 +67,116 @@ exports.viewStory = async (req, res) => {
       .json({ message: "Story izlenme kaydedilemedi", error: err.message });
   }
 };
+
+exports.deleteStory = async (req, res) => {
+  try {
+    const storyId = req.params.id;
+    const { userId } = req.body;
+    if (!userId)
+      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+
+    const story = await Story.findById(storyId);
+    if (!story) return res.status(404).json({ message: "Story bulunamadı" });
+
+    // Sadece story sahibi silebilir
+    if (story.user.toString() !== userId) {
+      return res.status(403).json({ message: "Bu işlem için yetkiniz yok" });
+    }
+
+    await Story.findByIdAndDelete(storyId);
+    res.json({ message: "Story başarıyla silindi" });
+  } catch (err) {
+    res.status(500).json({ message: "Story silinemedi", error: err.message });
+  }
+};
+
+exports.archiveStory = async (req, res) => {
+  try {
+    const storyId = req.params.id;
+    const { userId } = req.body;
+    if (!userId)
+      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+
+    const story = await Story.findById(storyId);
+    if (!story) return res.status(404).json({ message: "Story bulunamadı" });
+
+    // Sadece story sahibi arşivleyebilir
+    if (story.user.toString() !== userId) {
+      return res.status(403).json({ message: "Bu işlem için yetkiniz yok" });
+    }
+
+    story.archived = true;
+    story.archivedAt = new Date();
+    await story.save();
+
+    res.json({ message: "Story başarıyla arşivlendi" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Story arşivlenemedi", error: err.message });
+  }
+};
+
+// Arşivlenen story'leri getir
+exports.getArchivedStories = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    if (!userId)
+      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+
+    const stories = await Story.find({
+      user: userId,
+      archived: true,
+    }).populate("user");
+
+    const result = stories.map((s) => {
+      const obj = s.toObject();
+      obj.isViewed = (s.viewers || []).map(String).includes(String(userId));
+      return obj;
+    });
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({
+      message: "Arşivlenen storyler getirilemedi",
+      error: err.message,
+    });
+  }
+};
+
+// Story'yi arşivden çıkar
+exports.unarchiveStory = async (req, res) => {
+  try {
+    const storyId = req.params.id;
+    const { userId } = req.body;
+    if (!userId)
+      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+
+    const story = await Story.findById(storyId);
+    if (!story) return res.status(404).json({ message: "Story bulunamadı" });
+
+    // Sadece story sahibi arşivden çıkarabilir
+    if (story.user.toString() !== userId) {
+      return res.status(403).json({ message: "Bu işlem için yetkiniz yok" });
+    }
+
+    // 24 saatten eski ise çıkarılamaz
+    const now = new Date();
+    const created = story.createdAt || story.timestamp;
+    if (now - created > 24 * 60 * 60 * 1000) {
+      return res
+        .status(400)
+        .json({ message: "24 saatten eski story arşivden çıkarılamaz" });
+    }
+
+    story.archived = false;
+    story.archivedAt = undefined;
+    await story.save();
+
+    res.json({ message: "Story arşivden çıkarıldı" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Story arşivden çıkarılamadı", error: err.message });
+  }
+};

@@ -86,6 +86,38 @@ export const getStories = async (userId?: string) => {
   return res.data;
 };
 
+// Story'yi görüldü olarak işaretle
+export const viewStory = async (storyId: string, userId: string) => {
+  const res = await api.post(`/users/stories/${storyId}/view`, { userId });
+  return res.data;
+};
+
+// Story'yi sil
+export const deleteStory = async (storyId: string, userId: string) => {
+  const res = await api.delete(`/users/stories/${storyId}`, {
+    data: { userId },
+  });
+  return res.data;
+};
+
+// Story'yi arşivle
+export const archiveStory = async (storyId: string, userId: string) => {
+  const res = await api.post(`/users/stories/${storyId}/archive`, { userId });
+  return res.data;
+};
+
+// Arşivlenen story'leri getir
+export const getArchivedStories = async (userId: string) => {
+  const res = await api.get(`/users/stories/archived/${userId}`);
+  return res.data;
+};
+
+// Story'yi arşivden çıkar
+export const unarchiveStory = async (storyId: string, userId: string) => {
+  const res = await api.post(`/users/stories/${storyId}/unarchive`, { userId });
+  return res.data;
+};
+
 // Postu kaydet/kaldır (toggle)
 export const savePost = async (userId: string, postId: string) => {
   console.log("[api/savePost] POST", api.defaults.baseURL + "/users/save", {

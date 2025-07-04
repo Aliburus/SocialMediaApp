@@ -81,8 +81,14 @@ const HomeScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
       const data = await getStories(userId);
-      console.log("[STORY API] Gelen storyler:", data);
-      setStories(data);
+
+      // Story'lerin görüldü durumunu kontrol et
+      const updatedStories = data.map((story: any) => ({
+        ...story,
+        isViewed: story.isViewed || false,
+      }));
+
+      setStories(updatedStories);
     } catch (err) {
       console.log("[STORY] Hata:", err);
     }
@@ -142,6 +148,16 @@ const HomeScreen: React.FC = () => {
         const userObj = userStr ? JSON.parse(userStr) : null;
         setUserId(userObj?._id || userObj?.id || null);
       })();
+
+      // Yeni post paylaşıldıysa en üste git
+      const route = navigation
+        .getState()
+        .routes.find((r: any) => r.name === "Home");
+      if (route?.params?.scrollToTop && flatListRef.current) {
+        setTimeout(() => {
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        }, 500);
+      }
     }, [])
   );
 
@@ -157,6 +173,28 @@ const HomeScreen: React.FC = () => {
   // Story ekleme veya Story ekranından çıkınca story'leri güncelle
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
+      fetchStories();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  // StoryScreen'den çıkıldığında story'leri güncelle
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (e: any) => {
+      if (e.target.includes("Story")) {
+        // StoryScreen'den çıkıldığında story'leri yeniden fetch et
+        setTimeout(() => {
+          fetchStories();
+        }, 100);
+      }
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  // StoryScreen'den focus olduğunda story'leri güncelle
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      // StoryScreen'den döndüğünde story'leri yenile
       fetchStories();
     });
     return unsubscribe;
@@ -184,13 +222,21 @@ const HomeScreen: React.FC = () => {
           (fp) => (fp._id || fp.id) === (post._id || post.id)
         ) && !post.archived
     );
+    let allPosts = [];
     if (followingPosts.length === 0 && safeMyPosts.length > 0) {
-      return safeMyPosts.filter((p) => !p.archived);
+      allPosts = safeMyPosts.filter((p) => !p.archived);
+    } else if (followingPosts.length > 0 && safeMyPosts.length > 0) {
+      allPosts = [...followingPosts, ...myUniquePosts];
+    } else {
+      allPosts = followingPosts;
     }
-    if (followingPosts.length > 0 && safeMyPosts.length > 0) {
-      return [...followingPosts, ...myUniquePosts];
-    }
-    return followingPosts;
+
+    // Postları tarihe göre sırala (en yeni en üstte)
+    return allPosts.sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.timestamp || 0);
+      const dateB = new Date(b.createdAt || b.timestamp || 0);
+      return dateB.getTime() - dateA.getTime();
+    });
   }, [posts, followingIds, myPosts]);
 
   const filteredStories = React.useMemo(() => {
@@ -247,7 +293,7 @@ const HomeScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  // Story'leri kullanıcıya göre grupla (sadece takip edilenler)
+  // Story'leri kullanıcıya göre grupla (kendi story'nim her zaman ilk başta)
   const groupedStories = React.useMemo(() => {
     const map = new Map();
     filteredStories.forEach((story) => {
@@ -255,8 +301,28 @@ const HomeScreen: React.FC = () => {
       if (!map.has(userId)) map.set(userId, []);
       map.get(userId).push(story);
     });
-    return Array.from(map.values()).map((userStories) => userStories[0]);
-  }, [filteredStories]);
+
+    const allStories = Array.from(map.values()).map((userStories) => {
+      // Tüm story'ler görüldüyse isViewed true olsun
+      const allViewed = userStories.every((s: any) => s.isViewed);
+      return {
+        ...userStories[0],
+        isViewed: allViewed,
+        totalStories: userStories.length,
+        viewedStories: userStories.filter((s: any) => s.isViewed).length,
+      };
+    });
+
+    // Kendi story'ni her zaman ilk başta göster
+    const myStories = allStories.filter(
+      (story) => (story.user._id || story.user.id) === userId
+    );
+    const otherStories = allStories.filter(
+      (story) => (story.user._id || story.user.id) !== userId
+    );
+
+    return [...myStories, ...otherStories];
+  }, [filteredStories, userId]);
 
   // StoryScreen açıksa story barı gösterme
   const isStoryOpen = navigation
@@ -264,14 +330,27 @@ const HomeScreen: React.FC = () => {
     .routes.some((r: any) => r.name === "Story");
 
   const handleStoryPress = (item: any) => {
-    const userStories = stories.filter(
-      (s) => (s.user._id || s.user.id) === (item.user._id || item.user.id)
-    );
-    setActiveUserId(item.user._id || item.user.id);
-    navigation.navigate("Story", {
-      stories: userStories,
-      activeUserId: item.user._id || item.user.id,
-    });
+    // Tüm görülmemiş story'leri topla
+    const allUnviewedStories = stories.filter((s) => !s.isViewed);
+
+    // Eğer görülmemiş story varsa, onları göster
+    if (allUnviewedStories.length > 0) {
+      setActiveUserId(item.user._id || item.user.id);
+      navigation.navigate("Story", {
+        stories: allUnviewedStories,
+        activeUserId: item.user._id || item.user.id,
+      });
+    } else {
+      // Görülmemiş story yoksa sadece o kullanıcının story'lerini göster
+      const userStories = stories.filter(
+        (s) => (s.user._id || s.user.id) === (item.user._id || item.user.id)
+      );
+      setActiveUserId(item.user._id || item.user.id);
+      navigation.navigate("Story", {
+        stories: userStories,
+        activeUserId: item.user._id || item.user.id,
+      });
+    }
   };
 
   // Story barını ListHeaderComponent olarak ekle
@@ -285,30 +364,48 @@ const HomeScreen: React.FC = () => {
         },
       ]}
     >
-      <FlatList
-        data={groupedStories}
-        renderItem={({ item }) =>
-          item.user ? (
-            <StoryItem
-              story={item}
-              isActive={activeUserId === (item.user._id || item.user.id)}
-              isViewed={viewedUserIds.has(item.user._id || item.user.id)}
-              onPress={() => handleStoryPress(item)}
-            />
-          ) : null
-        }
-        keyExtractor={(item) => item._id || item.id}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        ListHeaderComponent={renderMyStory()}
-        contentContainerStyle={styles.storiesContent}
-        style={styles.storiesList}
-      />
-      {/* {groupedStories.length === 0 && (
-        <Text style={{ color: colors.textSecondary, padding: 16, textAlign: "center" }}>
-          Henüz hiç hikaye yok.
-        </Text>
-      )} */}
+      {groupedStories.length === 0 ? (
+        <View
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          {renderMyStory()}
+          <Text
+            style={{
+              color: colors.textSecondary,
+              textAlign: "center",
+              marginTop: 12,
+            }}
+          >
+            Henüz hiç hikaye yok.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={groupedStories}
+          renderItem={({ item }) =>
+            item.user ? (
+              <StoryItem
+                story={item}
+                isActive={activeUserId === (item.user._id || item.user.id)}
+                isViewed={item.isViewed}
+                totalStories={item.totalStories}
+                viewedStories={item.viewedStories}
+                onPress={() => handleStoryPress(item)}
+              />
+            ) : null
+          }
+          keyExtractor={(item) => item._id || item.id}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          ListHeaderComponent={renderMyStory()}
+          contentContainerStyle={styles.storiesContent}
+          style={styles.storiesList}
+        />
+      )}
     </View>
   );
 
@@ -374,7 +471,6 @@ const HomeScreen: React.FC = () => {
     <PostCard
       post={item}
       onPress={() => navigation.navigate("PostDetail", { post: item })}
-      onLike={() => console.log("Like pressed")}
       onComment={() =>
         navigation.navigate("Comment", { postId: item._id || item.id })
       }
@@ -451,7 +547,10 @@ const HomeScreen: React.FC = () => {
             onRefresh={onRefresh}
             ListHeaderComponent={!isStoryOpen ? renderListHeader : undefined}
             style={styles.postsList}
-            contentContainerStyle={styles.postsContent}
+            contentContainerStyle={[
+              styles.postsContent,
+              { paddingBottom: insets.bottom + 24 },
+            ]}
             initialNumToRender={8}
             maxToRenderPerBatch={8}
             windowSize={10}

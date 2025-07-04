@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   FlatList,
   Dimensions,
   RefreshControl,
+  PanResponder,
+  Animated,
 } from "react-native";
 import {
   SafeAreaView,
@@ -44,6 +46,37 @@ const ProfileScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [savedPosts, setSavedPosts] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
+
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = React.useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 10,
+        onPanResponderMove: Animated.event([null, { dx: translateX }], {
+          useNativeDriver: false,
+        }),
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx > 50) {
+            // Sağa kaydırma - önceki tab
+            if (activeTab === "reels") setActiveTab("grid");
+            else if (activeTab === "saved") setActiveTab("reels");
+            else if (activeTab === "tagged") setActiveTab("saved");
+          } else if (gestureState.dx < -50) {
+            // Sola kaydırma - sonraki tab
+            if (activeTab === "grid") setActiveTab("reels");
+            else if (activeTab === "reels") setActiveTab("saved");
+            else if (activeTab === "saved") setActiveTab("tagged");
+          }
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        },
+      }),
+    [activeTab]
+  );
 
   const fetchUserData = async () => {
     setLoading(true);
@@ -153,256 +186,262 @@ const ProfileScreen: React.FC = () => {
       style={{ flex: 1, backgroundColor: colors.background }}
       edges={["top", "bottom"]}
     >
-      <ScrollView
-        style={{ backgroundColor: colors.background }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity>
-            <Ionicons name="person-add-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <View style={styles.usernameContainer}>
-            <Text style={[styles.headerUsername, { color: colors.text }]}>
-              {profile?.username || ""}
-            </Text>
-            {profile?.isVerified && (
-              <Ionicons name="checkmark-circle" size={20} color="#1DA1F2" />
-            )}
-          </View>
-          <TouchableOpacity onPress={() => navigation.navigate("Settings")}>
-            <Ionicons name="menu-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Profile Info */}
-        <View style={styles.profileInfo}>
-          <View style={styles.profileHeader}>
-            <Image
-              source={{ uri: profile?.avatar || "" }}
-              style={[
-                styles.profileImage,
-                { backgroundColor: colors.background },
-              ]}
-            />
-            <View style={styles.statsContainer}>
-              <View style={styles.statItem}>
-                <Text style={[styles.statNumber, { color: colors.text }]}>
-                  {userPosts.filter((p) => !p.archived).length}
-                </Text>
-                <Text
-                  style={[styles.statLabel, { color: colors.textSecondary }]}
-                >
-                  Posts
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.statItem}
-                onPress={() => navigation.navigate("Followers" as never)}
-              >
-                <Text style={[styles.statNumber, { color: colors.text }]}>
-                  {followersCount}
-                </Text>
-                <Text
-                  style={[styles.statLabel, { color: colors.textSecondary }]}
-                >
-                  Followers
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.statItem}
-                onPress={() => navigation.navigate("Following" as never)}
-              >
-                <Text style={[styles.statNumber, { color: colors.text }]}>
-                  {followingCount}
-                </Text>
-                <Text
-                  style={[styles.statLabel, { color: colors.textSecondary }]}
-                >
-                  Following
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.bioContainer}>
-            <Text style={[styles.fullName, { color: colors.text }]}>
-              {profile?.name || ""}
-            </Text>
-            {profile?.bio && (
-              <Text style={[styles.bio, { color: colors.text }]}>
-                {profile.bio}
-              </Text>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.editButton, { backgroundColor: colors.surface }]}
-            onPress={() => navigation.navigate("EditProfile" as never)}
-          >
-            <Text style={[styles.editButtonText, { color: colors.text }]}>
-              Edit Profile
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Story Highlights */}
-        <View
-          style={[
-            styles.highlightsContainer,
-            { borderBottomColor: colors.border },
-          ]}
-        >
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <TouchableOpacity
-              style={styles.addHighlight}
-              onPress={() => navigation.navigate("AddStory")}
-            >
-              <View
-                style={[
-                  styles.addHighlightCircle,
-                  { borderColor: colors.border },
-                ]}
-              >
-                <Ionicons name="add" size={24} color={colors.textSecondary} />
-              </View>
-              <Text
-                style={[styles.highlightText, { color: colors.textSecondary }]}
-              >
-                New
-              </Text>
-            </TouchableOpacity>
-            {stories &&
-              stories.length > 0 &&
-              stories.map((story: any) => (
-                <TouchableOpacity
-                  key={story._id || story.id}
-                  style={styles.addHighlight}
-                >
-                  <Image
-                    source={{ uri: story.image }}
-                    style={styles.profileImage}
+      <Animated.View style={{ flex: 1 }} {...panResponder.panHandlers}>
+        <FlatList
+          data={activeTab === "reels" ? userReels : tabData}
+          keyExtractor={(item) => item._id || item.id}
+          numColumns={3}
+          renderItem={renderPostItem}
+          contentContainerStyle={{ padding: 2 }}
+          scrollEnabled={true}
+          ListHeaderComponent={
+            <>
+              {/* Header */}
+              <View style={styles.header}>
+                <TouchableOpacity>
+                  <Ionicons
+                    name="person-add-outline"
+                    size={24}
+                    color={colors.text}
                   />
-                  <Text
+                </TouchableOpacity>
+                <View style={styles.usernameContainer}>
+                  <Text style={[styles.headerUsername, { color: colors.text }]}>
+                    {profile?.username || ""}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("Settings")}
+                >
+                  <Ionicons name="menu-outline" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Profile Info */}
+              <View style={styles.profileInfo}>
+                <View style={styles.profileHeader}>
+                  <Image
+                    source={{ uri: profile?.avatar || "" }}
                     style={[
-                      styles.highlightText,
-                      { color: colors.textSecondary },
+                      styles.profileImage,
+                      { backgroundColor: colors.background },
                     ]}
-                  >
-                    {story.user?.username || "Story"}
+                  />
+                  <View style={styles.statsContainer}>
+                    <View style={styles.statItem}>
+                      <Text style={[styles.statNumber, { color: colors.text }]}>
+                        {userPosts.filter((p) => !p.archived).length}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.statLabel,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Posts
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.statItem}
+                      onPress={() => navigation.navigate("Followers" as never)}
+                    >
+                      <Text style={[styles.statNumber, { color: colors.text }]}>
+                        {followersCount}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.statLabel,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Followers
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.statItem}
+                      onPress={() => navigation.navigate("Following" as never)}
+                    >
+                      <Text style={[styles.statNumber, { color: colors.text }]}>
+                        {followingCount}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.statLabel,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Following
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.bioContainer}>
+                  <Text style={[styles.fullName, { color: colors.text }]}>
+                    {profile?.name || ""}
+                  </Text>
+                  {profile?.bio && (
+                    <Text style={[styles.bio, { color: colors.text }]}>
+                      {profile.bio}
+                    </Text>
+                  )}
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.editButton,
+                    { backgroundColor: colors.surface },
+                  ]}
+                  onPress={() => navigation.navigate("EditProfile" as never)}
+                >
+                  <Text style={[styles.editButtonText, { color: colors.text }]}>
+                    Edit Profile
                   </Text>
                 </TouchableOpacity>
-              ))}
-          </ScrollView>
-        </View>
+              </View>
 
-        {/* Tabs */}
-        <View
-          style={[styles.tabsContainer, { borderBottomColor: colors.border }]}
-        >
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === "grid" && [
-                styles.activeTab,
-                { borderBottomColor: colors.primary },
-              ],
-            ]}
-            onPress={() => setActiveTab("grid")}
-          >
-            <Ionicons
-              name="grid-outline"
-              size={24}
-              color={
-                activeTab === "grid" ? colors.primary : colors.textSecondary
-              }
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === "reels" && [
-                styles.activeTab,
-                { borderBottomColor: colors.primary },
-              ],
-            ]}
-            onPress={() => setActiveTab("reels")}
-          >
-            <Ionicons
-              name="play-outline"
-              size={24}
-              color={
-                activeTab === "reels" ? colors.primary : colors.textSecondary
-              }
-            />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === "saved" && [
-                styles.activeTab,
-                { borderBottomColor: colors.primary },
-              ],
-            ]}
-            onPress={() => setActiveTab("saved")}
-          >
-            <Ionicons
-              name="bookmark-outline"
-              size={24}
-              color={
-                activeTab === "saved" ? colors.primary : colors.textSecondary
-              }
-            />
-          </TouchableOpacity>
-        </View>
+              {/* Story Highlights */}
+              <View
+                style={[
+                  styles.highlightsContainer,
+                  { borderBottomColor: colors.border },
+                ]}
+              >
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <TouchableOpacity
+                    style={styles.addHighlight}
+                    onPress={() => navigation.navigate("AddStory")}
+                  >
+                    <View
+                      style={[
+                        styles.addHighlightCircle,
+                        { borderColor: colors.border },
+                      ]}
+                    >
+                      <Ionicons
+                        name="add"
+                        size={24}
+                        color={colors.textSecondary}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.highlightText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      New
+                    </Text>
+                  </TouchableOpacity>
+                  {stories &&
+                    stories.length > 0 &&
+                    stories.map((story: any) => (
+                      <TouchableOpacity
+                        key={story._id || story.id}
+                        style={styles.addHighlight}
+                      >
+                        <Image
+                          source={{ uri: story.image }}
+                          style={styles.profileImage}
+                        />
+                        <Text
+                          style={[
+                            styles.highlightText,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {story.user?.username || "Story"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                </ScrollView>
+              </View>
 
-        {/* Tab Content */}
-        <View style={styles.postsContainer}>
-          {activeTab === "reels" &&
-          userPosts.filter(
-            (p) => (p.type === "reel" || p.isReel) && !p.archived
-          ).length === 0 ? (
-            <View
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 32,
-              }}
-            >
-              <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
-                Hiç reels yok
+              {/* Tabs */}
+              <View
+                style={[
+                  styles.tabsContainer,
+                  { borderBottomColor: colors.border },
+                ]}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.tab,
+                    activeTab === "grid" && [
+                      styles.activeTab,
+                      { borderBottomColor: colors.primary },
+                    ],
+                  ]}
+                  onPress={() => setActiveTab("grid")}
+                >
+                  <Ionicons
+                    name="grid-outline"
+                    size={24}
+                    color={
+                      activeTab === "grid"
+                        ? colors.primary
+                        : colors.textSecondary
+                    }
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tab,
+                    activeTab === "reels" && [
+                      styles.activeTab,
+                      { borderBottomColor: colors.primary },
+                    ],
+                  ]}
+                  onPress={() => setActiveTab("reels")}
+                >
+                  <Ionicons
+                    name="play-outline"
+                    size={24}
+                    color={
+                      activeTab === "reels"
+                        ? colors.primary
+                        : colors.textSecondary
+                    }
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tab,
+                    activeTab === "saved" && [
+                      styles.activeTab,
+                      { borderBottomColor: colors.primary },
+                    ],
+                  ]}
+                  onPress={() => setActiveTab("saved")}
+                >
+                  <Ionicons
+                    name="bookmark-outline"
+                    size={24}
+                    color={
+                      activeTab === "saved"
+                        ? colors.primary
+                        : colors.textSecondary
+                    }
+                  />
+                </TouchableOpacity>
+              </View>
+            </>
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyStateContainer}>
+              <Text
+                style={[styles.emptyStateText, { color: colors.textSecondary }]}
+              >
+                {activeTab === "reels"
+                  ? "Henüz reels yok"
+                  : activeTab === "saved"
+                  ? "Henüz kayıtlı gönderi yok"
+                  : "Henüz gönderi yok"}
               </Text>
             </View>
-          ) : tabData.length === 0 ? (
-            <View
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 32,
-              }}
-            >
-              <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
-                Hiç gönderi yok
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={tabData}
-              renderItem={renderPostItem}
-              keyExtractor={(item) => item._id || item.id}
-              numColumns={3}
-              scrollEnabled={false}
-              contentContainerStyle={{
-                paddingBottom: 24,
-                paddingHorizontal: 0,
-              }}
-              columnWrapperStyle={{ gap: 0 }}
-            />
-          )}
-        </View>
-      </ScrollView>
+          }
+        />
+      </Animated.View>
     </SafeAreaView>
   );
 };
@@ -527,6 +566,17 @@ const styles = StyleSheet.create({
   postImage: {
     width: imageSize,
     height: imageSize,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    minHeight: 200,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    textAlign: "center",
   },
 });
 

@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
+import { UserProvider, useUser } from "./src/context/UserContext";
 import {
   Text,
   Platform,
@@ -16,6 +17,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { getProfile } from "./src/services/api";
 
 // Screens
 import HomeScreen from "./src/screens/HomeScreen";
@@ -42,49 +44,15 @@ import UserSearchScreen from "./src/screens/UserSearchScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import ChangePasswordScreen from "./src/screens/ChangePasswordScreen";
 import ArchiveScreen from "./src/screens/ArchiveScreen";
+import NotificationSettingsScreen from "./src/screens/NotificationSettingsScreen";
+import MapScreen from "./src/screens/MapScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 function MainTabs({ onLogout }: { onLogout: () => void }) {
   const { colors, isDark } = useTheme();
-  const [userAvatar, setUserAvatar] = useState<string>("");
-
-  useEffect(() => {
-    const getUserAvatar = async () => {
-      try {
-        const userStr = await AsyncStorage.getItem("user");
-        const userObj = userStr ? JSON.parse(userStr) : null;
-        if (userObj?.avatar) {
-          setUserAvatar(userObj.avatar);
-        } else {
-          setUserAvatar("");
-        }
-      } catch (err) {
-        setUserAvatar("");
-      }
-    };
-    getUserAvatar();
-  }, []);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      const getUserAvatar = async () => {
-        try {
-          const userStr = await AsyncStorage.getItem("user");
-          const userObj = userStr ? JSON.parse(userStr) : null;
-          if (userObj?.avatar) {
-            setUserAvatar(userObj.avatar);
-          } else {
-            setUserAvatar("");
-          }
-        } catch (err) {
-          setUserAvatar("");
-        }
-      };
-      getUserAvatar();
-    }, [])
-  );
+  const { user } = useUser();
 
   const handleProfileLongPress = () => {
     Alert.alert(
@@ -127,7 +95,8 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
                   backgroundColor: colors.primary,
                   justifyContent: "center",
                   alignItems: "center",
-                  marginBottom: 24,
+                  marginBottom: 32,
+                  alignSelf: "center",
                   shadowColor: "#000",
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.2,
@@ -138,8 +107,8 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
                 <Ionicons name="add" size={32} color="#fff" />
               </View>
             );
-          } else if (route.name === "Camera") {
-            iconName = focused ? "camera" : "camera-outline";
+          } else if (route.name === "Map") {
+            iconName = focused ? "location" : "location-outline";
           } else if (route.name === "Profile") {
             return (
               <TouchableOpacity
@@ -149,7 +118,7 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
                 <Image
                   source={{
                     uri:
-                      userAvatar ||
+                      user?.avatar ||
                       "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
                   }}
                   style={{
@@ -172,8 +141,16 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: {
           backgroundColor: colors.tabBar,
-          borderTopWidth: 1,
-          borderTopColor: colors.tabBarBorder,
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+          shadowColor: "transparent",
+          borderTopColor: "transparent",
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 10,
         },
         headerShown: false,
         headerTitle: () => null,
@@ -203,7 +180,20 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
         component={AddPostScreen}
         options={{ tabBarLabel: "" }}
       />
-      <Tab.Screen name="Camera" component={CameraScreen} />
+      <Tab.Screen
+        name="Map"
+        component={MapScreen}
+        options={{
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons
+              name={focused ? "location" : "location-outline"}
+              size={size}
+              color={color}
+            />
+          ),
+          tabBarLabel: "Konum",
+        }}
+      />
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
@@ -212,7 +202,7 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
             <Image
               source={{
                 uri:
-                  userAvatar ||
+                  user?.avatar ||
                   "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
               }}
               style={{
@@ -252,7 +242,15 @@ function AppContent() {
   }, []);
 
   const handleLogin = async (userData: any = null) => {
-    await AsyncStorage.setItem("user", JSON.stringify(userData || {}));
+    let user = userData || {};
+    // Avatarı eksikse profilden çek
+    if (!user.avatar && (user.id || user._id)) {
+      try {
+        const profile = await getProfile(user.id || user._id);
+        user.avatar = profile.avatar;
+      } catch {}
+    }
+    await AsyncStorage.setItem("user", JSON.stringify(user));
     setIsLoggedIn(true);
   };
 
@@ -324,12 +322,18 @@ function AppContent() {
           <Stack.Screen name="SavedDetail" component={SavedDetailScreen} />
           <Stack.Screen name="UserProfile" component={UserProfileScreen} />
           <Stack.Screen name="UserSearchScreen" component={UserSearchScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Settings">
+            {(props) => <SettingsScreen {...props} onLogout={handleLogout} />}
+          </Stack.Screen>
           <Stack.Screen
             name="ChangePassword"
             component={ChangePasswordScreen}
           />
           <Stack.Screen name="Archive" component={ArchiveScreen} />
+          <Stack.Screen
+            name="NotificationSettings"
+            component={NotificationSettingsScreen}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
@@ -339,7 +343,9 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <UserProvider>
+        <AppContent />
+      </UserProvider>
     </ThemeProvider>
   );
 }

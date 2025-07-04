@@ -362,7 +362,13 @@ const PostCard: React.FC<PostCardProps> = ({
           <TouchableOpacity onPress={onComment} style={styles.actionButton}>
             <Ionicons name="chatbubble-outline" size={24} color={colors.text} />
             <Text style={[styles.actionCount, { color: colors.text }]}>
-              {post.comments}
+              {typeof post.comments === "number"
+                ? post.comments
+                : Array.isArray(post.comments)
+                ? (post.comments as any[]).length
+                : Array.isArray(comments)
+                ? comments.length
+                : 0}
             </Text>
           </TouchableOpacity>
 

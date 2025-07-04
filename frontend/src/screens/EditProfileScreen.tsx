@@ -17,11 +17,13 @@ import { useTheme } from "../context/ThemeContext";
 import { updateProfile, getProfile } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
+import { useUser } from "../context/UserContext";
 
 const EditProfileScreen: React.FC = () => {
   const navigation = useNavigation();
   const currentUser = mockUsers[0];
   const { colors } = useTheme();
+  const { updateUser } = useUser();
 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -48,6 +50,7 @@ const EditProfileScreen: React.FC = () => {
 
   const handleSave = async () => {
     try {
+      console.log("EditProfile: Saving with avatar:", avatar);
       const updated = await updateProfile({
         userId,
         name,
@@ -55,13 +58,25 @@ const EditProfileScreen: React.FC = () => {
         avatar,
         bio,
       });
+      console.log("EditProfile: Server response:", updated);
       setName(updated.name);
       setUsername(updated.username);
       setAvatar(updated.avatar);
       setBio(updated.bio);
+      console.log(
+        "EditProfile: Updating UserContext with avatar:",
+        updated.avatar
+      );
+      updateUser({
+        name: updated.name,
+        username: updated.username,
+        avatar: updated.avatar,
+        bio: updated.bio,
+      });
       Alert.alert("Başarılı", "Profil güncellendi!");
       navigation.goBack();
     } catch (err) {
+      console.error("EditProfile: Error updating profile:", err);
       Alert.alert("Hata", "Profil güncellenemedi");
     }
   };
