@@ -11,14 +11,11 @@ SocialMediaApp, React Native ve Expo ile geliştirilmiş modern bir sosyal medya
 - Bildirimler
 - Arşivleme ve arşivden çıkarma (post, story, reels)
 - Light/Dark mode ve SafeArea desteği
-- Profilde sadece arşivde olmayan postlar sayılır
-- Story ve post arşivleme, arşivden çıkarma
-- Story'de çift tık ile kamera değiştirme
-- Story eklerken galeri ve kamera seçimi
-- Paylaşılan postlar anında HomeScreen'de en üstte görünür
-- Postlar tarihe göre sıralanır
-- Tüm görsellerde radius ve safe area uyumu
-- Tüm butonlar ve metinler Türkçe
+  
+- Story ve post arşivleme
+
+
+
 
 ## Kullanılan Teknolojiler
 
@@ -77,9 +74,4 @@ backend/
   server.js       # Sunucu başlangıcı
 ```
 
-## Notlar
 
-- Tüm arayüzler SafeArea ve dark/light mode uyumludur.
-- Arşivdeki story ve postlar için doğru buton metinleri gösterilir.
-- Story eklerken galeri ve kamera seçimi yapılabilir, çift tık ile kamera değişir.
-- Herhangi bir hata veya eksiklikte bana bildirin!
