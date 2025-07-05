@@ -124,6 +124,12 @@ export const unarchiveStory = async (storyId: string, userId: string) => {
   return res.data;
 };
 
+// Story görünme istatistiklerini getir
+export const getStoryStats = async (userId: string) => {
+  const res = await api.get(`/users/stories/stats/${userId}`);
+  return res.data;
+};
+
 // Postu kaydet/kaldır (toggle)
 export const savePost = async (userId: string, postId: string) => {
   console.log("[api/savePost] POST", api.defaults.baseURL + "/users/save", {
@@ -236,16 +242,16 @@ export const getConversationMessages = async (
 };
 
 // Mesaj gönder
-export const sendMessage = async (
-  senderId: string,
-  receiverId: string,
-  text: string
-) => {
-  const res = await api.post("/users/send-message", {
-    senderId,
-    receiverId,
-    text,
-  });
+export const sendMessage = async (payload: {
+  senderId: string;
+  receiverId: string;
+  text?: string;
+  postId?: string;
+  storyId?: string;
+}) => {
+  console.log("API sendMessage - Gönderilecek payload:", payload);
+  const res = await api.post("/users/send-message", payload);
+  console.log("API sendMessage - Response:", res.data);
   return res.data;
 };
 

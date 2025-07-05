@@ -25,6 +25,7 @@ import {
   getStories,
   getProfile,
   getUserPosts,
+  viewStory,
 } from "../services/api";
 import { ShareModal } from "../components/ShareModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -44,6 +45,13 @@ const HomeScreen: React.FC = () => {
   const [userId, setUserId] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const flatListRef = React.useRef<FlatList<any> | null>(null);
+
+  // Pagination için state'ler
+  const [displayedPosts, setDisplayedPosts] = React.useState<any[]>([]);
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [loadingMore, setLoadingMore] = React.useState(false);
+  const [hasMorePosts, setHasMorePosts] = React.useState(true);
+  const POSTS_PER_PAGE = 15;
 
   // PanResponder ile sağdan sola swipe hareketini algıla
   const panResponder = React.useRef(
@@ -73,6 +81,11 @@ const HomeScreen: React.FC = () => {
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       setPosts(sortedData);
+
+      // İlk 15 postu göster
+      setDisplayedPosts(sortedData.slice(0, POSTS_PER_PAGE));
+      setCurrentPage(1);
+      setHasMorePosts(sortedData.length > POSTS_PER_PAGE);
     } catch (err) {
       console.log("[POSTLAR] Hata:", err);
     } finally {
@@ -223,6 +236,19 @@ const HomeScreen: React.FC = () => {
     return unsubscribe;
   }, [navigation]);
 
+  // StoryScreen'den çıkıldığında story'lerin görünme durumunu güncelle
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (e: any) => {
+      if (e.target.includes("Story")) {
+        // StoryScreen'den çıkıldığında story'leri yeniden fetch et
+        setTimeout(() => {
+          fetchStories();
+        }, 100);
+      }
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     InteractionManager.runAfterInteractions(async () => {
@@ -230,6 +256,29 @@ const HomeScreen: React.FC = () => {
       setActiveUserId(null);
       setRefreshing(false);
     });
+  };
+
+  // Daha fazla post yükle
+  const loadMorePosts = async () => {
+    if (loadingMore || !hasMorePosts) return;
+
+    setLoadingMore(true);
+
+    const nextPage = currentPage + 1;
+    const startIndex = (nextPage - 1) * POSTS_PER_PAGE;
+    const endIndex = startIndex + POSTS_PER_PAGE;
+
+    const newPosts = posts.slice(startIndex, endIndex);
+
+    if (newPosts.length > 0) {
+      setDisplayedPosts((prev) => [...prev, ...newPosts]);
+      setCurrentPage(nextPage);
+      setHasMorePosts(endIndex < posts.length);
+    } else {
+      setHasMorePosts(false);
+    }
+
+    setLoadingMore(false);
   };
 
   // Post ve story'leri sadece takip edilenlerden filtrele
@@ -255,11 +304,20 @@ const HomeScreen: React.FC = () => {
     }
 
     // Postları tarihe göre sırala (en yeni en üstte)
-    return allPosts.sort((a, b) => {
+    const sortedPosts = allPosts.sort((a, b) => {
       const dateA = new Date(a.createdAt || a.timestamp || 0);
       const dateB = new Date(b.createdAt || b.timestamp || 0);
       return dateB.getTime() - dateA.getTime();
     });
+
+    // Filtrelenmiş postları güncelle ve ilk 15'ini göster
+    if (sortedPosts.length !== posts.length) {
+      setDisplayedPosts(sortedPosts.slice(0, POSTS_PER_PAGE));
+      setCurrentPage(1);
+      setHasMorePosts(sortedPosts.length > POSTS_PER_PAGE);
+    }
+
+    return sortedPosts;
   }, [posts, followingIds, myPosts]);
 
   const filteredStories = React.useMemo(() => {
@@ -352,7 +410,7 @@ const HomeScreen: React.FC = () => {
     .getState()
     .routes.some((r: any) => r.name === "Story");
 
-  const handleStoryPress = (item: any) => {
+  const handleStoryPress = async (item: any) => {
     // Tüm görülmemiş story'leri topla
     const allUnviewedStories = stories.filter((s) => !s.isViewed);
 
@@ -541,7 +599,7 @@ const HomeScreen: React.FC = () => {
               Yükleniyor...
             </Text>
           </View>
-        ) : filteredPosts.length === 0 ? (
+        ) : displayedPosts.length === 0 ? (
           <>
             {renderListHeader()}
             <View
@@ -567,13 +625,29 @@ const HomeScreen: React.FC = () => {
         ) : (
           <FlatList
             ref={flatListRef}
-            data={filteredPosts}
+            data={displayedPosts}
             renderItem={renderPost}
             keyExtractor={(item) => item._id?.toString() || item.id?.toString()}
             showsVerticalScrollIndicator={false}
             refreshing={refreshing}
             onRefresh={onRefresh}
+            onEndReached={loadMorePosts}
+            onEndReachedThreshold={0.1}
             ListHeaderComponent={!isStoryOpen ? renderListHeader : undefined}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={styles.loadingMore}>
+                  <Text
+                    style={[
+                      styles.loadingText,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Daha fazla yükleniyor...
+                  </Text>
+                </View>
+              ) : null
+            }
             style={styles.postsList}
             contentContainerStyle={[
               styles.postsContent,
@@ -703,6 +777,13 @@ const styles = StyleSheet.create({
   },
   postsContent: {
     flexGrow: 1,
+  },
+  loadingMore: {
+    paddingVertical: 20,
+    alignItems: "center",
+  },
+  loadingText: {
+    fontSize: 14,
   },
 });
 

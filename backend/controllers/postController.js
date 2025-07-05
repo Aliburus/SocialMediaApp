@@ -1,5 +1,6 @@
 const Post = require("../models/Post");
 const Comment = require("../models/Comment");
+const { createOrUpdateNotification } = require("./notificationController");
 
 // Post oluşturma
 exports.createPost = async (req, res) => {
@@ -66,6 +67,8 @@ exports.toggleLike = async (req, res) => {
     const index = post.likes.indexOf(userId);
     if (index === -1) {
       post.likes.push(userId);
+      // Bildirim oluştur
+      await createOrUpdateNotification(post.user, userId, "like", postId);
     } else {
       post.likes.splice(index, 1);
     }
@@ -88,9 +91,18 @@ exports.addComment = async (req, res) => {
     const { userId, text } = req.body;
     const postId = req.params.id;
     if (!text) return res.status(400).json({ message: "Yorum boş olamaz" });
+
+    // Post'u bul
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: "Post bulunamadı" });
+
     const comment = await Comment.create({ user: userId, post: postId, text });
     // Yorumu post'a ekle
     await Post.findByIdAndUpdate(postId, { $push: { comments: comment._id } });
+
+    // Bildirim oluştur
+    await createOrUpdateNotification(post.user, userId, "comment", postId);
+
     const populatedComment = await Comment.findById(comment._id).populate(
       "user",
       "username avatar"
@@ -185,6 +197,14 @@ exports.toggleCommentLike = async (req, res) => {
     const index = comment.likes.indexOf(userId);
     if (index === -1) {
       comment.likes.push(userId);
+      // Bildirim oluştur
+      await createOrUpdateNotification(
+        comment.user,
+        userId,
+        "like",
+        null,
+        commentId
+      );
     } else {
       comment.likes.splice(index, 1);
     }

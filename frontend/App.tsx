@@ -55,6 +55,7 @@ import ChangePasswordScreen from "./src/screens/ChangePasswordScreen";
 import ArchiveScreen from "./src/screens/ArchiveScreen";
 import NotificationSettingsScreen from "./src/screens/NotificationSettingsScreen";
 import MapScreen from "./src/screens/MapScreen";
+import ChatHistoryScreen from "./src/screens/ChatHistoryScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -351,6 +352,7 @@ function AppContent() {
             name="NotificationSettings"
             component={NotificationSettingsScreen}
           />
+          <Stack.Screen name="ChatHistory" component={ChatHistoryScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

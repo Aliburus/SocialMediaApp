@@ -547,6 +547,8 @@ exports.rejectFollowRequest = async (req, res) => {
 exports.getUserConversations = async (req, res) => {
   try {
     const userId = req.params.userId;
+    console.log("Backend getUserConversations - userId:", userId);
+
     const conversations = await Conversation.find({ users: userId })
       .populate({
         path: "users",
@@ -554,19 +556,67 @@ exports.getUserConversations = async (req, res) => {
       })
       .populate({
         path: "lastMessage",
-        populate: { path: "sender receiver", select: "_id username avatar" },
+        populate: [
+          { path: "sender", select: "_id username avatar" },
+          { path: "receiver", select: "_id username avatar" },
+          { path: "post", select: "_id" },
+          { path: "story", select: "_id" },
+        ],
       })
       .sort({ updatedAt: -1 });
+
+    console.log(
+      "Backend getUserConversations - Bulunan conversations:",
+      conversations
+    );
+
     // Karşıdaki kullanıcıyı bul
     const result = conversations.map((conv) => {
       const otherUser = conv.users.find((u) => u._id.toString() !== userId);
-      return {
+
+      // Son mesaj metnini belirle
+      let lastMessageText = "";
+      console.log(
+        "Backend getUserConversations - lastMessage:",
+        conv.lastMessage
+      );
+
+      if (conv.lastMessage) {
+        const senderUsername =
+          conv.lastMessage?.sender?.username ||
+          (conv.lastMessage?.sender &&
+          typeof conv.lastMessage.sender === "string"
+            ? conv.lastMessage.sender
+            : "") ||
+          "Bilinmeyen";
+        if (conv.lastMessage.text) {
+          lastMessageText = conv.lastMessage.text;
+        } else if (conv.lastMessage.post) {
+          lastMessageText = `${senderUsername}’dan gönderi gönderildi`;
+        } else if (conv.lastMessage.story) {
+          lastMessageText = `${senderUsername}’dan hikaye gönderildi`;
+        }
+      }
+
+      const mapped = {
         id: conv._id,
         user: otherUser,
-        lastMessage: conv.lastMessage?.text || "",
+        lastMessage: lastMessageText,
         time: conv.lastMessage?.createdAt || conv.updatedAt,
+        lastMessageType: conv.lastMessage?.post
+          ? "post"
+          : conv.lastMessage?.story
+          ? "story"
+          : "text",
       };
+      console.log(
+        "Backend getUserConversations - Mapped conversation:",
+        mapped
+      );
+      return mapped;
     });
+
+    console.log("Backend getUserConversations - Final result:", result);
     res.json(result);
   } catch (err) {
     res
@@ -591,7 +641,25 @@ exports.getConversationMessages = async (req, res) => {
     // Mesajları getir
     const messages = await Message.find({ conversation: conversation._id })
       .sort({ createdAt: -1 })
-      .populate("sender receiver", "_id username avatar");
+      .populate("sender receiver", "_id username avatar")
+      .populate({
+        path: "post",
+        select: "_id image description user",
+        populate: {
+          path: "user",
+          select: "_id username avatar",
+        },
+      })
+      .populate({
+        path: "story",
+        select: "_id image user",
+        populate: {
+          path: "user",
+          select: "_id username avatar",
+        },
+      });
+
+    console.log("Backend getConversationMessages - Mesajlar:", messages);
     res.json({ conversationId: conversation._id, messages });
   } catch (err) {
     res
@@ -603,9 +671,18 @@ exports.getConversationMessages = async (req, res) => {
 // Mesaj gönder
 exports.sendMessage = async (req, res) => {
   try {
-    const { senderId, receiverId, text } = req.body;
+    const { senderId, receiverId, text, postId, storyId } = req.body;
 
-    if (!senderId || !receiverId || !text) {
+    console.log("Backend sendMessage - Gelen veri:", {
+      senderId,
+      receiverId,
+      text,
+      postId,
+      storyId,
+    });
+
+    if (!senderId || !receiverId || (!text && !postId && !storyId)) {
+      console.log("Backend sendMessage - Eksik veri hatası");
       return res.status(400).json({ message: "Eksik veri" });
     }
 
@@ -617,7 +694,7 @@ exports.sendMessage = async (req, res) => {
 
     if (receiver.onlyFollowersCanMessage) {
       const sender = await User.findById(senderId);
-      if (!sender.followers.includes(receiverId)) {
+      if (!receiver.followers.includes(senderId)) {
         return res.status(403).json({
           message: "Bu kullanıcı sadece takipçilerinden mesaj kabul ediyor",
         });
@@ -636,11 +713,22 @@ exports.sendMessage = async (req, res) => {
     }
 
     // Mesaj oluştur
+    console.log("Backend sendMessage - Oluşturulacak mesaj:", {
+      conversation: conversation._id,
+      sender: senderId,
+      receiver: receiverId,
+      text: text ? text.trim() : undefined,
+      post: postId || undefined,
+      story: storyId || undefined,
+    });
+
     const message = await Message.create({
       conversation: conversation._id,
       sender: senderId,
       receiver: receiverId,
-      text: text.trim(),
+      text: text ? text.trim() : undefined,
+      post: postId || undefined,
+      story: storyId || undefined,
     });
 
     // Conversation'ın son mesajını güncelle
@@ -648,11 +736,26 @@ exports.sendMessage = async (req, res) => {
     await conversation.save();
 
     // Mesajı populate ile getir
-    const populatedMessage = await Message.findById(message._id).populate(
-      "sender receiver",
-      "_id username avatar"
-    );
+    const populatedMessage = await Message.findById(message._id)
+      .populate("sender receiver", "_id username avatar")
+      .populate({
+        path: "post",
+        select: "_id image description user",
+        populate: {
+          path: "user",
+          select: "_id username avatar",
+        },
+      })
+      .populate({
+        path: "story",
+        select: "_id image user",
+        populate: {
+          path: "user",
+          select: "_id username avatar",
+        },
+      });
 
+    console.log("Backend sendMessage - Başarılı gönderim:", populatedMessage);
     res.json(populatedMessage);
   } catch (err) {
     res

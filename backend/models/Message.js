@@ -5,8 +5,10 @@ const messageSchema = new mongoose.Schema(
     conversation: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation" },
     sender: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     receiver: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    text: { type: String, required: true },
+    text: { type: String },
     read: { type: Boolean, default: false },
+    post: { type: mongoose.Schema.Types.ObjectId, ref: "Post" },
+    story: { type: mongoose.Schema.Types.ObjectId, ref: "Story" },
   },
   { timestamps: true }
 );

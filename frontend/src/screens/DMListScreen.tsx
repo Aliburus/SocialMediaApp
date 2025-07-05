@@ -35,10 +35,10 @@ const DMListScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       if (userObj?._id || userObj?.id) {
         const list = await getUserConversations(userObj._id || userObj.id);
-        const filtered = list.filter(
-          (item: any) => item.lastMessage && item.lastMessage.trim() !== ""
-        );
-        setDmList(filtered);
+        console.log("DMListScreen - Gelen conversation listesi:", list);
+
+        // Filtreleme kaldırıldı - tüm conversation'ları göster
+        setDmList(list);
       }
     } catch (error) {
       console.error("DM listesi yükleme hatası:", error);
@@ -68,25 +68,28 @@ const DMListScreen: React.FC = () => {
       })();
     }
   }, [showFriendsModal]);
-  const renderItem = ({ item }: { item: any }) => (
-    <TouchableOpacity
-      style={[styles.dmItem, { borderBottomColor: colors.border }]}
-      onPress={() => navigation.navigate("DMChat", { user: item.user })}
-    >
-      <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
-      <View style={styles.dmInfo}>
-        <Text style={[styles.username, { color: colors.text }]}>
-          {item.user.username}
+  const renderItem = ({ item }: { item: any }) => {
+    console.log("DMListScreen - Render edilen item:", item);
+    return (
+      <TouchableOpacity
+        style={[styles.dmItem, { borderBottomColor: colors.border }]}
+        onPress={() => navigation.navigate("DMChat", { user: item.user })}
+      >
+        <Image source={{ uri: item.user?.avatar }} style={styles.avatar} />
+        <View style={styles.dmInfo}>
+          <Text style={[styles.username, { color: colors.text }]}>
+            {item.user?.username || "Bilinmeyen Kullanıcı"}
+          </Text>
+          <Text style={[styles.lastMessage, { color: colors.textSecondary }]}>
+            {item.lastMessage}
+          </Text>
+        </View>
+        <Text style={[styles.time, { color: colors.textSecondary }]}>
+          {item.time ? new Date(item.time).toLocaleDateString() : ""}
         </Text>
-        <Text style={[styles.lastMessage, { color: colors.textSecondary }]}>
-          {item.lastMessage}
-        </Text>
-      </View>
-      <Text style={[styles.time, { color: colors.textSecondary }]}>
-        {item.time ? new Date(item.time).toLocaleDateString() : ""}
-      </Text>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView

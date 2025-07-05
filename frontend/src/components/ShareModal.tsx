@@ -8,42 +8,117 @@ import {
   Image,
   StyleSheet,
   TextInput,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getUserFriends } from "../services/api";
 import { useTheme } from "../context/ThemeContext";
+import { sendMessage } from "../services/api";
 
 interface ShareModalProps {
   visible: boolean;
   onClose: () => void;
+  post?: any;
+  story?: any;
 }
 
-export const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose }) => {
-  const { colors, isDark } = useTheme();
+export const ShareModal: React.FC<ShareModalProps> = ({
+  visible,
+  onClose,
+  post,
+  story,
+}) => {
+  const { colors } = useTheme();
   const [friends, setFriends] = React.useState<any[]>([]);
   const [search, setSearch] = React.useState("");
+  const [selectedFriend, setSelectedFriend] = React.useState<any>(null);
+  const [sending, setSending] = React.useState(false);
+  const [sent, setSent] = React.useState(false);
   const filteredFriends = friends.filter((u) =>
     u.username.toLowerCase().includes(search.toLowerCase())
   );
 
   React.useEffect(() => {
     if (visible) {
+      console.log("ShareModal - Modal açıldı, post:", post, "story:", story);
       (async () => {
         const userStr = await AsyncStorage.getItem("user");
         const userObj = userStr ? JSON.parse(userStr) : null;
+        console.log("ShareModal - Kullanıcı bilgisi:", userObj);
         if (userObj?._id || userObj?.id) {
           const list = await getUserFriends(userObj._id || userObj.id);
+          console.log("ShareModal - Arkadaş listesi yüklendi:", list);
           setFriends(list);
         }
       })();
+      setSelectedFriend(null);
+      setSent(false);
     }
-  }, [visible]);
+  }, [visible, post, story]);
+
+  const handleSend = async () => {
+    console.log("[ShareModal] post:", post, "story:", story);
+    if (!selectedFriend) {
+      console.log("ShareModal - Kullanıcı seçilmedi");
+      return;
+    }
+    try {
+      setSending(true);
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      if (!userObj?._id && !userObj?.id) {
+        console.log("ShareModal - Kullanıcı bilgisi bulunamadı");
+        return;
+      }
+      const senderId = userObj._id || userObj.id;
+      const receiverId = selectedFriend._id || selectedFriend.id;
+      let payload: any = { senderId, receiverId };
+      if (post) {
+        payload.postId = post._id || post.id;
+        console.log("ShareModal - postId eklendi:", payload.postId);
+      }
+      if (story) {
+        payload.storyId = story._id || story.id;
+        console.log("ShareModal - storyId eklendi:", payload.storyId);
+      }
+      if (!post && !story) {
+        payload.text = "Paylaşım";
+        console.log("ShareModal - Boş mesaj eklendi");
+      } else {
+        delete payload.text;
+      }
+      console.log("ShareModal - Gönderilecek payload:", payload);
+      const result = await sendMessage(payload);
+      console.log("ShareModal - Gönderim sonucu:", result);
+      setSent(true);
+      setSending(false);
+      setTimeout(() => {
+        setSent(false);
+        onClose();
+      }, 1500);
+    } catch (err) {
+      setSending(false);
+      Alert.alert("Hata", "Mesaj gönderilemedi");
+    }
+  };
 
   const renderFriendItem = ({ item }: { item: any }) => (
     <TouchableOpacity
-      style={[styles.friendItem, { backgroundColor: colors.surface }]}
+      style={[
+        styles.friendItem,
+        { backgroundColor: colors.surface },
+        selectedFriend &&
+        (selectedFriend._id || selectedFriend.id) === (item._id || item.id)
+          ? { borderColor: colors.primary, borderWidth: 2 }
+          : {},
+      ]}
+      onPress={() => {
+        console.log("ShareModal - Kullanıcı seçildi:", item);
+        setSelectedFriend(item);
+      }}
+      disabled={sending}
     >
       <View style={styles.friendAvatarContainer}>
         <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
@@ -55,15 +130,23 @@ export const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose }) => {
       </View>
       <View style={styles.friendInfo}>
         <Text style={[styles.friendUsername, { color: colors.text }]}>
-          {item.username}
+          {" "}
+          {item.username}{" "}
         </Text>
         <Text style={[styles.friendStatus, { color: colors.textSecondary }]}>
-          {item.isOnline ? "Çevrimiçi" : "Çevrimdışı"}
+          {" "}
+          {item.isOnline ? "Çevrimiçi" : "Çevrimdışı"}{" "}
         </Text>
       </View>
-      <TouchableOpacity style={styles.sendButton}>
-        <Ionicons name="paper-plane" size={20} color={colors.primary} />
-      </TouchableOpacity>
+      {selectedFriend &&
+        (selectedFriend._id || selectedFriend.id) === (item._id || item.id) && (
+          <Ionicons
+            name="checkmark-circle"
+            size={22}
+            color={colors.primary}
+            style={{ marginLeft: 8 }}
+          />
+        )}
     </TouchableOpacity>
   );
 
@@ -85,43 +168,15 @@ export const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose }) => {
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={[styles.modalTitle, { color: colors.text }]}>
-            Paylaş
+            {" "}
+            Paylaş{" "}
           </Text>
           <View style={{ width: 24 }} />
         </View>
-
-        <View style={styles.shareOptions}>
-          <TouchableOpacity style={styles.shareOption}>
-            <View style={styles.shareOptionIcon}>
-              <Ionicons name="add-circle" size={32} color={colors.primary} />
-            </View>
-            <Text style={[styles.shareOptionText, { color: colors.text }]}>
-              Hikaye
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.shareOption}>
-            <View style={styles.shareOptionIcon}>
-              <Ionicons name="chatbubble" size={32} color={colors.primary} />
-            </View>
-            <Text style={[styles.shareOptionText, { color: colors.text }]}>
-              Mesaj
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.shareOption}>
-            <View style={styles.shareOptionIcon}>
-              <Ionicons name="copy" size={32} color={colors.primary} />
-            </View>
-            <Text style={[styles.shareOptionText, { color: colors.text }]}>
-              Bağlantıyı Kopyala
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         <View style={styles.friendsSection}>
           <Text style={[styles.friendsSectionTitle, { color: colors.text }]}>
-            Arkadaşlar
+            {" "}
+            Arkadaşlar{" "}
           </Text>
           <TextInput
             style={{
@@ -145,6 +200,57 @@ export const ShareModal: React.FC<ShareModalProps> = ({ visible, onClose }) => {
             showsVerticalScrollIndicator={false}
           />
         </View>
+        <TouchableOpacity
+          style={{
+            backgroundColor: selectedFriend ? colors.primary : colors.surface,
+            padding: 16,
+            borderRadius: 12,
+            margin: 16,
+            alignItems: "center",
+            opacity: sending ? 0.6 : 1,
+          }}
+          onPress={() => {
+            console.log("ShareModal - Gönder butonuna basıldı");
+            console.log("ShareModal - selectedFriend:", selectedFriend);
+            handleSend();
+          }}
+          disabled={!selectedFriend || sending}
+        >
+          <Text
+            style={{
+              color: selectedFriend ? colors.background : colors.textSecondary,
+              fontWeight: "bold",
+              fontSize: 16,
+            }}
+          >
+            Gönder
+          </Text>
+        </TouchableOpacity>
+        {sent && (
+          <View
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 24,
+              alignItems: "center",
+              zIndex: 100,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: "#2ecc40",
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+                borderRadius: 24,
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}>
+                Gönderildi
+              </Text>
+            </View>
+          </View>
+        )}
       </SafeAreaView>
     </Modal>
   );

@@ -180,3 +180,38 @@ exports.unarchiveStory = async (req, res) => {
       .json({ message: "Story arşivden çıkarılamadı", error: err.message });
   }
 };
+
+// Story görünme istatistiklerini getir
+exports.getStoryStats = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    if (!userId)
+      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+
+    const stories = await Story.find({ user: userId, archived: false });
+
+    const stats = {
+      totalStories: stories.length,
+      totalViews: 0,
+      uniqueViewers: new Set(),
+      storiesWithViews: 0,
+    };
+
+    stories.forEach((story) => {
+      const viewers = story.viewers || [];
+      stats.totalViews += viewers.length;
+      viewers.forEach((viewer) => stats.uniqueViewers.add(viewer.toString()));
+      if (viewers.length > 0) stats.storiesWithViews++;
+    });
+
+    res.json({
+      ...stats,
+      uniqueViewers: Array.from(stats.uniqueViewers).length,
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Story istatistikleri getirilemedi",
+      error: err.message,
+    });
+  }
+};

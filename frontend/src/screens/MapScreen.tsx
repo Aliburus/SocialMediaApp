@@ -37,7 +37,7 @@ const getLeafletHtml = (
   // Kendi marker'ı için
   let userMarker = "";
   const minRadius = 5;
-  const usedRadius = Math.max((radiusKm || 10) / 2, minRadius);
+  const usedRadius = Math.max(radiusKm || 10, minRadius);
   if (showUser) {
     const genderClass =
       userGender === "female"
@@ -53,7 +53,7 @@ const getLeafletHtml = (
       userHtml = `<div class="custom-marker-initial ${genderClass}">${"U"}</div>`;
     }
     userMarker = `var myIcon = L.divIcon({ html: '<div class="custom-marker">${userHtml}<div class="custom-marker-pointer ${genderClass}"></div></div>', iconSize: [48, 56], iconAnchor: [24, 56], className: '' }); var center = [${lat}, ${lng}]; var circle = L.circle(center, {radius: ${
-      usedRadius * 1000
+      (usedRadius * 1000) / 2
     }, color: 'red', fillColor: 'red', fillOpacity: 0.08, weight: 1}).addTo(map); L.marker(center, {icon: myIcon}).addTo(map); map.setView(center, 13); map.fitBounds(circle.getBounds(), {padding: [40,40]});`;
   }
   // Diğer kullanıcılar için
@@ -266,6 +266,29 @@ const MapScreen: React.FC = () => {
   const [vpnChecking, setVpnChecking] = useState(true);
   const [vpnError, setVpnError] = useState<string | null>(null);
 
+  // Filtreleri AsyncStorage'dan yükle
+  useEffect(() => {
+    const loadFilters = async () => {
+      try {
+        const savedGenderFilter = await AsyncStorage.getItem("mapGenderFilter");
+        const savedRadiusFilter = await AsyncStorage.getItem("mapRadiusFilter");
+
+        if (savedGenderFilter) {
+          setGenderFilter(
+            savedGenderFilter === "null" ? null : savedGenderFilter
+          );
+        }
+        if (savedRadiusFilter) {
+          setRadiusFilter(parseInt(savedRadiusFilter, 10));
+        }
+      } catch (error) {
+        console.error("Filtre yükleme hatası:", error);
+      }
+    };
+
+    loadFilters();
+  }, []);
+
   useFocusEffect(
     React.useCallback(() => {
       let interval: NodeJS.Timeout | undefined;
@@ -343,13 +366,13 @@ const MapScreen: React.FC = () => {
             const othersStr = await AsyncStorage.getItem("nearbyLocations");
             if (othersStr) others = JSON.parse(othersStr);
           } catch {}
-          // 10km çapındaki kullanıcıları filtrele
+          // radiusFilter km çapındaki kullanıcıları filtrele
           if (coords) {
             const now = Date.now();
             const filteredOthers = others.filter(
               (u: any) =>
                 haversine(coords.lat, coords.lng, u.lat, u.lng) <=
-                  radiusFilter &&
+                  radiusFilter / 2 &&
                 u.locationTimestamp &&
                 now - u.locationTimestamp <= 25 * 60 * 1000 &&
                 (!genderFilter || u.gender === genderFilter)
@@ -363,7 +386,7 @@ const MapScreen: React.FC = () => {
                 avatarUrl,
                 userGender,
                 colorScheme === "dark",
-                radiusFilter
+                radiusFilter / 2
               )
             );
           } else {
@@ -463,10 +486,9 @@ const MapScreen: React.FC = () => {
         setVpnError(null);
       }
     } catch (error) {
-      setVpnBlocked(false); // Artık engelleme yok
-      setVpnError(
-        "VPN kontrolü sırasında bir hata oluştu. Lütfen internet bağlantınızı kontrol edin. Eğer VPN/proxy kullanmıyorsanız haritayı kullanmaya devam edebilirsiniz."
-      );
+      // VPN tespit hatası durumunda sessizce devam et, hata mesajı gösterme
+      setVpnBlocked(false);
+      setVpnError(null);
     } finally {
       setVpnChecking(false);
     }
@@ -508,9 +530,24 @@ const MapScreen: React.FC = () => {
     }
   };
 
-  const applyFilters = () => {
+  const applyFilters = async () => {
     setGenderFilter(pendingGenderFilter);
     setRadiusFilter(pendingRadiusFilter);
+
+    // Filtreleri AsyncStorage'a kaydet
+    try {
+      await AsyncStorage.setItem(
+        "mapGenderFilter",
+        pendingGenderFilter || "null"
+      );
+      await AsyncStorage.setItem(
+        "mapRadiusFilter",
+        pendingRadiusFilter.toString()
+      );
+    } catch (error) {
+      console.error("Filtre kaydetme hatası:", error);
+    }
+
     setFilterModalVisible(false);
   };
 
@@ -628,7 +665,7 @@ const MapScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
           <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
-            Alan (km)
+            Çap (km)
           </Text>
           <View style={{ alignItems: "center", marginBottom: 16 }}>
             <Slider

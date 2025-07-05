@@ -175,18 +175,42 @@ function NotificationsScreen() {
   };
 
   const renderNotificationItem = ({ item }: { item: any }) => {
+    // Grup bildirimi için kullanıcı avatarları
+    const renderUserAvatars = () => {
+      if (item.users && item.users.length > 0) {
+        return (
+          <View style={{ flexDirection: "row", marginRight: 8 }}>
+            {item.users.slice(0, 3).map((user: any, index: number) => (
+              <Image
+                key={user._id || user.id}
+                source={{ uri: user.avatar }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  borderWidth: 2,
+                  borderColor: colors.background,
+                  marginLeft: index > 0 ? -8 : 0,
+                  zIndex: 3 - index,
+                }}
+              />
+            ))}
+          </View>
+        );
+      }
+      return null;
+    };
+
     const getNotificationIcon = () => {
       switch (item.type) {
         case "like":
-          return <Ionicons name="heart" size={24} color={colors.primary} />;
+          return <Ionicons name="heart" size={24} color="#FF3040" />;
         case "comment":
-          return <Ionicons name="chatbubble" size={24} color={colors.info} />;
+          return <Ionicons name="chatbubble" size={24} color="#4F8EF7" />;
         case "follow":
-          return (
-            <Ionicons name="person-add" size={24} color={colors.success} />
-          );
+          return <Ionicons name="person-add" size={24} color="#4F8EF7" />;
         case "mention":
-          return <Ionicons name="at" size={24} color={colors.warning} />;
+          return <Ionicons name="at" size={24} color="#FF9500" />;
         default:
           return (
             <Ionicons
@@ -234,38 +258,30 @@ function NotificationsScreen() {
         <TouchableOpacity
           style={[
             styles.notificationItem,
-            item.isRead
-              ? { backgroundColor: "#ffdddd" } // Okunduysa kırmızımsı arka plan
-              : [
-                  styles.unreadNotification,
-                  { backgroundColor: colors.surface },
-                ],
-            { backgroundColor: colors.background },
+            {
+              backgroundColor: item.isRead ? colors.background : colors.surface,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+            },
           ]}
           onPress={() => handleMarkAsRead(item.id)}
         >
-          <Image
-            source={{ uri: item.user?.avatar || item.from?.avatar }}
-            style={styles.avatar}
-          />
+          {renderUserAvatars() || (
+            <Image
+              source={{ uri: item.user?.avatar || item.from?.avatar }}
+              style={styles.avatar}
+            />
+          )}
           <View style={styles.notificationContent}>
             <View style={styles.notificationText}>
               <Text style={[styles.username, { color: colors.text }]}>
                 {item.user?.username || item.from?.username}
               </Text>
-              {typeof item.user?.followersCount === "number" &&
-                typeof item.user?.followingCount === "number" && (
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                      Takipçi: {item.user.followersCount}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                      Takip: {item.user.followingCount}
-                    </Text>
-                  </View>
-                )}
               <Text
-                style={[styles.notificationMessage, { color: colors.text }]}
+                style={[
+                  styles.notificationMessage,
+                  { color: colors.textSecondary },
+                ]}
               >
                 {" "}
                 {item.text}
@@ -297,6 +313,32 @@ function NotificationsScreen() {
         ? { ...item.user, id: item.user._id }
         : item.user;
       navigation.navigate("UserProfile", { user: userParam });
+    };
+
+    // Grup bildirimi için kullanıcı avatarları
+    const renderUserAvatars = () => {
+      if (item.users && item.users.length > 0) {
+        return (
+          <View style={{ flexDirection: "row", marginRight: 8 }}>
+            {item.users.slice(0, 3).map((user: any, index: number) => (
+              <Image
+                key={user._id || user.id}
+                source={{ uri: user.avatar }}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  borderWidth: 2,
+                  borderColor: colors.background,
+                  marginLeft: index > 0 ? -8 : 0,
+                  zIndex: 3 - index,
+                }}
+              />
+            ))}
+          </View>
+        );
+      }
+      return null;
     };
     if (item.type === "follow" && item.status === "pending") {
       return (
@@ -336,12 +378,14 @@ function NotificationsScreen() {
                 }
               >
                 <Text style={{ color: colors.background, fontWeight: "bold" }}>
-                  Kabul Et
+                  Takip Et
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={{
-                  backgroundColor: colors.error,
+                  backgroundColor: colors.surface,
+                  borderWidth: 1,
+                  borderColor: colors.border,
                   paddingHorizontal: 16,
                   paddingVertical: 8,
                   borderRadius: 6,
@@ -350,8 +394,8 @@ function NotificationsScreen() {
                   handleReject(item.id, item.user?._id || item.from?._id)
                 }
               >
-                <Text style={{ color: colors.background, fontWeight: "bold" }}>
-                  Sil
+                <Text style={{ color: colors.text, fontWeight: "bold" }}>
+                  Takipten Çık
                 </Text>
               </TouchableOpacity>
             </View>
@@ -372,22 +416,28 @@ function NotificationsScreen() {
             backgroundColor: colors.background,
           }}
         >
-          <Image
-            source={{ uri: item.user?.avatar || item.from?.avatar }}
-            style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }}
-          />
+          {renderUserAvatars() || (
+            <Image
+              source={{ uri: item.user?.avatar || item.from?.avatar }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                marginRight: 12,
+              }}
+            />
+          )}
           <Text style={{ color: colors.text, flex: 1 }}>
             <Text style={{ fontWeight: "bold" }}>
               {item.user?.username || item.from?.username}
             </Text>{" "}
-            ile artık birbirinizi takip ediyorsunuz
+            seni takip etmeye başladı
           </Text>
-          <Ionicons name="checkmark-circle" size={28} color={colors.success} />
-          {!isFollowed && (
+          {!isFollowed ? (
             <TouchableOpacity
               style={{
                 backgroundColor: colors.primary,
-                paddingHorizontal: 12,
+                paddingHorizontal: 16,
                 paddingVertical: 8,
                 borderRadius: 6,
                 marginLeft: 8,
@@ -395,24 +445,26 @@ function NotificationsScreen() {
               onPress={() => handleFollowBack(item.user?._id || item.user?.id)}
             >
               <Text style={{ color: colors.background, fontWeight: "bold" }}>
-                Geri Takip Et
+                Takip Et
               </Text>
             </TouchableOpacity>
-          )}
-          {isFollowed && (
-            <View
+          ) : (
+            <TouchableOpacity
               style={{
-                backgroundColor: colors.success,
-                paddingHorizontal: 12,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.border,
+                paddingHorizontal: 16,
                 paddingVertical: 8,
                 borderRadius: 6,
                 marginLeft: 8,
               }}
+              onPress={() => handleFollowBack(item.user?._id || item.user?.id)}
             >
-              <Text style={{ color: colors.background, fontWeight: "bold" }}>
-                Takiptesin
+              <Text style={{ color: colors.text, fontWeight: "bold" }}>
+                Takipten Çık
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
         </TouchableOpacity>
       );

@@ -33,6 +33,7 @@ import {
   archivePost,
 } from "../services/api";
 import { useNavigation } from "@react-navigation/native";
+import { ShareModal } from "./ShareModal";
 
 const { width } = Dimensions.get("window");
 
@@ -142,6 +143,7 @@ const PostCard: React.FC<PostCardProps> = ({
       : 0
   );
   const [showShareModal, setShowShareModal] = useState(false);
+  const [sharePost, setSharePost] = useState<Post | null>(null);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [likeLocked, setLikeLocked] = useState(false);
@@ -247,14 +249,7 @@ const PostCard: React.FC<PostCardProps> = ({
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
       const postId = post._id || post.id;
-      console.log(
-        "[PostCard/handleSave] userId:",
-        userId,
-        typeof userId,
-        "postId:",
-        postId,
-        typeof postId
-      );
+
       if (!userId || !postId) return;
       const res = await savePost(userId, postId);
       setIsSaved((res.savedBy || []).includes(userId));
@@ -270,8 +265,8 @@ const PostCard: React.FC<PostCardProps> = ({
   };
 
   const handleShare = () => {
+    setSharePost(post);
     setShowShareModal(true);
-    onShare?.();
   };
 
   const handleDelete = async () => {
@@ -603,6 +598,15 @@ const PostCard: React.FC<PostCardProps> = ({
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <ShareModal
+        visible={showShareModal}
+        onClose={() => {
+          setShowShareModal(false);
+          setSharePost(null);
+        }}
+        post={sharePost}
+      />
     </View>
   );
 };

@@ -8,6 +8,8 @@ import {
   Dimensions,
   ScrollView,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Video, ResizeMode } from "expo-av";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -172,213 +174,232 @@ const ReelDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Reel</Text>
-        <TouchableOpacity>
-          <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Reel Header */}
-        <View style={styles.reelHeader}>
-          <View style={styles.userInfo}>
-            <Image source={{ uri: reel.user?.avatar }} style={styles.avatar} />
-            <View>
-              <View style={styles.usernameContainer}>
-                <Text style={[styles.username, { color: colors.text }]}>
-                  {reel.user?.username}
-                </Text>
-                {reel.user?.isVerified && (
-                  <Ionicons name="checkmark-circle" size={16} color="#1DA1F2" />
-                )}
-              </View>
-              {reel.location && (
-                <Text
-                  style={[styles.location, { color: colors.textSecondary }]}
-                >
-                  {reel.location}
-                </Text>
-              )}
-            </View>
-          </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
+      >
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Reel</Text>
           <TouchableOpacity>
             <Ionicons
-              name="ellipsis-horizontal"
+              name="paper-plane-outline"
               size={24}
-              color={colors.textSecondary}
+              color={colors.text}
             />
           </TouchableOpacity>
         </View>
 
-        {/* Reel Video */}
-        <Video
-          source={{
-            uri:
-              reel?.video ||
-              reel?.media ||
-              "https://www.w3schools.com/html/mov_bbb.mp4",
-          }}
-          style={styles.video}
-          useNativeControls
-          resizeMode={ResizeMode.COVER}
-          shouldPlay
-          isLooping
-        />
-
-        {/* Reel Actions */}
-        <View style={styles.actions}>
-          <View style={styles.leftActions}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-              <Ionicons
-                name={isLiked ? "heart" : "heart-outline"}
-                size={28}
-                color={isLiked ? "#FF3040" : colors.text}
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Reel Header */}
+          <View style={styles.reelHeader}>
+            <View style={styles.userInfo}>
+              <Image
+                source={{ uri: reel.user?.avatar }}
+                style={styles.avatar}
               />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={handleComment}
-            >
+              <View>
+                <View style={styles.usernameContainer}>
+                  <Text style={[styles.username, { color: colors.text }]}>
+                    {reel.user?.username}
+                  </Text>
+                  {reel.user?.isVerified && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={16}
+                      color="#1DA1F2"
+                    />
+                  )}
+                </View>
+                {reel.location && (
+                  <Text
+                    style={[styles.location, { color: colors.textSecondary }]}
+                  >
+                    {reel.location}
+                  </Text>
+                )}
+              </View>
+            </View>
+            <TouchableOpacity>
               <Ionicons
-                name="chatbubble-outline"
-                size={26}
-                color={colors.text}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-              <Ionicons
-                name="paper-plane-outline"
-                size={26}
-                color={colors.text}
+                name="ellipsis-horizontal"
+                size={24}
+                color={colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={handleSave}>
-            <Ionicons
-              name={isSaved ? "bookmark" : "bookmark-outline"}
-              size={26}
-              color={isSaved ? colors.primary : colors.text}
-            />
-          </TouchableOpacity>
-        </View>
 
-        {/* Reel Info */}
-        <View style={styles.reelInfo}>
-          <Text style={[styles.likes, { color: colors.text }]}>
-            {likesCount} beğeni
-          </Text>
+          {/* Reel Video */}
+          <Video
+            source={{
+              uri:
+                reel?.video ||
+                reel?.media ||
+                "https://www.w3schools.com/html/mov_bbb.mp4",
+            }}
+            style={styles.video}
+            useNativeControls
+            resizeMode={ResizeMode.COVER}
+            shouldPlay
+            isLooping
+          />
 
-          {/* Açıklama metni varsa göster, çok uzunsa devamını gör butonu */}
-          {(reel.caption || reel.description) && (
-            <View style={{ marginTop: 2 }}>
-              <Text
-                style={[
-                  styles.caption,
-                  { color: colors.text, flexWrap: "wrap" },
-                ]}
-                numberOfLines={showFullCaption ? undefined : 2}
-                ellipsizeMode={showFullCaption ? undefined : "tail"}
+          {/* Reel Actions */}
+          <View style={styles.actions}>
+            <View style={styles.leftActions}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleLike}
               >
-                <Text style={{ fontWeight: "bold" }}>
-                  {reel.user?.username || ""}{" "}
+                <Ionicons
+                  name={isLiked ? "heart" : "heart-outline"}
+                  size={28}
+                  color={isLiked ? "#FF3040" : colors.text}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleComment}
+              >
+                <Ionicons
+                  name="chatbubble-outline"
+                  size={26}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={handleShare}
+              >
+                <Ionicons
+                  name="paper-plane-outline"
+                  size={26}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={handleSave}>
+              <Ionicons
+                name={isSaved ? "bookmark" : "bookmark-outline"}
+                size={26}
+                color={isSaved ? colors.primary : colors.text}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Reel Info */}
+          <View style={styles.reelInfo}>
+            <Text style={[styles.likes, { color: colors.text }]}>
+              {likesCount} beğeni
+            </Text>
+
+            {/* Açıklama metni varsa göster, çok uzunsa devamını gör butonu */}
+            {(reel.caption || reel.description) && (
+              <View style={{ marginTop: 2 }}>
+                <Text
+                  style={[
+                    styles.caption,
+                    { color: colors.text, flexWrap: "wrap" },
+                  ]}
+                  numberOfLines={showFullCaption ? undefined : 2}
+                  ellipsizeMode={showFullCaption ? undefined : "tail"}
+                >
+                  <Text style={{ fontWeight: "bold" }}>
+                    {reel.user?.username || ""}{" "}
+                  </Text>
+                  {reel.caption || reel.description}
                 </Text>
-                {reel.caption || reel.description}
-              </Text>
-              {!showFullCaption &&
-                (reel.caption || reel.description)?.length > 80 && (
-                  <TouchableOpacity onPress={() => setShowFullCaption(true)}>
+                {!showFullCaption &&
+                  (reel.caption || reel.description)?.length > 80 && (
+                    <TouchableOpacity onPress={() => setShowFullCaption(true)}>
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontSize: 13,
+                          marginTop: 2,
+                        }}
+                      >
+                        devamını gör
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+              </View>
+            )}
+
+            {/* Yorumlar (en fazla 2 tane) */}
+            {comments.length > 0 && (
+              <View style={styles.commentsPreview}>
+                {comments.slice(0, 2).map((comment) => (
+                  <View
+                    key={comment._id || comment.id}
+                    style={styles.commentPreviewItem}
+                  >
                     <Text
-                      style={{
-                        color: colors.textSecondary,
-                        fontSize: 13,
-                        marginTop: 2,
-                      }}
+                      style={[
+                        styles.commentPreviewUsername,
+                        { color: colors.text },
+                      ]}
                     >
-                      devamını gör
+                      {comment.user?.username}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.commentPreviewText,
+                        { color: colors.text },
+                      ]}
+                    >
+                      {" "}
+                      {comment.text}
+                    </Text>
+                  </View>
+                ))}
+                {comments.length > 2 && (
+                  <TouchableOpacity onPress={handleComment}>
+                    <Text
+                      style={[
+                        styles.viewAllComments,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Tüm yorumları görüntüle ({comments.length})
                     </Text>
                   </TouchableOpacity>
                 )}
-            </View>
-          )}
+              </View>
+            )}
 
-          {/* Yorumlar (en fazla 2 tane) */}
-          {comments.length > 0 && (
-            <View style={styles.commentsPreview}>
-              {comments.slice(0, 2).map((comment) => (
-                <View
-                  key={comment._id || comment.id}
-                  style={styles.commentPreviewItem}
-                >
-                  <Text
-                    style={[
-                      styles.commentPreviewUsername,
-                      { color: colors.text },
-                    ]}
-                  >
-                    {comment.user?.username}
-                  </Text>
-                  <Text
-                    style={[styles.commentPreviewText, { color: colors.text }]}
-                  >
-                    {" "}
-                    {comment.text}
-                  </Text>
-                </View>
-              ))}
-              {comments.length > 2 && (
-                <TouchableOpacity onPress={handleComment}>
-                  <Text
-                    style={[
-                      styles.viewAllComments,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Tüm yorumları görüntüle ({comments.length})
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+            <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+              {reel.createdAt ? timeAgo(reel.createdAt) : reel.timestamp}
+            </Text>
+          </View>
+        </ScrollView>
 
-          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-            {reel.createdAt ? timeAgo(reel.createdAt) : reel.timestamp}
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* Comment Input */}
-      <View
-        style={[
-          styles.commentInputContainer,
-          { backgroundColor: colors.background, borderTopColor: colors.border },
-        ]}
-      >
-        <Image
-          source={{
-            uri: "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150",
-          }}
-          style={styles.inputAvatar}
-        />
-        <TextInput
+        {/* Comment Input */}
+        <View
           style={[
-            styles.commentInput,
-            { color: colors.text, backgroundColor: colors.surface },
+            styles.commentInputContainer,
+            {
+              backgroundColor: colors.surface,
+              borderTopColor: colors.border,
+            },
           ]}
-          placeholder="Yorum ekle..."
-          placeholderTextColor={colors.textSecondary}
-        />
-        <TouchableOpacity>
-          <Text style={[styles.postButton, { color: colors.primary }]}>
-            Gönder
-          </Text>
-        </TouchableOpacity>
-      </View>
-
+        >
+          <TextInput
+            style={[styles.commentInput, { color: colors.text }]}
+            placeholder="Yorum ekle..."
+            placeholderTextColor={colors.textSecondary}
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, { backgroundColor: colors.primary }]}
+          >
+            <Ionicons name="send" size={20} color={colors.background} />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
       <ShareModal
         visible={showShareModal}
         onClose={() => setShowShareModal(false)}
@@ -500,10 +521,16 @@ const styles = StyleSheet.create({
   commentInput: {
     flex: 1,
     fontSize: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: "transparent",
   },
-  postButton: {
-    fontWeight: "600",
-    fontSize: 16,
+  sendButton: {
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginLeft: 6,
   },
 });
 

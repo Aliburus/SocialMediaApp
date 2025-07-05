@@ -8,6 +8,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../context/ThemeContext";
@@ -122,70 +125,91 @@ const AddPostScreen: React.FC = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <TouchableOpacity
-        style={[
-          styles.imagePicker,
-          {
-            marginTop: insets.top,
-            height: screenHeight / 2,
-          },
-        ]}
-        onPress={pickImage}
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        {image ? (
-          <Image source={{ uri: image }} style={styles.image} />
-        ) : (
-          <View style={styles.placeholderContainer}>
-            <Text style={{ color: "#fff", fontSize: 18, marginBottom: 20 }}>
-              Fotoğraf seçmek için tıkla
+        {/* Header */}
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="close" size={28} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            Yeni Gönderi
+          </Text>
+          <TouchableOpacity
+            onPress={handleShare}
+            disabled={loading || !image}
+            style={[
+              styles.shareButton,
+              {
+                backgroundColor: colors.primary,
+                opacity: loading || !image ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.shareButtonText, { color: "#fff" }]}>
+              {loading ? "..." : "Paylaş"}
             </Text>
-            <View style={styles.iconContainer}>
-              <Ionicons name="images-outline" size={40} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Image Section */}
+        <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+          {image ? (
+            <Image source={{ uri: image }} style={styles.image} />
+          ) : (
+            <View style={styles.placeholderContainer}>
+              <Ionicons
+                name="images-outline"
+                size={60}
+                color={colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.placeholderText,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Fotoğraf seçmek için tıkla
+              </Text>
             </View>
-          </View>
-        )}
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.cameraButton, { backgroundColor: colors.primary }]}
-        onPress={takePhoto}
-      >
-        <Ionicons name="camera" size={24} color="#fff" />
-        <Text
-          style={{
-            color: "#fff",
-            marginLeft: 8,
-            fontSize: 16,
-            fontWeight: "600",
-          }}
+          )}
+        </TouchableOpacity>
+
+        {/* Camera Button */}
+        <TouchableOpacity
+          style={[styles.cameraButton, { backgroundColor: colors.surface }]}
+          onPress={takePhoto}
         >
-          Kamera ile Çek
-        </Text>
-      </TouchableOpacity>
-      <TextInput
-        style={[
-          styles.input,
-          {
-            color: colors.text,
-            backgroundColor: colors.surface,
-          },
-        ]}
-        placeholder="Açıklama (isteğe bağlı)"
-        placeholderTextColor={colors.textSecondary}
-        value={description}
-        onChangeText={setDescription}
-        multiline
-      />
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: colors.primary }]}
-        onPress={handleShare}
-        disabled={loading}
-      >
-        <Text style={{ color: colors.background, fontWeight: "bold" }}>
-          {loading ? "Paylaşılıyor..." : "Paylaş"}
-        </Text>
-      </TouchableOpacity>
-    </View>
+          <Ionicons name="camera" size={24} color={colors.primary} />
+          <Text style={[styles.cameraButtonText, { color: colors.primary }]}>
+            Kamera ile Çek
+          </Text>
+        </TouchableOpacity>
+
+        {/* Description Input */}
+        <View
+          style={[styles.inputContainer, { backgroundColor: colors.surface }]}
+        >
+          <TextInput
+            style={[styles.input, { color: colors.text }]}
+            placeholder="Açıklama ekle..."
+            placeholderTextColor={colors.textSecondary}
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            textAlignVertical="top"
+          />
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -193,9 +217,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  shareButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  shareButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
   imagePicker: {
     width: "100%",
-    backgroundColor: "#000",
+    height: 300,
+    backgroundColor: "#f0f0f0",
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -208,14 +260,12 @@ const styles = StyleSheet.create({
   placeholderContainer: {
     alignItems: "center",
     justifyContent: "center",
+    padding: 20,
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
+  placeholderText: {
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: "center",
   },
   cameraButton: {
     flexDirection: "row",
@@ -223,20 +273,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 16,
     margin: 16,
+    borderRadius: 12,
+  },
+  cameraButtonText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  inputContainer: {
+    margin: 16,
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 120,
   },
   input: {
-    width: "100%",
-    padding: 12,
     fontSize: 16,
-    marginBottom: 16,
-    minHeight: 48,
-    margin: 16,
-  },
-  button: {
-    width: "100%",
-    padding: 16,
-    alignItems: "center",
-    marginHorizontal: 16,
+    minHeight: 100,
   },
 });
 

@@ -36,6 +36,7 @@ router.delete("/stories/:id", storyController.deleteStory);
 router.post("/stories/:id/archive", storyController.archiveStory);
 router.post("/stories/:id/unarchive", storyController.unarchiveStory);
 router.get("/stories/archived/:userId", storyController.getArchivedStories);
+router.get("/stories/stats/:userId", storyController.getStoryStats);
 router.post("/save", savePost);
 router.get("/saved/:userId", getSavedPosts);
 router.post("/follow", followUser);

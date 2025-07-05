@@ -55,12 +55,15 @@ const DMChatScreen: React.FC = () => {
         );
 
         setConversationId(data.conversationId);
+        console.log("DMChatScreen - Gelen mesajlar:", data.messages);
         setMessages(
           data.messages.map((msg: any) => ({
             id: msg._id,
             fromMe: (msg.sender._id || msg.sender) === currentUserId,
             text: msg.text,
             createdAt: msg.createdAt,
+            post: msg.post,
+            story: msg.story,
           }))
         );
       }
@@ -140,11 +143,11 @@ const DMChatScreen: React.FC = () => {
       const receiverId = user._id || user.id;
 
       // Önce API ile mesajı veritabanına kaydet
-      const sentMessage = await sendMessage(
-        currentUserId,
-        receiverId,
-        messageText
-      );
+      const sentMessage = await sendMessage({
+        senderId: currentUserId,
+        receiverId: receiverId,
+        text: messageText,
+      });
 
       // Socket.io ile mesaj gönder
       socketService.sendMessage(
@@ -210,6 +213,16 @@ const DMChatScreen: React.FC = () => {
         <Text style={[styles.username, { color: colors.text }]}>
           {user?.username || "kullanici"}
         </Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("ChatHistory", { user })}
+          style={styles.infoButton}
+        >
+          <Ionicons
+            name="information-circle-outline"
+            size={26}
+            color={colors.text}
+          />
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -245,45 +258,223 @@ const DMChatScreen: React.FC = () => {
             <FlatList
               data={messages}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <View
-                  style={[
-                    styles.messageBubble,
-                    item.fromMe
-                      ? [styles.myMessage, { backgroundColor: colors.primary }]
-                      : [
-                          styles.theirMessage,
-                          { backgroundColor: colors.surface },
-                        ],
-                  ]}
-                >
-                  <Text
+              renderItem={({ item }) => {
+                console.log("[DMChatScreen] Render edilen mesaj:", item);
+                return (
+                  <View
                     style={[
-                      styles.messageText,
-                      { color: item.fromMe ? colors.background : colors.text },
+                      styles.messageContainer,
+                      item.fromMe
+                        ? styles.myMessageContainer
+                        : styles.theirMessageContainer,
                     ]}
                   >
-                    {item.text}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.messageTime,
-                      {
-                        color: item.fromMe
-                          ? colors.background
-                          : colors.textSecondary,
-                      },
-                    ]}
-                  >
-                    {item.createdAt
-                      ? new Date(item.createdAt).toLocaleTimeString("tr-TR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : ""}
-                  </Text>
-                </View>
-              )}
+                    {!item.fromMe && (
+                      <TouchableOpacity
+                        onPress={() =>
+                          navigation.navigate("UserProfile", { user })
+                        }
+                        style={styles.avatarContainer}
+                      >
+                        <Image
+                          source={{
+                            uri:
+                              user?.avatar ||
+                              "https://placehold.co/100x100/000/fff",
+                          }}
+                          style={styles.messageAvatar}
+                        />
+                      </TouchableOpacity>
+                    )}
+                    <View
+                      style={[
+                        styles.messageBubble,
+                        item.fromMe
+                          ? [
+                              styles.myMessage,
+                              { backgroundColor: colors.primary },
+                            ]
+                          : [
+                              styles.theirMessage,
+                              { backgroundColor: colors.surface },
+                            ],
+                      ]}
+                    >
+                      {/* Post paylaşımı ise detaylı kart */}
+                      {item.post && (
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: "transparent",
+                          }}
+                          onPress={() =>
+                            navigation.navigate("PostDetail", {
+                              post: item.post,
+                            })
+                          }
+                        >
+                          {/* Üstte küçük avatar ve username yatay, sol üstte */}
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              marginBottom: 6,
+                              marginLeft: 2,
+                            }}
+                          >
+                            <Image
+                              source={{
+                                uri:
+                                  item.post.user?.avatar ||
+                                  "https://placehold.co/100x100/000/fff",
+                              }}
+                              style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 14,
+                                marginRight: 8,
+                              }}
+                            />
+                            <Text
+                              style={{
+                                fontSize: 14,
+                                fontWeight: "600",
+                                color: colors.text,
+                              }}
+                            >
+                              {item.post.user?.username || "Kullanıcı"}
+                            </Text>
+                          </View>
+                          {/* Ortada büyük görsel */}
+                          <Image
+                            source={{ uri: item.post.image }}
+                            style={{
+                              width: 220,
+                              height: 220,
+                              borderRadius: 8,
+                              alignSelf: "flex-start",
+                              backgroundColor: "#111",
+                            }}
+                          />
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Story paylaşımı ise detaylı kart */}
+                      {item.story && (
+                        <TouchableOpacity
+                          style={[
+                            styles.shareCard,
+                            {
+                              backgroundColor: item.fromMe
+                                ? colors.background
+                                : colors.surface,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                          onPress={() =>
+                            navigation.navigate("StoryScreen", {
+                              story: item.story,
+                            })
+                          }
+                        >
+                          <View style={styles.shareCardHeader}>
+                            <Image
+                              source={{
+                                uri:
+                                  item.story.user?.avatar ||
+                                  "https://placehold.co/100x100/000/fff",
+                              }}
+                              style={styles.shareCardAvatar}
+                            />
+                            <Text
+                              style={[
+                                styles.shareCardUsername,
+                                {
+                                  color: item.fromMe
+                                    ? colors.background
+                                    : colors.text,
+                                },
+                              ]}
+                            >
+                              {item.story.user?.username || "Kullanıcı"}
+                            </Text>
+                            <Ionicons
+                              name="camera"
+                              size={16}
+                              color={
+                                item.fromMe ? colors.background : colors.primary
+                              }
+                              style={{ marginLeft: 8 }}
+                            />
+                          </View>
+                          <View style={{ position: "relative" }}>
+                            <Image
+                              source={{ uri: item.story.image }}
+                              style={styles.shareCardImage}
+                            />
+                            <View
+                              style={{
+                                position: "absolute",
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                height: 40,
+                                backgroundColor: "rgba(0,0,0,0.3)",
+                              }}
+                            />
+                          </View>
+                          <Text
+                            style={[
+                              styles.shareCardDescription,
+                              {
+                                color: item.fromMe
+                                  ? colors.background
+                                  : colors.textSecondary,
+                              },
+                            ]}
+                          >
+                            Hikaye
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      {/* Normal mesaj metni */}
+                      {item.text && (
+                        <Text
+                          style={[
+                            styles.messageText,
+                            {
+                              color: item.fromMe
+                                ? colors.background
+                                : colors.text,
+                            },
+                          ]}
+                        >
+                          {item.text}
+                        </Text>
+                      )}
+                      <Text
+                        style={[
+                          styles.messageTime,
+                          {
+                            color: item.fromMe
+                              ? colors.background
+                              : colors.textSecondary,
+                          },
+                        ]}
+                      >
+                        {item.createdAt
+                          ? new Date(item.createdAt).toLocaleTimeString(
+                              "tr-TR",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )
+                          : ""}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }}
               contentContainerStyle={styles.messagesList}
               inverted
             />
@@ -351,18 +542,41 @@ const styles = StyleSheet.create({
   username: {
     fontWeight: "bold",
     fontSize: 18,
+    flex: 1,
+  },
+  infoButton: {
+    marginLeft: 8,
   },
   messagesList: {
     flexGrow: 1,
     justifyContent: "flex-end",
     padding: 16,
   },
+  messageContainer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    marginBottom: 10,
+  },
+  myMessageContainer: {
+    justifyContent: "flex-end",
+  },
+  theirMessageContainer: {
+    justifyContent: "flex-start",
+  },
+  avatarContainer: {
+    marginRight: 8,
+    marginBottom: 4,
+  },
+  messageAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
   messageBubble: {
     maxWidth: "75%",
     borderRadius: 18,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    marginBottom: 10,
   },
   myMessage: {
     alignSelf: "flex-end",
@@ -403,6 +617,101 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginRight: 8,
+  },
+  shareCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 8,
+    maxWidth: 220,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  shareCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    paddingBottom: 8,
+  },
+  shareCardAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 10,
+  },
+  shareCardUsername: {
+    fontSize: 13,
+    fontWeight: "600",
+    flex: 1,
+  },
+  shareCardImage: {
+    width: "100%",
+    height: 140,
+    resizeMode: "cover",
+  },
+  shareCardDescription: {
+    fontSize: 12,
+    padding: 12,
+    paddingTop: 8,
+    lineHeight: 16,
+  },
+  shareCardModern: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 12,
+    maxWidth: 260,
+    backgroundColor: "#222",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.13,
+    shadowRadius: 6,
+    elevation: 4,
+    alignSelf: "center",
+  },
+  shareCardModernHeader: {
+    flexDirection: "column",
+    alignItems: "center",
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: "transparent",
+  },
+  shareCardModernAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    marginBottom: 6,
+  },
+  shareCardModernUsername: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff",
+    textAlign: "center",
+  },
+  shareCardModernImage: {
+    width: 240,
+    height: 240,
+    borderRadius: 12,
+    alignSelf: "center",
+    marginVertical: 8,
+    backgroundColor: "#111",
+  },
+  shareCardModernFooter: {
+    backgroundColor: "#333",
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  shareCardModernFooterText: {
+    color: "#bbb",
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.2,
   },
 });
 

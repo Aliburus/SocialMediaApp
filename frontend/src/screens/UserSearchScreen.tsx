@@ -25,6 +25,13 @@ const UserSearchScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
 
+  // Pagination için state'ler
+  const [displayedResults, setDisplayedResults] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreResults, setHasMoreResults] = useState(true);
+  const RESULTS_PER_PAGE = 15;
+
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
     if (query.length > 0) {
@@ -32,13 +39,45 @@ const UserSearchScreen: React.FC = () => {
       try {
         const results = await searchUsersApi(query);
         setSearchResults(results);
+
+        // İlk 15 sonucu göster
+        setDisplayedResults(results.slice(0, RESULTS_PER_PAGE));
+        setCurrentPage(1);
+        setHasMoreResults(results.length > RESULTS_PER_PAGE);
       } catch (err) {
         setSearchResults([]);
+        setDisplayedResults([]);
+        setHasMoreResults(false);
       }
       setLoading(false);
     } else {
       setSearchResults([]);
+      setDisplayedResults([]);
+      setHasMoreResults(false);
     }
+  };
+
+  // Daha fazla sonuç yükle
+  const loadMoreResults = async () => {
+    if (loadingMore || !hasMoreResults) return;
+
+    setLoadingMore(true);
+
+    const nextPage = currentPage + 1;
+    const startIndex = (nextPage - 1) * RESULTS_PER_PAGE;
+    const endIndex = startIndex + RESULTS_PER_PAGE;
+
+    const newResults = searchResults.slice(startIndex, endIndex);
+
+    if (newResults.length > 0) {
+      setDisplayedResults((prev) => [...prev, ...newResults]);
+      setCurrentPage(nextPage);
+      setHasMoreResults(endIndex < searchResults.length);
+    } else {
+      setHasMoreResults(false);
+    }
+
+    setLoadingMore(false);
   };
 
   const renderUserItem = ({ item }: { item: any }) => (
@@ -99,10 +138,23 @@ const UserSearchScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
-          data={searchResults}
+          data={displayedResults}
           renderItem={renderUserItem}
           keyExtractor={(item) => item._id || item.id}
           showsVerticalScrollIndicator={false}
+          onEndReached={loadMoreResults}
+          onEndReachedThreshold={0.1}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadingMore}>
+                <Text
+                  style={[styles.loadingText, { color: colors.textSecondary }]}
+                >
+                  Daha fazla yükleniyor...
+                </Text>
+              </View>
+            ) : null
+          }
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         />
       )}
@@ -155,6 +207,13 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 16,
     fontWeight: "500",
+  },
+  loadingMore: {
+    paddingVertical: 20,
+    alignItems: "center",
+  },
+  loadingText: {
+    fontSize: 14,
   },
 });
 

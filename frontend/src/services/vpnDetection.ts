@@ -96,10 +96,7 @@ class VPNDetectionService {
 
       return result;
     } catch (error) {
-      if (__DEV__) {
-        console.error("VPN tespit hatası:", error);
-      }
-      // Hata durumunda varsayılan olarak VPN olmadığını kabul et
+      // Hata durumunda sessizce VPN olmadığını kabul et
       return { isVPN: false };
     }
   }
