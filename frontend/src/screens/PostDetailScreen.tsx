@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,13 @@ import {
   TextInput,
   Dimensions,
   Modal,
+  Animated,
 } from "react-native";
+import {
+  PinchGestureHandler,
+  PanGestureHandler,
+  State,
+} from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -70,6 +76,12 @@ const PostDetailScreen: React.FC = () => {
   const [isSaved, setIsSaved] = React.useState(false);
   const [showFullCaption, setShowFullCaption] = React.useState(false);
   const [showOptionsModal, setShowOptionsModal] = React.useState(false);
+
+  // Pinch-to-zoom için state'ler
+  const scale = useRef(new Animated.Value(1)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const [isZoomed, setIsZoomed] = React.useState(false);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -207,6 +219,58 @@ const PostDetailScreen: React.FC = () => {
     }
   };
 
+  // Pinch gesture handler - daha hassas
+  const onPinchGestureEvent = Animated.event(
+    [{ nativeEvent: { scale: scale } }],
+    { useNativeDriver: true }
+  );
+
+  // Pinch gesture için minimum scale değişimi
+  const minScaleChange = 0.005;
+
+  // Pan gesture handler (zoom sırasında kaydırma için)
+  const onPanGestureEvent = Animated.event(
+    [{ nativeEvent: { translationX: translateX, translationY: translateY } }],
+    { useNativeDriver: true }
+  );
+
+  const onPanHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      // Pan bırakıldığında pozisyonu sıfırla
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const onPinchHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      // Bırakıldığında normal haline dön
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+
+      setIsZoomed(false);
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
@@ -246,7 +310,24 @@ const PostDetailScreen: React.FC = () => {
         </View>
 
         {/* Post Image */}
-        <Image source={{ uri: post.image }} style={styles.postImage} />
+        <PinchGestureHandler
+          onGestureEvent={onPinchGestureEvent}
+          onHandlerStateChange={onPinchHandlerStateChange}
+          simultaneousHandlers={[]}
+          shouldCancelWhenOutside={false}
+        >
+          <Animated.View
+            style={{
+              transform: [
+                { scale: scale },
+                { translateX: translateX },
+                { translateY: translateY },
+              ],
+            }}
+          >
+            <Image source={{ uri: post.image }} style={styles.postImage} />
+          </Animated.View>
+        </PinchGestureHandler>
 
         {/* Post Actions */}
         <View style={styles.actions}>

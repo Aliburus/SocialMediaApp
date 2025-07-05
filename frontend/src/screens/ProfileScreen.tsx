@@ -118,6 +118,26 @@ const ProfileScreen: React.FC = () => {
     }, [activeTab])
   );
 
+  // Tab'a basıldığında refresh
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserData();
+      fetchUserPosts();
+    }, [])
+  );
+
+  // Tab'a basıldığında refresh
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("tabPress", () => {
+      console.log("Profile tab pressed - refreshing...");
+      setRefreshing(true);
+      Promise.all([fetchUserData(), fetchUserPosts()]).finally(() => {
+        setRefreshing(false);
+      });
+    });
+    return unsubscribe;
+  }, [navigation]);
+
   const fetchUserPosts = async () => {
     setLoading(true);
     const userStr = await AsyncStorage.getItem("user");
@@ -126,7 +146,12 @@ const ProfileScreen: React.FC = () => {
     const endpoint = `/posts/user/${userId}`;
     try {
       const posts = await getUserPosts(userId);
-      setUserPosts(posts);
+      // En yeniden eskiye doğru sırala
+      const sortedPosts = posts.sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setUserPosts(sortedPosts);
     } catch (err: any) {
       console.log(
         "[PROFILE] Profilde post çekme hatası:",
@@ -194,6 +219,8 @@ const ProfileScreen: React.FC = () => {
           renderItem={renderPostItem}
           contentContainerStyle={{ padding: 2 }}
           scrollEnabled={true}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           ListHeaderComponent={
             <>
               {/* Header */}

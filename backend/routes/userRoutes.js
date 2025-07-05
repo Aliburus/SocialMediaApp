@@ -17,6 +17,7 @@ const {
   rejectFollowRequest,
   getUserConversations,
   getConversationMessages,
+  sendMessage,
   getUserFriends,
   changePassword,
   getNotificationSettings,
@@ -51,6 +52,7 @@ router.get(
   "/:userId/conversations/:otherUserId/messages",
   getConversationMessages
 );
+router.post("/send-message", sendMessage);
 router.post("/change-password", changePassword);
 router.get("/:userId/notification-settings", getNotificationSettings);
 router.post("/:userId/notification-settings", updateNotificationSettings);

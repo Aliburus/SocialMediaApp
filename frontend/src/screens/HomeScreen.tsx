@@ -67,7 +67,12 @@ const HomeScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
       const data = await getAllPosts(userId);
-      setPosts(data);
+      // En yeniden eskiye doğru sırala
+      const sortedData = data.sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setPosts(sortedData);
     } catch (err) {
       console.log("[POSTLAR] Hata:", err);
     } finally {
@@ -160,6 +165,24 @@ const HomeScreen: React.FC = () => {
       }
     }, [])
   );
+
+  // Tab'a basıldığında refresh
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("tabPress", () => {
+      console.log("Home tab pressed - refreshing...");
+      setRefreshing(true);
+      Promise.all([
+        fetchPosts(),
+        fetchStories(),
+        fetchMyAvatar(),
+        fetchMyFollowing(),
+        fetchMyPosts(),
+      ]).finally(() => {
+        setRefreshing(false);
+      });
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   // navigation focus olduğunda postları tekrar fetch et
   React.useEffect(() => {
@@ -467,6 +490,10 @@ const HomeScreen: React.FC = () => {
     setPosts((prev) => prev.filter((p) => (p._id || p.id) !== postId));
   };
 
+  const handleArchivePost = (postId: string) => {
+    setPosts((prev) => prev.filter((p) => (p._id || p.id) !== postId));
+  };
+
   const renderPost = ({ item }: { item: any }) => (
     <PostCard
       post={item}
@@ -476,6 +503,7 @@ const HomeScreen: React.FC = () => {
       }
       onShare={() => setShowShareModal(true)}
       onDelete={() => handleDeletePost(item._id || item.id)}
+      onArchive={() => handleArchivePost(item._id || item.id)}
     />
   );
 

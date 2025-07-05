@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,15 @@ import {
   Dimensions,
   Modal,
   FlatList,
+  Alert,
+  Animated,
 } from "react-native";
+import {
+  PinchGestureHandler,
+  PanGestureHandler,
+  State,
+} from "react-native-gesture-handler";
+
 import { Ionicons } from "@expo/vector-icons";
 import { Post } from "../types";
 import {
@@ -35,6 +43,7 @@ interface PostCardProps {
   onComment?: () => void;
   onShare?: () => void;
   onDelete?: () => void;
+  onArchive?: () => void;
 }
 
 // Mock arkadaş listesi
@@ -122,6 +131,7 @@ const PostCard: React.FC<PostCardProps> = ({
   onComment,
   onShare,
   onDelete,
+  onArchive,
 }) => {
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(
@@ -139,7 +149,14 @@ const PostCard: React.FC<PostCardProps> = ({
   const [comments, setComments] = useState<any[]>([]);
   const [showFullCaption, setShowFullCaption] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const navigation = useNavigation<any>();
+
+  // Pinch-to-zoom için state'ler
+  const scale = useRef(new Animated.Value(1)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const [isZoomed, setIsZoomed] = useState(false);
 
   // Like işlemi için debounce
   const likeTimeout = React.useRef<NodeJS.Timeout | null>(null);
@@ -154,6 +171,7 @@ const PostCard: React.FC<PostCardProps> = ({
     const checkLiked = async () => {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
+      setCurrentUser(userObj);
       if (userObj?._id && Array.isArray(post.likes)) {
         setIsLiked((post.likes as any[]).includes(userObj._id));
       }
@@ -270,9 +288,69 @@ const PostCard: React.FC<PostCardProps> = ({
     setShowOptionsModal(false);
     try {
       await archivePost(post._id || post.id);
+      if (onArchive) onArchive();
       if (onDelete) onDelete();
     } catch (err) {
       alert("Arşivleme işlemi başarısız!");
+    }
+  };
+
+  const handleCopyLink = () => {
+    setShowOptionsModal(false);
+    // Post linkini kopyala
+    const postLink = `https://instagram.com/p/${post._id || post.id}`;
+    Alert.alert("Başarılı", "Bağlantı kopyalandı!");
+  };
+
+  // Pinch gesture handler - daha hassas
+  const onPinchGestureEvent = Animated.event(
+    [{ nativeEvent: { scale: scale } }],
+    { useNativeDriver: true }
+  );
+
+  // Pinch gesture için minimum scale değişimi
+  const minScaleChange = 0.005;
+
+  // Pan gesture handler (zoom sırasında kaydırma için)
+  const onPanGestureEvent = Animated.event(
+    [{ nativeEvent: { translationX: translateX, translationY: translateY } }],
+    { useNativeDriver: true }
+  );
+
+  const onPanHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      // Pan bırakıldığında pozisyonu sıfırla
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const onPinchHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      // Bırakıldığında normal haline dön
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+
+      setIsZoomed(false);
     }
   };
 
@@ -334,12 +412,29 @@ const PostCard: React.FC<PostCardProps> = ({
       </View>
 
       {/* Image */}
-      <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
-        <Image
-          source={{ uri: post.image }}
-          style={[styles.postImage, { backgroundColor: colors.background }]}
-        />
-      </TouchableOpacity>
+      <PinchGestureHandler
+        onGestureEvent={onPinchGestureEvent}
+        onHandlerStateChange={onPinchHandlerStateChange}
+        simultaneousHandlers={[]}
+        shouldCancelWhenOutside={false}
+      >
+        <Animated.View
+          style={{
+            transform: [
+              { scale: scale },
+              { translateX: translateX },
+              { translateY: translateY },
+            ],
+          }}
+        >
+          <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
+            <Image
+              source={{ uri: post.image }}
+              style={[styles.postImage, { backgroundColor: colors.background }]}
+            />
+          </TouchableOpacity>
+        </Animated.View>
+      </PinchGestureHandler>
 
       {/* Actions */}
       <View style={styles.actions}>
@@ -463,7 +558,7 @@ const PostCard: React.FC<PostCardProps> = ({
         )}
       </View>
 
-      {/* Silme işlemi için modal */}
+      {/* Seçenekler modal */}
       <Modal
         visible={showOptionsModal}
         transparent
@@ -476,20 +571,35 @@ const PostCard: React.FC<PostCardProps> = ({
           onPress={() => setShowOptionsModal(false)}
         >
           <View style={[styles.optionsModal, { backgroundColor: colors.card }]}>
-            <TouchableOpacity
-              onPress={handleDelete}
-              style={styles.optionButton}
-            >
-              <Text style={[styles.optionText, { color: "red" }]}>Sil</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={handleArchive}
-              style={styles.optionButton}
-            >
-              <Text style={[styles.optionText, { color: "blue" }]}>
-                Arşivle
-              </Text>
-            </TouchableOpacity>
+            {currentUser && post.user.username === currentUser.username ? (
+              // Kullanıcının kendi postu - sil ve arşiv seçenekleri
+              <>
+                <TouchableOpacity
+                  onPress={handleDelete}
+                  style={styles.optionButton}
+                >
+                  <Text style={[styles.optionText, { color: "red" }]}>Sil</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleArchive}
+                  style={styles.optionButton}
+                >
+                  <Text style={[styles.optionText, { color: "blue" }]}>
+                    Arşivle
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              // Başkasının postu - sadece bağlantı kopyala
+              <TouchableOpacity
+                onPress={handleCopyLink}
+                style={styles.optionButton}
+              >
+                <Text style={[styles.optionText, { color: colors.text }]}>
+                  Bağlantıyı kopyala
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>

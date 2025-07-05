@@ -55,6 +55,12 @@ export const addComment = async (
   return res.data;
 };
 
+// Yorumu beğen veya beğenmekten vazgeç
+export const toggleCommentLike = async (commentId: string, userId: string) => {
+  const res = await api.put(`/posts/comments/${commentId}/like`, { userId });
+  return res.data;
+};
+
 // Kullanıcının kendi postlarını getir
 export const getUserPosts = async (userId: string) => {
   const res = await api.get(`/posts/user/${userId}`);
@@ -226,6 +232,20 @@ export const getConversationMessages = async (
   const res = await api.get(
     `/users/${userId}/conversations/${otherUserId}/messages`
   );
+  return res.data;
+};
+
+// Mesaj gönder
+export const sendMessage = async (
+  senderId: string,
+  receiverId: string,
+  text: string
+) => {
+  const res = await api.post("/users/send-message", {
+    senderId,
+    receiverId,
+    text,
+  });
   return res.data;
 };
 

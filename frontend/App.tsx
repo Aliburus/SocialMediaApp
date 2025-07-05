@@ -14,10 +14,19 @@ import {
   Image,
   TouchableOpacity,
   Alert,
+  LogBox,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { getProfile } from "./src/services/api";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import socketService from "./src/services/socketService";
+
+// StatusBar uyarılarını kapat
+LogBox.ignoreLogs([
+  "StatusBar backgroundColor is not supported with edge-to-edge enabled",
+  "StatusBar is always translucent when edge-to-edge is enabled",
+]);
 
 // Screens
 import HomeScreen from "./src/screens/HomeScreen";
@@ -252,11 +261,19 @@ function AppContent() {
     }
     await AsyncStorage.setItem("user", JSON.stringify(user));
     setIsLoggedIn(true);
+
+    // Socket.io bağlantısı
+    if (user.id || user._id) {
+      socketService.connect(user.id || user._id);
+    }
   };
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem("user");
     setIsLoggedIn(false);
+
+    // Socket.io bağlantısını kapat
+    socketService.disconnect();
   };
 
   if (loading) {
@@ -342,10 +359,12 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <UserProvider>
-        <AppContent />
-      </UserProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <UserProvider>
+          <AppContent />
+        </UserProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

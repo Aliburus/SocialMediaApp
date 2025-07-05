@@ -5,6 +5,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import {
   SafeAreaView,
@@ -21,6 +22,7 @@ import Modal from "react-native-modal";
 import Slider from "@react-native-community/slider";
 import { useUser } from "../context/UserContext";
 import * as FileSystem from "expo-file-system";
+import vpnDetectionService from "../services/vpnDetection";
 
 const getLeafletHtml = (
   lat: number,
@@ -259,11 +261,19 @@ const MapScreen: React.FC = () => {
     null
   );
   const [pendingRadiusFilter, setPendingRadiusFilter] = useState(10);
+  const [refreshing, setRefreshing] = useState(false);
+  const [vpnBlocked, setVpnBlocked] = useState(false);
+  const [vpnChecking, setVpnChecking] = useState(true);
+  const [vpnError, setVpnError] = useState<string | null>(null);
 
   useFocusEffect(
     React.useCallback(() => {
       let interval: NodeJS.Timeout | undefined;
       (async () => {
+        // VPN kontrolü yap
+        await checkVPNStatus(false); // İlk yüklemede cache kullan
+        if (vpnBlocked) return;
+
         // MOCK DATA: Pendik/Güzelyalı'da konumu açık bir kullanıcı
         const mockNearby: any[] = [
           {
@@ -399,7 +409,7 @@ const MapScreen: React.FC = () => {
       return () => {
         if (interval) clearInterval(interval);
       };
-    }, [navigation, colorScheme, genderFilter, radiusFilter])
+    }, [navigation, colorScheme, genderFilter, radiusFilter, vpnBlocked])
   );
 
   useEffect(() => {
@@ -409,7 +419,64 @@ const MapScreen: React.FC = () => {
     }
   }, [filterModalVisible]);
 
+  // Tab'a basıldığında refresh
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      console.log("Map tab pressed - refreshing...");
+      setRefreshing(true);
+      // Map için konum izinlerini tekrar kontrol et
+      setPermission("unknown");
+      setLocationEnabled(false);
+      setTimeout(() => setRefreshing(false), 500);
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const checkVPNStatus = async (clearCache = false) => {
+    try {
+      setVpnChecking(true);
+      setVpnError(null);
+      if (clearCache) {
+        await vpnDetectionService.clearCache();
+      }
+      const vpnResult = await vpnDetectionService.checkVPNStatus();
+      if (vpnResult.isVPN) {
+        setVpnBlocked(true);
+        setVpnError(null);
+        Alert.alert(
+          "VPN Tespit Edildi",
+          `Güvenlik nedeniyle ${
+            vpnResult.provider || "VPN"
+          } kullanımı engellenmiştir. Lütfen VPN'i kapatıp tekrar deneyin.`,
+          [
+            {
+              text: "Tamam",
+              onPress: () => {
+                (navigation as any).navigate("Home");
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+      } else {
+        setVpnBlocked(false);
+        setVpnError(null);
+      }
+    } catch (error) {
+      setVpnBlocked(false); // Artık engelleme yok
+      setVpnError(
+        "VPN kontrolü sırasında bir hata oluştu. Lütfen internet bağlantınızı kontrol edin. Eğer VPN/proxy kullanmıyorsanız haritayı kullanmaya devam edebilirsiniz."
+      );
+    } finally {
+      setVpnChecking(false);
+    }
+  };
+
   const handleAllowLocation = async () => {
+    // Önce VPN kontrolü yap
+    await checkVPNStatus(true); // Cache'i temizle
+    if (vpnBlocked) return;
+
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status === "granted") {
       let loc = await Location.getCurrentPositionAsync({});
@@ -596,7 +663,7 @@ const MapScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </Modal>
-      {permission !== "granted" || !locationEnabled ? (
+      {vpnChecking ? (
         <View style={styles.center}>
           <Text
             style={{
@@ -606,40 +673,150 @@ const MapScreen: React.FC = () => {
               marginBottom: 24,
             }}
           >
-            Konum izni vermeden haritayı görüntüleyemezsin.
+            Güvenlik kontrolü yapılıyor...
+          </Text>
+        </View>
+      ) : vpnBlocked ? (
+        <View style={styles.center}>
+          <Ionicons
+            name="shield-checkmark"
+            size={64}
+            color={colors.error || "#ff4444"}
+            style={{ marginBottom: 24 }}
+          />
+          <Text
+            style={{
+              color: colors.text,
+              fontSize: 18,
+              textAlign: "center",
+              marginBottom: 16,
+              fontWeight: "bold",
+            }}
+          >
+            VPN Tespit Edildi
+          </Text>
+          <Text
+            style={{
+              color: colors.textSecondary,
+              fontSize: 14,
+              textAlign: "center",
+              marginBottom: 24,
+              lineHeight: 20,
+            }}
+          >
+            {vpnError
+              ? vpnError
+              : `Güvenlik nedeniyle VPN/proxy kullanımı engellenmiştir.\nLütfen VPN'i kapatıp tekrar deneyin.`}
           </Text>
           <TouchableOpacity
             style={{
               backgroundColor: colors.primary,
               padding: 16,
               borderRadius: 12,
+              marginBottom: 12,
             }}
-            onPress={handleAllowLocation}
+            onPress={async () => {
+              setVpnBlocked(false);
+              setVpnError(null);
+              await checkVPNStatus(true);
+            }}
           >
             <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}>
-              Konum İzni Ver
+              Tekrar Dene
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              backgroundColor: colors.surface,
+              padding: 16,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+            onPress={() => (navigation as any).navigate("Home")}
+          >
+            <Text
+              style={{
+                color: colors.text,
+                fontWeight: "bold",
+                fontSize: 16,
+                textAlign: "center",
+              }}
+            >
+              Ana Sayfaya Dön
             </Text>
           </TouchableOpacity>
         </View>
-      ) : html ? (
-        <WebView
-          originWhitelist={["*"]}
-          source={{ html }}
-          style={styles.webview}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          allowsInlineMediaPlayback
-          startInLoadingState
-          onMessage={(event) => {
-            const username = event.nativeEvent.data;
-            if (username) {
-              (navigation as any).navigate("UserProfile", {
-                user: { username },
-              });
-            }
-          }}
-        />
-      ) : null}
+      ) : (
+        <>
+          {vpnError && (
+            <View
+              style={{
+                backgroundColor: colors.warning,
+                padding: 12,
+                margin: 12,
+                borderRadius: 8,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.text,
+                  textAlign: "center",
+                  fontSize: 14,
+                }}
+              >
+                {vpnError}
+              </Text>
+            </View>
+          )}
+          {permission !== "granted" || !locationEnabled ? (
+            <View style={styles.center}>
+              <Text
+                style={{
+                  color: colors.text,
+                  fontSize: 18,
+                  textAlign: "center",
+                  marginBottom: 24,
+                }}
+              >
+                Konum izni vermeden haritayı görüntüleyemezsin.
+              </Text>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: colors.primary,
+                  padding: 16,
+                  borderRadius: 12,
+                }}
+                onPress={handleAllowLocation}
+              >
+                <Text
+                  style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}
+                >
+                  Konum İzni Ver
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : html ? (
+            <WebView
+              originWhitelist={["*"]}
+              source={{ html }}
+              style={styles.webview}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              allowsInlineMediaPlayback
+              startInLoadingState
+              onMessage={(event) => {
+                const username = event.nativeEvent.data;
+                if (username) {
+                  (navigation as any).navigate("UserProfile", {
+                    user: { username },
+                  });
+                }
+              }}
+            />
+          ) : null}
+        </>
+      )}
     </SafeAreaView>
   );
 };

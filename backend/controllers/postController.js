@@ -173,3 +173,31 @@ exports.archivePost = async (req, res) => {
     res.status(500).json({ message: "Post arşivlenemedi", error: err.message });
   }
 };
+
+// Yorumu beğen veya beğenmekten vazgeç
+exports.toggleCommentLike = async (req, res) => {
+  try {
+    const userId = req.body.userId;
+    const commentId = req.params.commentId;
+    const comment = await Comment.findById(commentId);
+    if (!comment) return res.status(404).json({ message: "Yorum bulunamadı" });
+
+    const index = comment.likes.indexOf(userId);
+    if (index === -1) {
+      comment.likes.push(userId);
+    } else {
+      comment.likes.splice(index, 1);
+    }
+    await comment.save();
+
+    const populatedComment = await Comment.findById(commentId).populate(
+      "user",
+      "username avatar"
+    );
+    res.json(populatedComment);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Yorum beğeni işlemi başarısız", error: err.message });
+  }
+};

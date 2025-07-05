@@ -600,6 +600,67 @@ exports.getConversationMessages = async (req, res) => {
   }
 };
 
+// Mesaj gönder
+exports.sendMessage = async (req, res) => {
+  try {
+    const { senderId, receiverId, text } = req.body;
+
+    if (!senderId || !receiverId || !text) {
+      return res.status(400).json({ message: "Eksik veri" });
+    }
+
+    // Alıcının mesaj gizliliği kontrolü
+    const receiver = await User.findById(receiverId);
+    if (!receiver) {
+      return res.status(404).json({ message: "Alıcı bulunamadı" });
+    }
+
+    if (receiver.onlyFollowersCanMessage) {
+      const sender = await User.findById(senderId);
+      if (!sender.followers.includes(receiverId)) {
+        return res.status(403).json({
+          message: "Bu kullanıcı sadece takipçilerinden mesaj kabul ediyor",
+        });
+      }
+    }
+
+    // Conversation bul veya oluştur
+    let conversation = await Conversation.findOne({
+      users: { $all: [senderId, receiverId] },
+    });
+
+    if (!conversation) {
+      conversation = await Conversation.create({
+        users: [senderId, receiverId],
+      });
+    }
+
+    // Mesaj oluştur
+    const message = await Message.create({
+      conversation: conversation._id,
+      sender: senderId,
+      receiver: receiverId,
+      text: text.trim(),
+    });
+
+    // Conversation'ın son mesajını güncelle
+    conversation.lastMessage = message._id;
+    await conversation.save();
+
+    // Mesajı populate ile getir
+    const populatedMessage = await Message.findById(message._id).populate(
+      "sender receiver",
+      "_id username avatar"
+    );
+
+    res.json(populatedMessage);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Mesaj gönderilemedi", error: err.message });
+  }
+};
+
 // Kullanıcının arkadaş listesini getir (takip ettikleri ve edenler birleşimi)
 exports.getUserFriends = async (req, res) => {
   try {

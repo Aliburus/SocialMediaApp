@@ -29,8 +29,8 @@ const DMListScreen: React.FC = () => {
   const filteredFriends = friends.filter((u) =>
     u.username.toLowerCase().includes(friendSearch.toLowerCase())
   );
-  React.useEffect(() => {
-    (async () => {
+  const loadConversations = async () => {
+    try {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
       if (userObj?._id || userObj?.id) {
@@ -40,8 +40,22 @@ const DMListScreen: React.FC = () => {
         );
         setDmList(filtered);
       }
-    })();
+    } catch (error) {
+      console.error("DM listesi yükleme hatası:", error);
+    }
+  };
+
+  React.useEffect(() => {
+    loadConversations();
   }, []);
+
+  // Ekran odaklandığında listeyi yenile
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      loadConversations();
+    });
+    return unsubscribe;
+  }, [navigation]);
   React.useEffect(() => {
     if (showFriendsModal) {
       (async () => {

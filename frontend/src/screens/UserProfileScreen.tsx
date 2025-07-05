@@ -59,7 +59,12 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
         const profileData = await getProfile(user._id || user.id);
         setProfile(profileData);
         const posts = await getUserPosts(user._id || user.id);
-        setUserPosts(posts);
+        // En yeniden eskiye doğru sırala
+        const sortedPosts = posts.sort(
+          (a: any, b: any) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setUserPosts(sortedPosts);
       } catch (error) {
         console.error("Error fetching user data:", error);
       }

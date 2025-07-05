@@ -22,7 +22,12 @@ import {
   useFocusEffect,
 } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
-import { viewStory, deleteStory, archiveStory } from "../services/api";
+import {
+  viewStory,
+  deleteStory,
+  archiveStory,
+  unarchiveStory,
+} from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width, height } = Dimensions.get("window");
@@ -54,6 +59,23 @@ const StoryScreen: React.FC = () => {
   const [progressValue, setProgressValue] = React.useState(0);
   const [remainingDuration, setRemainingDuration] = React.useState(8000);
   const [showOptions, setShowOptions] = React.useState(false);
+
+  // Story'nin 24 saat geçip geçmediğini kontrol et
+  const isStoryWithin24Hours = (story: any) => {
+    if (!story.createdAt) return false;
+    const storyDate = new Date(story.createdAt);
+    const now = new Date();
+    const diffInHours =
+      (now.getTime() - storyDate.getTime()) / (1000 * 60 * 60);
+    return diffInHours < 24;
+  };
+
+  console.log("StoryScreen - fromArchive:", fromArchive);
+  console.log("StoryScreen - current story:", stories[current]);
+  console.log(
+    "StoryScreen - isStoryWithin24Hours:",
+    isStoryWithin24Hours(stories[current])
+  );
 
   const translateY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
@@ -275,6 +297,22 @@ const StoryScreen: React.FC = () => {
     }
   };
 
+  const handleUnarchiveStory = async () => {
+    try {
+      if (stories[current]?._id && userId) {
+        await unarchiveStory(stories[current]._id, userId);
+        setShowOptions(false);
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+        } else {
+          navigation.navigate("Home");
+        }
+      }
+    } catch (error) {
+      setShowOptions(false);
+    }
+  };
+
   return (
     <>
       <StatusBar
@@ -475,13 +513,24 @@ const StoryScreen: React.FC = () => {
                   Story'yi Sil
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.optionButton}
-                onPress={handleArchiveStory}
-              >
-                <Ionicons name="archive-outline" size={24} color="#fff" />
-                <Text style={styles.optionText}>Arşivle</Text>
-              </TouchableOpacity>
+              {fromArchive && isStoryWithin24Hours(stories[current]) && (
+                <TouchableOpacity
+                  style={styles.optionButton}
+                  onPress={handleUnarchiveStory}
+                >
+                  <Ionicons name="archive-outline" size={24} color="#fff" />
+                  <Text style={styles.optionText}>Arşivden Çıkar</Text>
+                </TouchableOpacity>
+              )}
+              {!fromArchive && (
+                <TouchableOpacity
+                  style={styles.optionButton}
+                  onPress={handleArchiveStory}
+                >
+                  <Ionicons name="archive-outline" size={24} color="#fff" />
+                  <Text style={styles.optionText}>Arşivle</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[styles.optionButton, { borderBottomWidth: 0 }]}
                 onPress={() => setShowOptions(false)}

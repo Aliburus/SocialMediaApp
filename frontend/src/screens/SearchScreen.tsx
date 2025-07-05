@@ -21,7 +21,7 @@ import {
   cancelFollowRequest,
 } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -41,11 +41,33 @@ const SearchScreen: React.FC = () => {
   const [loadingMap, setLoadingMap] = useState<{ [userId: string]: boolean }>(
     {}
   );
+  const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation<any>();
 
   // Boş array kullan
   const posts: any[] = [];
   console.log("SearchScreen: posts length:", posts.length);
+
+  // Tab'a basıldığında refresh
+  useFocusEffect(
+    React.useCallback(() => {
+      // Search screen'e focus olduğunda refresh
+      setSearchQuery("");
+      setSearchResults([]);
+    }, [])
+  );
+
+  // Tab'a basıldığında refresh
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("tabPress", () => {
+      console.log("Search tab pressed - refreshing...");
+      setRefreshing(true);
+      setSearchQuery("");
+      setSearchResults([]);
+      setTimeout(() => setRefreshing(false), 500);
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   useEffect(() => {
     (async () => {
@@ -261,6 +283,13 @@ const SearchScreen: React.FC = () => {
         numColumns={3}
         showsVerticalScrollIndicator={false}
         key={"posts-3-cols"}
+        refreshing={refreshing}
+        onRefresh={() => {
+          setRefreshing(true);
+          setSearchQuery("");
+          setSearchResults([]);
+          setTimeout(() => setRefreshing(false), 500);
+        }}
         ListEmptyComponent={
           <View style={styles.emptyStateContainer}>
             <Text

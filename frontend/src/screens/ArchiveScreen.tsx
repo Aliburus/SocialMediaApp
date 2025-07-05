@@ -19,6 +19,7 @@ import {
   archivePost,
   getArchivedStories,
   unarchiveStory,
+  getAllPosts,
 } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -70,19 +71,39 @@ const ArchiveScreen: React.FC = () => {
         const userStr = await AsyncStorage.getItem("user");
         const userObj = userStr ? JSON.parse(userStr) : null;
         const userId = userObj?._id || userObj?.id;
+        if (!userId) return;
+
         // Postlar
-        const posts = await getUserPosts(userId);
-        setArchivedPosts(
-          posts.filter((p: any) => p.archived && (!p.type || p.type === "post"))
+        const allPosts = await getAllPosts();
+        const archivedPostsData = allPosts.filter(
+          (p: any) => p.archived && !p.isReel
         );
-        setArchivedReels(
-          posts.filter(
-            (p: any) => p.archived && (p.type === "reel" || p.isReel)
+        setArchivedPosts(
+          archivedPostsData.sort(
+            (a: any, b: any) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
           )
         );
+
+        // Reels
+        const archivedReelsData = allPosts.filter(
+          (p: any) => p.archived && (p.type === "reel" || p.isReel)
+        );
+        setArchivedReels(
+          archivedReelsData.sort(
+            (a: any, b: any) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )
+        );
+
         // Storyler
         const archivedStoriesData = await getArchivedStories(userId);
-        setArchivedStories(archivedStoriesData);
+        setArchivedStories(
+          archivedStoriesData.sort(
+            (a: any, b: any) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )
+        );
       })();
     }, [])
   );
@@ -93,6 +114,29 @@ const ArchiveScreen: React.FC = () => {
   if (tab === "reels") data = archivedReels;
 
   const navigation = useNavigation() as any;
+
+  // Story'nin 24 saat geçip geçmediğini kontrol et
+  const isStoryWithin24Hours = (story: any) => {
+    if (!story.createdAt) {
+      console.log("Story createdAt yok:", story);
+      return false;
+    }
+    const storyDate = new Date(story.createdAt);
+    const now = new Date();
+    const diffInHours =
+      (now.getTime() - storyDate.getTime()) / (1000 * 60 * 60);
+    console.log(
+      "Story:",
+      story.username || "Unknown",
+      "Tarih:",
+      storyDate,
+      "Saat farkı:",
+      diffInHours,
+      "24 saat içinde:",
+      diffInHours < 24
+    );
+    return diffInHours < 24;
+  };
 
   React.useEffect(() => {
     translateX.setValue(0);
@@ -214,57 +258,64 @@ const ArchiveScreen: React.FC = () => {
                   }}
                 />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  marginTop: 4,
-                  backgroundColor: colors.primary,
-                  borderRadius: 6,
-                  paddingVertical: 4,
-                  alignItems: "center",
-                }}
-                onPress={async () => {
-                  if (tab === "stories") {
-                    try {
-                      const userStr = await AsyncStorage.getItem("user");
-                      const userObj = userStr ? JSON.parse(userStr) : null;
-                      const userId = userObj?._id || userObj?.id;
-                      await unarchiveStory(item._id || item.id, userId);
-                      setArchivedStories((prev) =>
+              {tab !== "stories" && (
+                <TouchableOpacity
+                  style={{
+                    marginTop: 4,
+                    backgroundColor: colors.primary,
+                    borderRadius: 6,
+                    paddingVertical: 4,
+                    alignItems: "center",
+                  }}
+                  onPress={async () => {
+                    if (tab === "posts") {
+                      await archivePost(item._id || item.id, false);
+                      setArchivedPosts((prev) =>
                         prev.filter(
-                          (s) => (s._id || s.id) !== (item._id || item.id)
+                          (p) => (p._id || p.id) !== (item._id || item.id)
                         )
                       );
-                    } catch (err: any) {
-                      alert(
-                        err?.response?.data?.message ||
-                          "Arşivden çıkarılamadı. 24 saatten eski olabilir."
+                    } else if (tab === "reels") {
+                      await archivePost(item._id || item.id, false);
+                      setArchivedReels((prev) =>
+                        prev.filter(
+                          (r) => (r._id || r.id) !== (item._id || item.id)
+                        )
                       );
                     }
-                  } else if (tab === "posts") {
-                    await archivePost(item._id || item.id, false);
-                    setArchivedPosts((prev) =>
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 13 }}>
+                    Arşivden Çıkar
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {tab === "stories" && isStoryWithin24Hours(item) && (
+                <TouchableOpacity
+                  style={{
+                    marginTop: 4,
+                    backgroundColor: colors.primary,
+                    borderRadius: 6,
+                    paddingVertical: 4,
+                    alignItems: "center",
+                  }}
+                  onPress={async () => {
+                    const userStr = await AsyncStorage.getItem("user");
+                    const userObj = userStr ? JSON.parse(userStr) : null;
+                    const userId = userObj?._id || userObj?.id;
+                    await unarchiveStory(item._id || item.id, userId);
+                    setArchivedStories((prev) =>
                       prev.filter(
-                        (p) => (p._id || p.id) !== (item._id || item.id)
+                        (s) => (s._id || s.id) !== (item._id || item.id)
                       )
                     );
-                  } else if (tab === "reels") {
-                    await archivePost(item._id || item.id, false);
-                    setArchivedReels((prev) =>
-                      prev.filter(
-                        (r) => (r._id || r.id) !== (item._id || item.id)
-                      )
-                    );
-                  }
-                }}
-              >
-                <Text style={{ color: "#fff", fontSize: 13 }}>
-                  {tab === "stories"
-                    ? "Arşivden Çıkar"
-                    : item.archived
-                    ? "Arşivden Çıkar"
-                    : "Arşivle"}
-                </Text>
-              </TouchableOpacity>
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 13 }}>
+                    Arşivden Çıkar
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
           ListEmptyComponent={

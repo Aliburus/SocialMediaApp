@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
-import { getComments, addComment } from "../services/api";
+import { getComments, addComment, toggleCommentLike } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -39,6 +39,10 @@ const CommentScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [likeLoading, setLikeLoading] = useState<{
+    [commentId: string]: boolean;
+  }>({});
   const navigation = useNavigation<any>();
 
   const fetchComments = useCallback(async () => {
@@ -54,6 +58,13 @@ const CommentScreen: React.FC = () => {
 
   useEffect(() => {
     fetchComments();
+    // Kullanıcı bilgisini al
+    const getUser = async () => {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      setCurrentUser(userObj);
+    };
+    getUser();
   }, [fetchComments]);
 
   const handleSend = async () => {
@@ -80,23 +91,85 @@ const CommentScreen: React.FC = () => {
     setSending(false);
   };
 
+  const handleLikeComment = async (commentId: string) => {
+    if (!currentUser?._id) {
+      alert("Beğeni için giriş yapmalısın.");
+      return;
+    }
+
+    // Optimistic UI
+    setComments((prev) =>
+      prev.map((comment) => {
+        if (comment._id !== commentId) return comment;
+        const liked = comment.likes?.includes(currentUser._id);
+        let newLikes;
+        if (liked) {
+          newLikes = comment.likes.filter(
+            (id: string) => id !== currentUser._id
+          );
+        } else {
+          newLikes = [...(comment.likes || []), currentUser._id];
+        }
+        return { ...comment, likes: newLikes };
+      })
+    );
+    setLikeLoading((prev) => ({ ...prev, [commentId]: true }));
+    try {
+      const updatedComment = await toggleCommentLike(
+        commentId,
+        currentUser._id
+      );
+      setComments((prev) =>
+        prev.map((comment) =>
+          comment._id === commentId ? updatedComment : comment
+        )
+      );
+    } catch (err) {
+      // Hata olursa eski haline döndür
+      setComments((prev) =>
+        prev.map((comment) => {
+          if (comment._id !== commentId) return comment;
+          const liked = comment.likes?.includes(currentUser._id);
+          let newLikes;
+          if (liked) {
+            newLikes = [...(comment.likes || []), currentUser._id];
+          } else {
+            newLikes = comment.likes.filter(
+              (id: string) => id !== currentUser._id
+            );
+          }
+          return { ...comment, likes: newLikes };
+        })
+      );
+      alert("Beğeni işlemi başarısız!");
+    } finally {
+      setLikeLoading((prev) => ({ ...prev, [commentId]: false }));
+    }
+  };
+
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.commentRow}>
-      <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
+      <TouchableOpacity
+        onPress={() => navigation.navigate("UserProfile", { user: item.user })}
+      >
+        <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
+      </TouchableOpacity>
       <View style={styles.commentContent}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Text
-            style={{ fontWeight: "bold", color: colors.text }}
+          <TouchableOpacity
             onPress={() =>
               navigation.navigate("UserProfile", { user: item.user })
             }
+            style={{ flexDirection: "row", alignItems: "center" }}
           >
-            {item.user.username}
-          </Text>
-          <Text style={[styles.time, { color: colors.textSecondary }]}>
-            {"  "}
-            {timeAgo(item.createdAt)}
-          </Text>
+            <Text style={{ fontWeight: "bold", color: colors.text }}>
+              {item.user.username}
+            </Text>
+            <Text style={[styles.time, { color: colors.textSecondary }]}>
+              {"  "}
+              {timeAgo(item.createdAt)}
+            </Text>
+          </TouchableOpacity>
         </View>
         <Text style={[styles.commentText, { color: colors.text }]}>
           {item.text}
@@ -105,8 +178,27 @@ const CommentScreen: React.FC = () => {
           <TouchableOpacity><Text style={[styles.reply, { color: colors.textSecondary }]}>Yanıtla</Text></TouchableOpacity>
         </View> */}
       </View>
-      <TouchableOpacity style={styles.likeBtn}>
-        <Ionicons name="heart-outline" size={20} color={colors.textSecondary} />
+      <TouchableOpacity
+        style={styles.likeBtn}
+        onPress={() => handleLikeComment(item._id)}
+        disabled={likeLoading[item._id]}
+      >
+        <Ionicons
+          name={
+            item.likes?.includes(currentUser?._id) ? "heart" : "heart-outline"
+          }
+          size={20}
+          color={
+            item.likes?.includes(currentUser?._id)
+              ? "#FF3040"
+              : colors.textSecondary
+          }
+        />
+        {item.likes?.length > 0 && (
+          <Text style={[styles.likeCount, { color: colors.textSecondary }]}>
+            {item.likes.length}
+          </Text>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -114,31 +206,33 @@ const CommentScreen: React.FC = () => {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
+      edges={["top"]}
     >
       <View style={styles.headerBar}>
         <View style={styles.headerBarLine} />
       </View>
       <Text style={[styles.title, { color: colors.text }]}>Yorumlar</Text>
-      {loading ? (
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-          style={{ marginTop: 32 }}
-        />
-      ) : (
-        <FlatList
-          data={comments}
-          keyExtractor={(item) => item._id || item.id}
-          renderItem={renderItem}
-          style={{ width: "100%" }}
-          contentContainerStyle={{ paddingBottom: 16 }}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={16}
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
       >
+        {loading ? (
+          <ActivityIndicator
+            size="large"
+            color={colors.primary}
+            style={{ marginTop: 32 }}
+          />
+        ) : (
+          <FlatList
+            data={comments}
+            keyExtractor={(item) => item._id || item.id}
+            renderItem={renderItem}
+            style={{ width: "100%" }}
+            contentContainerStyle={{ paddingBottom: 16 }}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
         <View
           style={[
             styles.inputContainer,
@@ -152,6 +246,7 @@ const CommentScreen: React.FC = () => {
             value={input}
             onChangeText={setInput}
             editable={!sending}
+            multiline={false}
           />
           <TouchableOpacity
             style={[styles.sendButton, { backgroundColor: colors.primary }]}
@@ -223,6 +318,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginTop: 2,
     padding: 4,
+    flexDirection: "row",
+    alignItems: "center",
   },
   inputContainer: {
     flexDirection: "row",
@@ -244,6 +341,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     marginLeft: 6,
+  },
+  likeCount: {
+    fontSize: 12,
+    marginLeft: 4,
   },
 });
 

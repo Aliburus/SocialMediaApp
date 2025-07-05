@@ -4,6 +4,8 @@ const postController = require("../controllers/postController");
 const { archivePost } = require("../controllers/postController");
 // const auth = require('../middleware/auth'); // Auth middleware eklenebilir
 
+// Yorumu beğen veya beğenmekten vazgeç (en üstte olmalı)
+router.put("/comments/:commentId/like", postController.toggleCommentLike);
 // Kullanıcının kendi postlarını getir
 router.get("/user/:userId", postController.getUserPosts);
 // Tekil post detayını getir
