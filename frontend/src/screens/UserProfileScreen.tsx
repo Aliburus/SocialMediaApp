@@ -52,13 +52,14 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     setLoading(true);
     const userStr = await AsyncStorage.getItem("user");
     const userObj = userStr ? JSON.parse(userStr) : null;
-    setCurrentUserId(userObj?._id || userObj?.id || "");
+    const myUserId = userObj?._id || userObj?.id || "";
+    setCurrentUserId(myUserId);
 
     if (user._id || user.id) {
       try {
         const profileData = await getProfile(user._id || user.id);
         setProfile(profileData);
-        const posts = await getUserPosts(user._id || user.id);
+        const posts = await getUserPosts(user._id || user.id, myUserId);
         // En yeniden eskiye doğru sırala
         const sortedPosts = posts.sort(
           (a: any, b: any) =>
@@ -97,8 +98,18 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     setLoadingBtn(true);
     try {
       await followUser(currentUserId, profile._id || profile.id);
+      // Profil ve post verilerini yeniden çek
       const profileData = await getProfile(profile._id || profile.id);
       setProfile(profileData);
+      const posts = await getUserPosts(
+        profile._id || profile.id,
+        currentUserId
+      );
+      const sortedPosts = posts.sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setUserPosts(sortedPosts);
     } catch (error) {
       console.error("Error following user:", error);
     }
@@ -109,8 +120,18 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     setLoadingBtn(true);
     try {
       await unfollowUser(currentUserId, profile._id || profile.id);
+      // Profil ve post verilerini yeniden çek
       const profileData = await getProfile(profile._id || profile.id);
       setProfile(profileData);
+      const posts = await getUserPosts(
+        profile._id || profile.id,
+        currentUserId
+      );
+      const sortedPosts = posts.sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setUserPosts(sortedPosts);
       setFollowed(false);
     } catch (error) {
       console.error("Error unfollowing user:", error);
@@ -124,6 +145,15 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
       await sendFollowRequest(currentUserId, profile._id || profile.id);
       const profileData = await getProfile(profile._id || profile.id);
       setProfile(profileData);
+      const posts = await getUserPosts(
+        profile._id || profile.id,
+        currentUserId
+      );
+      const sortedPosts = posts.sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setUserPosts(sortedPosts);
     } catch (error) {
       console.error("Error sending follow request:", error);
     }
@@ -136,6 +166,15 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
       await cancelFollowRequest(currentUserId, profile._id || profile.id);
       const profileData = await getProfile(profile._id || profile.id);
       setProfile(profileData);
+      const posts = await getUserPosts(
+        profile._id || profile.id,
+        currentUserId
+      );
+      const sortedPosts = posts.sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setUserPosts(sortedPosts);
     } catch (error) {
       console.error("Error canceling follow request:", error);
     }
@@ -149,16 +188,66 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
       setFollowed(true);
       const profileData = await getProfile(profile._id || profile.id);
       setProfile(profileData);
+      const posts = await getUserPosts(
+        profile._id || profile.id,
+        currentUserId
+      );
+      const sortedPosts = posts.sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setUserPosts(sortedPosts);
     } catch (error) {
       console.error("Error following back:", error);
     }
     setLoadingBtn(false);
   };
 
-  const isPending = profile?.pendingFollowRequests?.includes(currentUserId);
-  const isSent = profile?.sentFollowRequests?.includes(currentUserId);
-  const isFollowing = profile?.followers?.includes(currentUserId);
-  const isFollowMe = profile?.following?.includes(currentUserId);
+  const isPending = profile?.pendingFollowRequests?.some(
+    (id: any) => id.toString() === currentUserId
+  );
+  const isSent = profile?.sentFollowRequests?.some(
+    (id: any) => id.toString() === currentUserId
+  );
+  const isFollowing = profile?.followers?.some(
+    (id: any) => id.toString() === currentUserId
+  );
+  const isFollowMe = profile?.following?.some(
+    (id: any) => id.toString() === currentUserId
+  );
+  const isPrivateAccount = profile?.privateAccount;
+  const isOwnProfile =
+    currentUserId?.toString() === (profile._id || profile.id)?.toString();
+  // Kendi profilinde her zaman postları görebil, başkalarının gizli hesabında takipçi olması gerekir
+  const canViewPosts = isOwnProfile || !isPrivateAccount || isFollowing;
+
+  // Test fonksiyonu - gizli hesap ayarını değiştir
+  const togglePrivateAccount = async () => {
+    try {
+      const response = await fetch(
+        `${process.env.BACKEND_URL}/api/users/${
+          profile._id || profile.id
+        }/toggle-private`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const result = await response.json();
+
+      // Backend'den gelen profil verisini kullan
+      if (result.profileData) {
+        setProfile(result.profileData);
+      } else {
+        // Profil verilerini yeniden çek
+        await fetchUserData();
+      }
+    } catch (error) {
+      console.error("Toggle error:", error);
+    }
+  };
 
   const renderPostItem = ({ item }: { item: any }) => (
     <TouchableOpacity
@@ -167,6 +256,21 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     >
       <Image source={{ uri: item.image }} style={styles.postImage} />
     </TouchableOpacity>
+  );
+
+  // Gizli hesap mesajı
+  const renderPrivateAccountMessage = () => (
+    <View style={styles.privateAccountContainer}>
+      <Ionicons name="lock-closed" size={48} color={colors.textSecondary} />
+      <Text style={[styles.privateAccountTitle, { color: colors.text }]}>
+        Gizli Hesap
+      </Text>
+      <Text
+        style={[styles.privateAccountText, { color: colors.textSecondary }]}
+      >
+        Bu hesabın gönderilerini görmek için takip etmeniz gerekiyor.
+      </Text>
+    </View>
   );
 
   // Yardımcı fonksiyon: Buton metni ve aksiyonu
@@ -277,7 +381,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
       edges={["top", "bottom"]}
     >
       <FlatList
-        data={activeTab === "grid" ? userPosts : []}
+        data={canViewPosts && activeTab === "grid" ? userPosts : []}
         renderItem={renderPostItem}
         keyExtractor={(item) => item._id || item.id}
         numColumns={3}
@@ -297,7 +401,25 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                 </Text>
                 {profile?.isVerified && <UserCheck size={20} color="#1DA1F2" />}
               </View>
-              <View style={{ width: 24 }} />
+              {currentUserId === (profile._id || profile.id) ? (
+                <TouchableOpacity
+                  onPress={togglePrivateAccount}
+                  style={{
+                    backgroundColor: colors.primary,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text
+                    style={{ color: "white", fontSize: 12, fontWeight: "600" }}
+                  >
+                    {profile?.privateAccount ? "Gizli" : "Açık"}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ width: 24 }} />
+              )}
             </View>
 
             {/* Profile Info */}
@@ -382,6 +504,40 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                     {profile.bio}
                   </Text>
                 )}
+
+                {/* Gizli hesap toggle butonu - sadece kendi profilinde */}
+                {currentUserId === (profile._id || profile.id) && (
+                  <View style={{ marginTop: 12, gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={togglePrivateAccount}
+                      style={{
+                        backgroundColor: colors.primary,
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
+                        borderRadius: 8,
+                        alignSelf: "flex-start",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "white",
+                          fontSize: 14,
+                          fontWeight: "600",
+                        }}
+                      >
+                        Hesap: {profile?.privateAccount ? "Gizli" : "Açık"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Debug bilgisi */}
+                    <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                      Debug: isPrivateAccount=
+                      {profile?.privateAccount?.toString()}, canViewPosts=
+                      {canViewPosts.toString()}, isFollowing=
+                      {isFollowing.toString()}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               {renderFollowButton()}
@@ -453,7 +609,9 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
         }
         ListEmptyComponent={
           <View style={styles.emptyStateContainer}>
-            {activeTab === "grid" ? (
+            {!canViewPosts ? (
+              renderPrivateAccountMessage()
+            ) : activeTab === "grid" ? (
               <Text
                 style={[styles.emptyStateText, { color: colors.textSecondary }]}
               >
@@ -497,10 +655,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
+    position: "relative",
   },
   usernameContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 4,
   },
   headerUsername: {
@@ -617,6 +780,23 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     alignItems: "center",
     justifyContent: "center",
+  },
+  privateAccountContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 32,
+  },
+  privateAccountTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  privateAccountText: {
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
   },
 });
 

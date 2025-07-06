@@ -145,7 +145,7 @@ const ProfileScreen: React.FC = () => {
     const userId = userObj?._id || userObj?.id;
     const endpoint = `/posts/user/${userId}`;
     try {
-      const posts = await getUserPosts(userId);
+      const posts = await getUserPosts(userId, userId); // currentUserId parametresi eklendi
       // En yeniden eskiye doğru sırala
       const sortedPosts = posts.sort(
         (a: any, b: any) =>

@@ -87,7 +87,7 @@ const HomeScreen: React.FC = () => {
       setCurrentPage(1);
       setHasMorePosts(sortedData.length > POSTS_PER_PAGE);
     } catch (err) {
-      console.log("[POSTLAR] Hata:", err);
+      // Hata yönetimi
     } finally {
       setLoading(false);
     }
@@ -108,7 +108,7 @@ const HomeScreen: React.FC = () => {
 
       setStories(updatedStories);
     } catch (err) {
-      console.log("[STORY] Hata:", err);
+      // Hata yönetimi
     }
   };
 
@@ -144,11 +144,11 @@ const HomeScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
       if (userId) {
-        const data = await getUserPosts(userId);
+        const data = await getUserPosts(userId, userId); // currentUserId parametresi eklendi
         setMyPosts(data);
       }
     } catch (err) {
-      console.log("[KENDİ POSTLARIM] Hata:", err);
+      // Hata yönetimi
     }
   };
 

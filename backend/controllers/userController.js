@@ -1,6 +1,7 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { createOrUpdateNotification } = require("./notificationController");
 const {
   validateRegisterInput,
   validateLoginInput,
@@ -81,7 +82,7 @@ exports.login = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const { userId, name, username, avatar, bio } = req.body;
+    const { userId, name, username, avatar, bio, privateAccount } = req.body;
     if (!userId)
       return res.status(400).json({ message: "Kullanıcı bulunamadı" });
     const updateData = {};
@@ -89,6 +90,8 @@ exports.updateProfile = async (req, res) => {
     if (username) updateData.username = username;
     if (avatar) updateData.avatar = avatar;
     if (bio !== undefined) updateData.bio = bio;
+    if (privateAccount !== undefined)
+      updateData.privateAccount = privateAccount;
     const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
       new: true,
     });
@@ -101,6 +104,7 @@ exports.updateProfile = async (req, res) => {
       avatar: updatedUser.avatar,
       bio: updatedUser.bio,
       email: updatedUser.email,
+      privateAccount: updatedUser.privateAccount,
     });
   } catch (err) {
     res
@@ -116,6 +120,7 @@ exports.getProfile = async (req, res) => {
       return res.status(400).json({ message: "Kullanıcı bulunamadı" });
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+
     res.json({
       _id: user._id,
       name: user.name,
@@ -129,6 +134,7 @@ exports.getProfile = async (req, res) => {
       followingCount: Array.isArray(user.following) ? user.following.length : 0,
       pendingFollowRequests: user.pendingFollowRequests,
       sentFollowRequests: user.sentFollowRequests,
+      privateAccount: user.privateAccount,
     });
   } catch (err) {
     res
@@ -140,14 +146,7 @@ exports.getProfile = async (req, res) => {
 exports.savePost = async (req, res) => {
   try {
     const { userId, postId } = req.body;
-    console.log(
-      "[savePost] userId:",
-      userId,
-      typeof userId,
-      "postId:",
-      postId,
-      typeof postId
-    );
+
     if (!userId || !postId)
       return res.status(400).json({ message: "Eksik veri" });
     const user = await User.findById(userId);
@@ -156,38 +155,24 @@ exports.savePost = async (req, res) => {
       return res
         .status(404)
         .json({ message: "Kullanıcı veya post bulunamadı" });
-    console.log(
-      "[savePost] Önce user.saved:",
-      user.saved,
-      "post.savedBy:",
-      post.savedBy
-    );
+
     // User'ın saved dizisi
     const userIndex = user.saved.indexOf(postId);
     if (userIndex === -1) {
       user.saved.push(postId);
-      console.log("[savePost] Post kaydedildi, user.saved'e eklendi");
     } else {
       user.saved.splice(userIndex, 1);
-      console.log("[savePost] Post kaydı kaldırıldı, user.saved'den çıkarıldı");
     }
     // Post'un savedBy dizisi
     const postIndex = post.savedBy.indexOf(userId);
     if (postIndex === -1) {
       post.savedBy.push(userId);
-      console.log("[savePost] Kullanıcı post.savedBy'ya eklendi");
     } else {
       post.savedBy.splice(postIndex, 1);
-      console.log("[savePost] Kullanıcı post.savedBy'dan çıkarıldı");
     }
     await user.save();
     await post.save();
-    console.log(
-      "[savePost] Sonra user.saved:",
-      user.saved,
-      "post.savedBy:",
-      post.savedBy
-    );
+
     res.json({ saved: user.saved, savedBy: post.savedBy });
   } catch (err) {
     console.error("[savePost] Hata:", err);
@@ -323,8 +308,8 @@ exports.sendFollowRequest = async (req, res) => {
       if (!targetUser.followers.includes(userId)) {
         targetUser.followers.push(userId);
       }
-      // Bildirim ekle
-      targetUser.notifications.push({ type: "follow", from: userId });
+      // Bildirim ekle - açık hesap için direkt takip bildirimi
+      await createOrUpdateNotification(targetUserId, userId, "follow");
       await user.save();
       await targetUser.save();
       return res.json({
@@ -333,11 +318,11 @@ exports.sendFollowRequest = async (req, res) => {
         message: "Takip edildi (açık hesap)",
       });
     }
-    // Gizli hesap, eski mantıkla istek gönder
+    // Gizli hesap, takip isteği gönder
     if (!targetUser.pendingFollowRequests.includes(userId)) {
       targetUser.pendingFollowRequests.push(userId);
-      // Bildirim ekle
-      targetUser.notifications.push({ type: "follow", from: userId });
+      // Bildirim ekle - gizli hesap için takip isteği bildirimi
+      await createOrUpdateNotification(targetUserId, userId, "follow");
       await targetUser.save();
     }
     if (!user.sentFollowRequests.includes(targetUserId)) {
@@ -389,11 +374,58 @@ exports.cancelFollowRequest = async (req, res) => {
   }
 };
 
+// Test endpoint - kullanıcının gizli hesap ayarını değiştir
+exports.togglePrivateAccount = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    user.privateAccount = !user.privateAccount;
+    await user.save();
+
+    // Veritabanından tekrar kontrol et
+    const updatedUser = await User.findById(userId);
+
+    // Profil verisini de kontrol et
+    const profileData = {
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      username: updatedUser.username,
+      avatar: updatedUser.avatar,
+      bio: updatedUser.bio,
+      email: updatedUser.email,
+      followers: updatedUser.followers,
+      following: updatedUser.following,
+      followersCount: Array.isArray(updatedUser.followers)
+        ? updatedUser.followers.length
+        : 0,
+      followingCount: Array.isArray(updatedUser.following)
+        ? updatedUser.following.length
+        : 0,
+      pendingFollowRequests: updatedUser.pendingFollowRequests,
+      sentFollowRequests: updatedUser.sentFollowRequests,
+      privateAccount: updatedUser.privateAccount,
+    };
+
+    res.json({
+      message: `Hesap ${user.privateAccount ? "gizli" : "açık"} yapıldı`,
+      privateAccount: user.privateAccount,
+      dbCheck: updatedUser.privateAccount,
+      profileData: profileData,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "İşlem başarısız", error: err.message });
+  }
+};
+
 // Bildirimleri getir
 exports.getNotifications = async (req, res) => {
   try {
     const { userId } = req.params;
-    console.log("[getNotifications] userId:", userId);
     const user = await User.findById(userId).populate({
       path: "notifications.from",
       select: "_id username avatar",
@@ -402,9 +434,7 @@ exports.getNotifications = async (req, res) => {
         { path: "following", select: "_id" },
       ],
     });
-    console.log("[getNotifications] user:", user ? user._id : null);
     if (!user) {
-      console.log("[getNotifications] Kullanıcı bulunamadı:", userId);
       return res.status(404).json({ message: "Kullanıcı bulunamadı" });
     }
     // Bildirimleri zenginleştir
@@ -454,10 +484,9 @@ exports.getNotifications = async (req, res) => {
         status,
       };
     });
-    console.log("[getNotifications] notifications:", notifications);
+
     res.json(notifications);
   } catch (err) {
-    console.error("[getNotifications] Hata:", err);
     res
       .status(500)
       .json({ message: "Bildirimler getirilemedi", error: err.message });
@@ -499,6 +528,10 @@ exports.acceptFollowRequest = async (req, res) => {
     requester.sentFollowRequests = requester.sentFollowRequests.filter(
       (id) => id.toString() !== userId
     );
+
+    // Takip isteği kabul edildiğinde bildirim oluştur
+    await createOrUpdateNotification(requesterId, userId, "follow");
+
     // Bildirim güncelle (opsiyonel: okundu yap)
     user.notifications = user.notifications.map((notif) => {
       if (notif.type === "follow" && notif.from.toString() === requesterId) {
@@ -506,6 +539,7 @@ exports.acceptFollowRequest = async (req, res) => {
       }
       return notif;
     });
+
     await user.save();
     await requester.save();
     res.json({ followers: user.followers, following: requester.following });
@@ -547,7 +581,6 @@ exports.rejectFollowRequest = async (req, res) => {
 exports.getUserConversations = async (req, res) => {
   try {
     const userId = req.params.userId;
-    console.log("Backend getUserConversations - userId:", userId);
 
     const conversations = await Conversation.find({ users: userId })
       .populate({
@@ -565,21 +598,12 @@ exports.getUserConversations = async (req, res) => {
       })
       .sort({ updatedAt: -1 });
 
-    console.log(
-      "Backend getUserConversations - Bulunan conversations:",
-      conversations
-    );
-
     // Karşıdaki kullanıcıyı bul
     const result = conversations.map((conv) => {
       const otherUser = conv.users.find((u) => u._id.toString() !== userId);
 
       // Son mesaj metnini belirle
       let lastMessageText = "";
-      console.log(
-        "Backend getUserConversations - lastMessage:",
-        conv.lastMessage
-      );
 
       if (conv.lastMessage) {
         const senderUsername =
@@ -609,14 +633,10 @@ exports.getUserConversations = async (req, res) => {
           ? "story"
           : "text",
       };
-      console.log(
-        "Backend getUserConversations - Mapped conversation:",
-        mapped
-      );
+
       return mapped;
     });
 
-    console.log("Backend getUserConversations - Final result:", result);
     res.json(result);
   } catch (err) {
     res
@@ -659,7 +679,6 @@ exports.getConversationMessages = async (req, res) => {
         },
       });
 
-    console.log("Backend getConversationMessages - Mesajlar:", messages);
     res.json({ conversationId: conversation._id, messages });
   } catch (err) {
     res
@@ -673,16 +692,7 @@ exports.sendMessage = async (req, res) => {
   try {
     const { senderId, receiverId, text, postId, storyId } = req.body;
 
-    console.log("Backend sendMessage - Gelen veri:", {
-      senderId,
-      receiverId,
-      text,
-      postId,
-      storyId,
-    });
-
     if (!senderId || !receiverId || (!text && !postId && !storyId)) {
-      console.log("Backend sendMessage - Eksik veri hatası");
       return res.status(400).json({ message: "Eksik veri" });
     }
 
@@ -713,14 +723,6 @@ exports.sendMessage = async (req, res) => {
     }
 
     // Mesaj oluştur
-    console.log("Backend sendMessage - Oluşturulacak mesaj:", {
-      conversation: conversation._id,
-      sender: senderId,
-      receiver: receiverId,
-      text: text ? text.trim() : undefined,
-      post: postId || undefined,
-      story: storyId || undefined,
-    });
 
     const message = await Message.create({
       conversation: conversation._id,
@@ -755,7 +757,6 @@ exports.sendMessage = async (req, res) => {
         },
       });
 
-    console.log("Backend sendMessage - Başarılı gönderim:", populatedMessage);
     res.json(populatedMessage);
   } catch (err) {
     res

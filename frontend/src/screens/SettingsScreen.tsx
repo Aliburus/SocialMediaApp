@@ -17,7 +17,8 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
     lng: number;
   } | null>(null);
   const [privateAccount, setPrivateAccount] = React.useState(false);
-  const [onlyFollowersCanMessage, setOnlyFollowersCanMessage] = React.useState(false);
+  const [onlyFollowersCanMessage, setOnlyFollowersCanMessage] =
+    React.useState(false);
 
   React.useEffect(() => {
     (async () => {
@@ -68,14 +69,20 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
     if (userStr) {
       try {
         const userObj = JSON.parse(userStr);
-        userObj.privateAccount = v;
+        const response = await fetch(
+          `${process.env.BACKEND_URL}/api/users/${userObj._id}/toggle-private`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+        const result = await response.json();
+        userObj.privateAccount = result.privateAccount;
         await AsyncStorage.setItem("user", JSON.stringify(userObj));
-        fetch("/api/users/updatePrivacy", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: userObj._id, privateAccount: v }),
-        });
-      } catch {}
+        setPrivateAccount(result.privateAccount);
+      } catch (e) {
+        setPrivateAccount(!v);
+      }
     }
   };
 

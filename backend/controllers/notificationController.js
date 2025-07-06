@@ -10,9 +10,20 @@ const createOrUpdateNotification = async (
   commentId = null
 ) => {
   try {
+    // Parametreleri kontrol et
+    if (!recipientId || !senderId || !type) {
+      return null;
+    }
+
+    // String'leri ObjectId'ye çevir
+    const recipientIdObj =
+      typeof recipientId === "string" ? recipientId : recipientId.toString();
+    const senderIdObj =
+      typeof senderId === "string" ? senderId : senderId.toString();
+
     // Kendi kendine bildirim oluşturmasın
-    if (recipientId.toString() === senderId.toString()) {
-      return;
+    if (recipientIdObj === senderIdObj) {
+      return null;
     }
 
     let groupId = null;
@@ -26,19 +37,19 @@ const createOrUpdateNotification = async (
       // Mevcut grup bildirimini bul
       let existingNotification = await Notification.findOne({
         groupId,
-        recipient: recipientId,
+        recipient: recipientIdObj,
         type,
       }).populate("recentUsers", "username avatar");
 
       if (existingNotification) {
         // Sender zaten var mı kontrol et
         const senderExists = existingNotification.recentUsers.some(
-          (user) => user._id.toString() === senderId.toString()
+          (user) => user._id.toString() === senderIdObj
         );
 
         if (!senderExists) {
           // Yeni kullanıcı ekle
-          existingNotification.recentUsers.unshift(senderId);
+          existingNotification.recentUsers.unshift(senderIdObj);
 
           // Sadece son 3 kullanıcıyı tut
           if (existingNotification.recentUsers.length > 3) {
@@ -53,15 +64,17 @@ const createOrUpdateNotification = async (
         return existingNotification;
       } else {
         // Yeni grup bildirimi oluştur
-        const sender = await User.findById(senderId).select("username avatar");
+        const sender = await User.findById(senderIdObj).select(
+          "username avatar"
+        );
         const newNotification = new Notification({
-          recipient: recipientId,
-          sender: senderId,
+          recipient: recipientIdObj,
+          sender: senderIdObj,
           type,
           post: postId,
           comment: commentId,
           groupId,
-          recentUsers: [senderId],
+          recentUsers: [senderIdObj],
           totalCount: 1,
         });
         await newNotification.save();
@@ -70,8 +83,8 @@ const createOrUpdateNotification = async (
     } else {
       // Normal bildirim oluştur
       const newNotification = new Notification({
-        recipient: recipientId,
-        sender: senderId,
+        recipient: recipientIdObj,
+        sender: senderIdObj,
         type,
         post: postId,
         comment: commentId,
@@ -88,10 +101,18 @@ const createOrUpdateNotification = async (
 exports.getNotifications = async (req, res) => {
   try {
     const userId = req.params.userId;
-    const notifications = await Notification.find({ recipient: userId })
+    // userId'yi ObjectId'ye çevir
+    const mongoose = require("mongoose");
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId) ? userId : null;
+
+    if (!userIdObj) {
+      return res.json([]);
+    }
+
+    const notifications = await Notification.find({ recipient: userIdObj })
       .populate("sender", "username avatar")
       .populate("recentUsers", "username avatar")
-      .populate("post", "image")
+      .populate("post", "image description user")
       .populate("comment", "text")
       .sort({ createdAt: -1 })
       .limit(50);

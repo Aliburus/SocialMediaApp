@@ -27,9 +27,50 @@ exports.getAllPosts = async (req, res) => {
       const user = await require("../models/User").findById(userId);
       if (!user)
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
-      posts = await Post.find({ user: { $in: user.following } })
+
+      // Takip edilen kullanıcıların postlarını getir
+      const followingPosts = await Post.find({ user: { $in: user.following } })
         .populate("user", "_id username avatar")
         .sort({ createdAt: -1 });
+
+      // Kendi postlarını da ekle
+      const myPosts = await Post.find({ user: userId })
+        .populate("user", "_id username avatar")
+        .sort({ createdAt: -1 });
+
+      // Gizli hesap kontrolü yap
+      const filteredPosts = [];
+
+      for (const post of [...followingPosts, ...myPosts]) {
+        const postUser = await require("../models/User").findById(
+          post.user._id
+        );
+        if (postUser) {
+          const isPrivateAccount = postUser.privateAccount;
+          const canViewPost =
+            !isPrivateAccount ||
+            postUser.followers.some(
+              (follower) => follower.toString() === userId
+            ) ||
+            post.user._id.toString() === userId;
+
+          if (canViewPost) {
+            filteredPosts.push(post);
+          }
+        }
+      }
+
+      // Tarihe göre sırala ve tekrar eden postları kaldır
+      const uniquePosts = filteredPosts.filter(
+        (post, index, self) =>
+          index ===
+          self.findIndex((p) => p._id.toString() === post._id.toString())
+      );
+
+      posts = uniquePosts.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
     } else {
       posts = await Post.find()
         .populate("user", "_id username avatar")
@@ -64,14 +105,21 @@ exports.toggleLike = async (req, res) => {
     const postId = req.params.id;
     const post = await Post.findById(postId);
     if (!post) return res.status(404).json({ message: "Post bulunamadı" });
+
     const index = post.likes.indexOf(userId);
     if (index === -1) {
       post.likes.push(userId);
+
       // Bildirim oluştur
-      await createOrUpdateNotification(post.user, userId, "like", postId);
+      try {
+        await createOrUpdateNotification(post.user, userId, "like", postId);
+      } catch (notificationError) {
+        // Bildirim hatası olsa bile like işlemi devam etsin
+      }
     } else {
       post.likes.splice(index, 1);
     }
+
     await post.save();
     const populatedPost = await Post.findById(postId).populate(
       "user",
@@ -101,7 +149,11 @@ exports.addComment = async (req, res) => {
     await Post.findByIdAndUpdate(postId, { $push: { comments: comment._id } });
 
     // Bildirim oluştur
-    await createOrUpdateNotification(post.user, userId, "comment", postId);
+    try {
+      await createOrUpdateNotification(post.user, userId, "comment", postId);
+    } catch (notificationError) {
+      // Bildirim hatası olsa bile yorum işlemi devam etsin
+    }
 
     const populatedComment = await Comment.findById(comment._id).populate(
       "user",
@@ -132,6 +184,35 @@ exports.getComments = async (req, res) => {
 exports.getUserPosts = async (req, res) => {
   try {
     const userId = req.params.userId;
+    const { currentUserId } = req.query; // Gizli hesap kontrolü için
+
+    // Kullanıcıyı bul
+    const user = await require("../models/User").findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    }
+
+    // Gizli hesap kontrolü
+    const isPrivateAccount = user.privateAccount;
+    const canViewPosts =
+      !isPrivateAccount ||
+      user.followers.some(
+        (follower) => follower.toString() === currentUserId
+      ) ||
+      userId === currentUserId;
+
+    console.log("Backend gizli hesap debug:", {
+      userId,
+      currentUserId,
+      isPrivateAccount,
+      followers: user.followers.map((f) => f.toString()),
+      canViewPosts,
+    });
+
+    if (!canViewPosts) {
+      return res.json([]); // Boş array dön, frontend gizli hesap mesajını gösterecek
+    }
+
     const posts = await Post.find({ user: userId })
       .populate("user", "username name avatar")
       .sort({ createdAt: -1 });

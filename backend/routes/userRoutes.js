@@ -22,6 +22,7 @@ const {
   changePassword,
   getNotificationSettings,
   updateNotificationSettings,
+  togglePrivateAccount,
 } = require("../controllers/userController");
 const storyController = require("../controllers/storyController");
 
@@ -57,5 +58,6 @@ router.post("/send-message", sendMessage);
 router.post("/change-password", changePassword);
 router.get("/:userId/notification-settings", getNotificationSettings);
 router.post("/:userId/notification-settings", updateNotificationSettings);
+router.put("/:userId/toggle-private", togglePrivateAccount);
 
 module.exports = router;

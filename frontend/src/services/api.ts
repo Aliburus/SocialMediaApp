@@ -62,8 +62,11 @@ export const toggleCommentLike = async (commentId: string, userId: string) => {
 };
 
 // Kullanıcının kendi postlarını getir
-export const getUserPosts = async (userId: string) => {
-  const res = await api.get(`/posts/user/${userId}`);
+export const getUserPosts = async (userId: string, currentUserId?: string) => {
+  const url = currentUserId
+    ? `/posts/user/${userId}?currentUserId=${currentUserId}`
+    : `/posts/user/${userId}`;
+  const res = await api.get(url);
   return res.data;
 };
 
@@ -74,6 +77,7 @@ export const updateProfile = async (data: {
   username?: string;
   avatar?: string;
   bio?: string;
+  privateAccount?: boolean;
 }) => {
   const res = await api.post("/users/update-profile", data);
   return res.data;
@@ -214,7 +218,15 @@ export const rejectFollowRequest = async (
 
 // Bildirimleri getir
 export const getNotifications = async (userId: string) => {
-  const res = await api.get(`/users/notifications/${userId}`);
+  console.log("[API] getNotifications çağrıldı, userId:", userId);
+  console.log(
+    "[API] API URL:",
+    api.defaults.baseURL + `/notifications/${userId}`
+  );
+
+  const res = await api.get(`/notifications/${userId}`);
+  console.log("[API] getNotifications response:", res.data);
+
   return res.data;
 };
 

@@ -33,6 +33,7 @@ import { Swipeable } from "react-native-gesture-handler";
 
 type RootStackParamList = {
   UserProfile: { user: any };
+  PostDetail: { post: any };
   // diğer ekranlar...
 };
 
@@ -69,6 +70,7 @@ function NotificationsScreen() {
         .filter(Boolean);
       setFollowedIds(followed);
     } catch (err) {
+      console.error("[NOTIFICATIONS_SCREEN] Bildirim getirme hatası:", err);
       setError("Bildirimler yüklenemedi");
     }
     setLoading(false);
@@ -170,20 +172,54 @@ function NotificationsScreen() {
     );
   };
 
-  const handleDeleteNotification = (notifId: string) => {
-    setNotifications((prev) => prev.filter((notif) => notif.id !== notifId));
+  const handleDeleteNotification = async (notifId: string) => {
+    try {
+      // Backend'de bildirimi sil
+      await fetch(`${process.env.BACKEND_URL}/api/notifications/${notifId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      // Frontend'den kaldır
+      setNotifications((prev) => prev.filter((notif) => notif.id !== notifId));
+    } catch (error) {
+      console.error("[NOTIFICATIONS] Bildirim silme hatası:", error);
+      // Hata olsa bile frontend'den kaldır
+      setNotifications((prev) => prev.filter((notif) => notif.id !== notifId));
+    }
   };
 
   const renderNotificationItem = ({ item }: { item: any }) => {
+    // Profil sayfasına git
+    const goToProfile = () => {
+      const userParam = item.user?._id
+        ? { ...item.user, id: item.user._id }
+        : item.user;
+      navigation.navigate("UserProfile", { user: userParam });
+    };
+
+    // Gönderi sayfasına git
+    const goToPost = () => {
+      try {
+        if (item.post && item.post._id) {
+          navigation.navigate("PostDetail", { post: item.post });
+        }
+      } catch (error) {
+        console.error("[NOTIFICATIONS] Gönderi sayfasına gitme hatası:", error);
+      }
+    };
+
     // Grup bildirimi için kullanıcı avatarları
     const renderUserAvatars = () => {
       if (item.users && item.users.length > 0) {
         return (
           <View style={{ flexDirection: "row", marginRight: 8 }}>
             {item.users.slice(0, 3).map((user: any, index: number) => (
-              <Image
+              <TouchableOpacity
                 key={user._id || user.id}
-                source={{ uri: user.avatar }}
+                onPress={goToProfile}
                 style={{
                   width: 32,
                   height: 32,
@@ -193,7 +229,16 @@ function NotificationsScreen() {
                   marginLeft: index > 0 ? -8 : 0,
                   zIndex: 3 - index,
                 }}
-              />
+              >
+                <Image
+                  source={{ uri: user.avatar }}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                  }}
+                />
+              </TouchableOpacity>
             ))}
           </View>
         );
@@ -224,7 +269,7 @@ function NotificationsScreen() {
 
     // Swipeable sağdan sola kaydırınca silme
     const renderRightActions = () => (
-      <View
+      <TouchableOpacity
         style={{
           width: 80,
           backgroundColor: "red",
@@ -232,30 +277,22 @@ function NotificationsScreen() {
           alignItems: "center",
           height: "100%",
         }}
+        onPress={() => {
+          handleDeleteNotification(item.id);
+        }}
       >
         <Ionicons name="trash" size={32} color="#fff" />
-      </View>
+      </TouchableOpacity>
     );
 
     return (
       <Swipeable
         renderRightActions={renderRightActions}
         onSwipeableOpen={() => {
-          Alert.alert(
-            "Bildirimi Sil",
-            "Bu bildirimi silmek istediğine emin misin?",
-            [
-              { text: "İptal", style: "cancel" },
-              {
-                text: "Sil",
-                style: "destructive",
-                onPress: () => handleDeleteNotification(item.id),
-              },
-            ]
-          );
+          // Modal'ı kaldırdık, direkt silme işlemi yapılıyor
         }}
       >
-        <TouchableOpacity
+        <View
           style={[
             styles.notificationItem,
             {
@@ -264,15 +301,22 @@ function NotificationsScreen() {
               borderBottomColor: colors.border,
             },
           ]}
-          onPress={() => handleMarkAsRead(item.id)}
         >
-          {renderUserAvatars() || (
-            <Image
-              source={{ uri: item.user?.avatar || item.from?.avatar }}
-              style={styles.avatar}
-            />
-          )}
-          <View style={styles.notificationContent}>
+          {/* Profil fotoğrafı - tıklanabilir */}
+          <TouchableOpacity onPress={goToProfile}>
+            {renderUserAvatars() || (
+              <Image
+                source={{ uri: item.user?.avatar || item.from?.avatar }}
+                style={styles.avatar}
+              />
+            )}
+          </TouchableOpacity>
+
+          {/* Bildirim içeriği - tıklanabilir */}
+          <TouchableOpacity
+            style={styles.notificationContent}
+            onPress={() => handleMarkAsRead(item.id)}
+          >
             <View style={styles.notificationText}>
               <Text style={[styles.username, { color: colors.text }]}>
                 {item.user?.username || item.from?.username}
@@ -290,15 +334,20 @@ function NotificationsScreen() {
             <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
               {item.timestamp}
             </Text>
-          </View>
+          </TouchableOpacity>
+
           <View style={styles.notificationIcon}>{getNotificationIcon()}</View>
-          {item.post && (
-            <Image
-              source={{ uri: item.post.image }}
-              style={styles.postThumbnail}
-            />
+
+          {/* Gönderi thumbnail - tıklanabilir */}
+          {item.post && item.post.image && (
+            <TouchableOpacity onPress={goToPost}>
+              <Image
+                source={{ uri: item.post.image }}
+                style={styles.postThumbnail}
+              />
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+        </View>
       </Swipeable>
     );
   };
@@ -321,9 +370,9 @@ function NotificationsScreen() {
         return (
           <View style={{ flexDirection: "row", marginRight: 8 }}>
             {item.users.slice(0, 3).map((user: any, index: number) => (
-              <Image
+              <TouchableOpacity
                 key={user._id || user.id}
-                source={{ uri: user.avatar }}
+                onPress={goToProfile}
                 style={{
                   width: 32,
                   height: 32,
@@ -333,7 +382,16 @@ function NotificationsScreen() {
                   marginLeft: index > 0 ? -8 : 0,
                   zIndex: 3 - index,
                 }}
-              />
+              >
+                <Image
+                  source={{ uri: user.avatar }}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                  }}
+                />
+              </TouchableOpacity>
             ))}
           </View>
         );

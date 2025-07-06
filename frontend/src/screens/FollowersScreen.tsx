@@ -67,15 +67,36 @@ const FollowersScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const myId = userObj?._id || userObj?.id;
       if (!myId) return;
+
       if (isFollowing) {
         await unfollowUser(myId, userId);
       } else {
         await followUser(myId, userId);
       }
-      // Güncel profil çek
+
+      // Güncel profil çek ve followers listesini güncelle
       const updatedProfile = await getProfile(myId);
-      setFollowersList(updatedProfile.followers || []);
-    } catch (err) {}
+      const followingIds = (updatedProfile.following || []).map(
+        (f: any) => f._id || f.id || f
+      );
+      const followers = updatedProfile.followers || [];
+
+      const detailedFollowers = await Promise.all(
+        followers.map(async (f: any) => {
+          let user = f;
+          if (!(typeof f === "object" && f.avatar)) {
+            user = await getProfile(f._id || f.id || f);
+          }
+          return {
+            ...user,
+            isFollowing: followingIds.includes(user._id || user.id || user),
+          };
+        })
+      );
+      setFollowersList(detailedFollowers);
+    } catch (err) {
+      console.error("Follow toggle error:", err);
+    }
   };
 
   const renderFollowerItem = ({ item }: { item: any }) => (

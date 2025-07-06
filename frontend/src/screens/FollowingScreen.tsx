@@ -13,7 +13,7 @@ import { useNavigation } from "@react-navigation/native";
 import { mockUsers } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getProfile } from "../services/api";
+import { getProfile, followUser, unfollowUser } from "../services/api";
 
 const FollowingScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -61,12 +61,42 @@ const FollowingScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const handleFollowToggle = (userId: string) => {
-    setFollowingList((prevList) =>
-      prevList.map((user) =>
-        user.id === userId ? { ...user, isFollowing: !user.isFollowing } : user
-      )
-    );
+  const handleFollowToggle = async (userId: string, isFollowing: boolean) => {
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      const myId = userObj?._id || userObj?.id;
+      if (!myId) return;
+
+      if (isFollowing) {
+        await unfollowUser(myId, userId);
+      } else {
+        await followUser(myId, userId);
+      }
+
+      // Güncel profil çek ve following listesini güncelle
+      const updatedProfile = await getProfile(myId);
+      const followingIds = (updatedProfile.following || []).map(
+        (f: any) => f._id || f.id || f
+      );
+      const following = updatedProfile.following || [];
+
+      const detailedFollowing = await Promise.all(
+        following.map(async (f: any) => {
+          let user = f;
+          if (!(typeof f === "object" && f.avatar)) {
+            user = await getProfile(f._id || f.id || f);
+          }
+          return {
+            ...user,
+            isFollowing: followingIds.includes(user._id || user.id || user),
+          };
+        })
+      );
+      setFollowingList(detailedFollowing);
+    } catch (err) {
+      console.error("Follow toggle error:", err);
+    }
   };
 
   const renderFollowingItem = ({ item }: { item: any }) => (
@@ -99,7 +129,9 @@ const FollowingScreen: React.FC = () => {
             borderColor: colors.primary,
           },
         ]}
-        onPress={() => handleFollowToggle(item.id)}
+        onPress={() =>
+          handleFollowToggle(item._id || item.id, item.isFollowing)
+        }
       >
         <Text
           style={[
