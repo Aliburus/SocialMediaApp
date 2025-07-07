@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
@@ -30,7 +30,10 @@ import {
 import { ShareModal } from "../components/ShareModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const HomeScreen: React.FC = () => {
+const HomeScreen: React.FC<{
+  unreadMessageCount?: number;
+  unreadNotifCount?: number;
+}> = (props) => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
@@ -45,6 +48,7 @@ const HomeScreen: React.FC = () => {
   const [userId, setUserId] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const flatListRef = React.useRef<FlatList<any> | null>(null);
+  const userInfoRef = React.useRef<any>(null);
 
   // Pagination için state'ler
   const [displayedPosts, setDisplayedPosts] = React.useState<any[]>([]);
@@ -69,104 +73,74 @@ const HomeScreen: React.FC = () => {
     })
   ).current;
 
-  const fetchPosts = async () => {
+  const [shareStory, setShareStory] = React.useState<any>(null);
+
+  // Kullanıcı bilgisini bir kere al
+  React.useEffect(() => {
+    const getUserInfo = async () => {
+      if (!userInfoRef.current) {
+        const userStr = await AsyncStorage.getItem("user");
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        userInfoRef.current = userObj;
+        setUserId(userObj?._id || userObj?.id || null);
+      }
+    };
+    getUserInfo();
+  }, []);
+
+  // userId yüklendiğinde veri yükle
+  const loadAllData = async () => {
+    if (!userId) return;
     try {
-      const userStr = await AsyncStorage.getItem("user");
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      const userId = userObj?._id || userObj?.id;
-      const data = await getAllPosts(userId);
-      // En yeniden eskiye doğru sırala
-      const sortedData = data.sort(
+      // Tüm API çağrılarını paralel olarak yap
+      const [postsData, storiesData, profileData, myPostsData] =
+        await Promise.all([
+          getAllPosts(userId),
+          getStories(userId),
+          getProfile(userId),
+          getUserPosts(userId, userId),
+        ]);
+
+      // Posts işleme
+      const sortedPosts = postsData.sort(
         (a: any, b: any) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
-      setPosts(sortedData);
-
-      // İlk 15 postu göster
-      setDisplayedPosts(sortedData.slice(0, POSTS_PER_PAGE));
+      setPosts(sortedPosts);
+      setDisplayedPosts(sortedPosts.slice(0, POSTS_PER_PAGE));
       setCurrentPage(1);
-      setHasMorePosts(sortedData.length > POSTS_PER_PAGE);
+      setHasMorePosts(sortedPosts.length > POSTS_PER_PAGE);
+
+      // Stories işleme
+      const updatedStories = storiesData.map((story: any) => ({
+        ...story,
+        isViewed: story.isViewed || false,
+      }));
+      setStories(updatedStories);
+
+      // Profile işleme
+      setMyAvatar(profileData.avatar || "");
+      setFollowingIds(
+        (profileData.following || []).map((id: any) => id.toString())
+      );
+
+      // My posts işleme
+      setMyPosts(myPostsData);
     } catch (err) {
-      // Hata yönetimi
+      console.error("Veri yükleme hatası:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchStories = async () => {
-    try {
-      const userStr = await AsyncStorage.getItem("user");
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      const userId = userObj?._id || userObj?.id;
-      const data = await getStories(userId);
-
-      // Story'lerin görüldü durumunu kontrol et
-      const updatedStories = data.map((story: any) => ({
-        ...story,
-        isViewed: story.isViewed || false,
-      }));
-
-      setStories(updatedStories);
-    } catch (err) {
-      // Hata yönetimi
+  React.useEffect(() => {
+    if (userId) {
+      loadAllData();
     }
-  };
-
-  const fetchMyAvatar = async () => {
-    try {
-      const userStr = await AsyncStorage.getItem("user");
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      const userId = userObj?._id || userObj?.id;
-      if (userId) {
-        const profile = await getProfile(userId);
-        setMyAvatar(profile.avatar || "");
-      }
-    } catch {}
-  };
-
-  const fetchMyFollowing = async () => {
-    try {
-      const userStr = await AsyncStorage.getItem("user");
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      const userId = userObj?._id || userObj?.id;
-      if (userId) {
-        const profile = await getProfile(userId);
-        setFollowingIds(
-          (profile.following || []).map((id: any) => id.toString())
-        );
-      }
-    } catch {}
-  };
-
-  const fetchMyPosts = async () => {
-    try {
-      const userStr = await AsyncStorage.getItem("user");
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      const userId = userObj?._id || userObj?.id;
-      if (userId) {
-        const data = await getUserPosts(userId, userId); // currentUserId parametresi eklendi
-        setMyPosts(data);
-      }
-    } catch (err) {
-      // Hata yönetimi
-    }
-  };
+  }, [userId]);
 
   useFocusEffect(
     React.useCallback(() => {
-      fetchPosts();
-      fetchStories();
-      fetchMyAvatar();
-      fetchMyFollowing();
-      (async () => {
-        await fetchMyPosts();
-      })();
-      (async () => {
-        const userStr = await AsyncStorage.getItem("user");
-        const userObj = userStr ? JSON.parse(userStr) : null;
-        setUserId(userObj?._id || userObj?.id || null);
-      })();
-
       // Yeni post paylaşıldıysa en üste git
       const route = navigation
         .getState()
@@ -184,75 +158,116 @@ const HomeScreen: React.FC = () => {
     const unsubscribe = navigation.addListener("tabPress", () => {
       console.log("Home tab pressed - refreshing...");
       setRefreshing(true);
-      Promise.all([
-        fetchPosts(),
-        fetchStories(),
-        fetchMyAvatar(),
-        fetchMyFollowing(),
-        fetchMyPosts(),
-      ]).finally(() => {
-        setRefreshing(false);
-      });
+      if (userId) {
+        Promise.all([
+          getAllPosts(userId),
+          getStories(userId),
+          getProfile(userId),
+          getUserPosts(userId, userId),
+        ]).finally(() => {
+          setRefreshing(false);
+        });
+      }
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, userId]);
 
   // navigation focus olduğunda postları tekrar fetch et
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
-      fetchPosts();
-      fetchMyPosts();
+      if (userId) {
+        getAllPosts(userId);
+        getStories(userId);
+        getProfile(userId);
+        getUserPosts(userId, userId);
+      }
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, userId]);
 
   // Story ekleme veya Story ekranından çıkınca story'leri güncelle
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
-      fetchStories();
+      if (userId) {
+        getStories(userId);
+      }
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, userId]);
 
   // StoryScreen'den çıkıldığında story'leri güncelle
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e: any) => {
-      if (e.target.includes("Story")) {
+      if (e.target.includes("Story") && userId) {
         // StoryScreen'den çıkıldığında story'leri yeniden fetch et
         setTimeout(() => {
-          fetchStories();
+          getStories(userId);
         }, 100);
       }
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, userId]);
 
   // StoryScreen'den focus olduğunda story'leri güncelle
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
       // StoryScreen'den döndüğünde story'leri yenile
-      fetchStories();
+      if (userId) {
+        getStories(userId);
+      }
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, userId]);
 
   // StoryScreen'den çıkıldığında story'lerin görünme durumunu güncelle
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e: any) => {
-      if (e.target.includes("Story")) {
+      if (e.target.includes("Story") && userId) {
         // StoryScreen'den çıkıldığında story'leri yeniden fetch et
         setTimeout(() => {
-          fetchStories();
+          getStories(userId);
         }, 100);
       }
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, userId]);
+
+  // Takip işlemi sonrası postları anında güncellemek için event listener ekle
+  React.useEffect(() => {
+    const subscription = navigation.addListener("focus", () => {
+      if (userId) {
+        loadAllData();
+      }
+    });
+
+    // Custom event: Takip değiştiğinde postları güncelle
+    const handleFollowChange = () => {
+      if (userId) {
+        loadAllData();
+      }
+    };
+    // window objesine event ekle (React Native'de global event için)
+    // @ts-ignore
+    if (typeof window !== "undefined") {
+      // @ts-ignore
+      window.__onFollowChange = handleFollowChange;
+    }
+    return () => {
+      subscription();
+      // @ts-ignore
+      if (typeof window !== "undefined") {
+        // @ts-ignore
+        window.__onFollowChange = undefined;
+      }
+    };
+  }, [navigation, userId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     InteractionManager.runAfterInteractions(async () => {
-      await fetchPosts();
+      if (userId) {
+        await getAllPosts(userId);
+      }
       setActiveUserId(null);
       setRefreshing(false);
     });
@@ -434,6 +449,11 @@ const HomeScreen: React.FC = () => {
     }
   };
 
+  const handleStoryLongPress = (item: any) => {
+    setShareStory(item);
+    setShowShareModal(true);
+  };
+
   // Story barını ListHeaderComponent olarak ekle
   const renderStoriesBar = () => (
     <View
@@ -476,6 +496,7 @@ const HomeScreen: React.FC = () => {
                 totalStories={item.totalStories}
                 viewedStories={item.viewedStories}
                 onPress={() => handleStoryPress(item)}
+                onLongPress={() => handleStoryLongPress(item)}
               />
             ) : null
           }
@@ -490,59 +511,8 @@ const HomeScreen: React.FC = () => {
     </View>
   );
 
-  // Header'ı ayrı bir fonksiyon olarak tanımla
-  const renderTopBar = () => (
-    <View
-      style={{
-        backgroundColor: colors.background,
-        paddingTop: 6, // Status bar'a daha yakınlaştır
-      }}
-    >
-      <View
-        style={[
-          styles.header,
-          {
-            backgroundColor: colors.background,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.headerLeft}>
-          <Text style={[styles.appTitle, { color: colors.primary }]}>
-            SocialApp
-          </Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.navigate("Notifications")}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="heart-outline" size={26} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.navigate("DMList")}
-            activeOpacity={0.7}
-          >
-            <Ionicons
-              name="paper-plane-outline"
-              size={26}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-
   // FlatList'in ListHeaderComponent'ine header ve story barı birlikte ekle
-  const renderListHeader = () => (
-    <>
-      {renderTopBar()}
-      {renderStoriesBar()}
-    </>
-  );
+  const renderListHeader = () => <>{renderStoriesBar()}</>;
 
   const handleDeletePost = (postId: string) => {
     setPosts((prev) => prev.filter((p) => (p._id || p.id) !== postId));
@@ -564,6 +534,9 @@ const HomeScreen: React.FC = () => {
       onArchive={() => handleArchivePost(item._id || item.id)}
     />
   );
+
+  // Posts'u useMemo ile optimize et
+  const memoizedPosts = useMemo(() => posts, [posts]);
 
   return (
     <SafeAreaView
@@ -628,11 +601,13 @@ const HomeScreen: React.FC = () => {
             data={displayedPosts}
             renderItem={renderPost}
             keyExtractor={(item) => item._id?.toString() || item.id?.toString()}
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={7}
+            removeClippedSubviews={true}
             showsVerticalScrollIndicator={false}
-            refreshing={refreshing}
-            onRefresh={onRefresh}
             onEndReached={loadMorePosts}
-            onEndReachedThreshold={0.1}
+            onEndReachedThreshold={0.5}
             ListHeaderComponent={!isStoryOpen ? renderListHeader : undefined}
             ListFooterComponent={
               loadingMore ? (
@@ -648,22 +623,22 @@ const HomeScreen: React.FC = () => {
                 </View>
               ) : null
             }
-            style={styles.postsList}
-            contentContainerStyle={[
-              styles.postsContent,
-              { paddingBottom: insets.bottom + 24 },
-            ]}
-            initialNumToRender={8}
-            maxToRenderPerBatch={8}
-            windowSize={10}
-            removeClippedSubviews={false}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 60 }}
+            {...panResponder.panHandlers}
           />
         )}
 
         {/* Share Modal */}
         <ShareModal
           visible={showShareModal}
-          onClose={() => setShowShareModal(false)}
+          onClose={() => {
+            setShowShareModal(false);
+            setShareStory(null);
+          }}
+          story={shareStory}
         />
       </View>
     </SafeAreaView>

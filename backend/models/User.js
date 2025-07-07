@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema(
       {
         type: {
           type: String,
-          enum: ["follow", "like", "comment"],
+          enum: ["follow", "follow_request", "like", "comment"],
           required: true,
         },
         from: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

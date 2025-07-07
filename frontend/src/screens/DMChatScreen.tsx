@@ -18,7 +18,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getConversationMessages, sendMessage } from "../services/api";
+import {
+  getConversationMessages,
+  sendMessage,
+  markMessagesAsSeen,
+  getUnreadMessageCount,
+} from "../services/api";
 import socketService from "../services/socketService";
 import { StackNavigationProp } from "@react-navigation/stack";
 
@@ -37,6 +42,7 @@ const DMChatScreen: React.FC = () => {
     null
   );
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
+  const [unreadMessageCount, setUnreadMessageCount] = React.useState(0);
 
   React.useEffect(() => {
     (async () => {
@@ -55,7 +61,7 @@ const DMChatScreen: React.FC = () => {
         );
 
         setConversationId(data.conversationId);
-        console.log("DMChatScreen - Gelen mesajlar:", data.messages);
+
         setMessages(
           data.messages.map((msg: any) => ({
             id: msg._id,
@@ -64,8 +70,30 @@ const DMChatScreen: React.FC = () => {
             createdAt: msg.createdAt,
             post: msg.post,
             story: msg.story,
+            read: msg.read,
+            seenAt: msg.seenAt,
           }))
         );
+
+        // Sohbet açıldığında mesajları görüldü olarak işaretle
+        if (data.conversationId) {
+          try {
+            await markMessagesAsSeen(currentUserId, data.conversationId);
+            // Socket üzerinden de bildir
+            socketService.markMessagesAsSeen(
+              currentUserId,
+              data.conversationId
+            );
+            // Okunmamış mesaj sayısını anında güncelle
+            if (typeof setUnreadMessageCount === "function") {
+              const unreadData = await getUnreadMessageCount(currentUserId);
+              setUnreadMessageCount(unreadData.unreadCount || 0);
+            }
+            console.log("Mesajlar görüldü olarak işaretlendi");
+          } catch (error) {
+            console.error("Mesajları görüldü olarak işaretleme hatası:", error);
+          }
+        }
       }
     })();
 
@@ -107,11 +135,6 @@ const DMChatScreen: React.FC = () => {
       }
     });
 
-    socketService.onMessageSent((data) => {
-      // Mesaj gönderildi onayı
-      console.log("Mesaj gönderildi:", data);
-    });
-
     socketService.onUserTyping((data) => {
       if (data.senderId === (user._id || user.id)) {
         setOtherUserTyping(true);
@@ -124,12 +147,27 @@ const DMChatScreen: React.FC = () => {
       }
     });
 
+    // Mesajların görüldüğünü dinle
+    socketService.onMessagesSeen((data) => {
+      if (data.conversationId === conversationId) {
+        // Mesajları güncelle
+        setMessages((prev) =>
+          prev.map((msg) =>
+            !msg.fromMe && !msg.read
+              ? { ...msg, read: true, seenAt: new Date() }
+              : msg
+          )
+        );
+      }
+    });
+
     return () => {
       // Cleanup
       socketService.off("new_message");
       socketService.off("message_sent");
       socketService.off("user_typing");
       socketService.off("user_stopped_typing");
+      socketService.off("messages_seen");
     };
   }, [user]);
 
@@ -258,8 +296,11 @@ const DMChatScreen: React.FC = () => {
             <FlatList
               data={messages}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => {
-                console.log("[DMChatScreen] Render edilen mesaj:", item);
+              renderItem={({ item, index }) => {
+                // Sadece en son kendi attığım mesajda ve seenAt varsa göster
+                const lastMyMessageIndex = messages.findIndex((m) => m.fromMe);
+                const isLastMyMessage =
+                  item.fromMe && index === lastMyMessageIndex;
                 return (
                   <View
                     style={[
@@ -471,6 +512,19 @@ const DMChatScreen: React.FC = () => {
                             )
                           : ""}
                       </Text>
+                      {/* GÖRÜLDÜ etiketi */}
+                      {isLastMyMessage && item.seenAt && (
+                        <Text
+                          style={{
+                            color: colors.background,
+                            fontSize: 11,
+                            marginTop: 2,
+                            alignSelf: "flex-end",
+                          }}
+                        >
+                          Görüldü
+                        </Text>
+                      )}
                     </View>
                   </View>
                 );

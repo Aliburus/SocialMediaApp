@@ -10,8 +10,17 @@ const createOrUpdateNotification = async (
   commentId = null
 ) => {
   try {
+    console.log(`[createOrUpdateNotification] Başlatılıyor:`, {
+      recipientId,
+      senderId,
+      type,
+      postId,
+      commentId,
+    });
+
     // Parametreleri kontrol et
     if (!recipientId || !senderId || !type) {
+      console.log(`[createOrUpdateNotification] Eksik parametreler`);
       return null;
     }
 
@@ -23,6 +32,9 @@ const createOrUpdateNotification = async (
 
     // Kendi kendine bildirim oluşturmasın
     if (recipientIdObj === senderIdObj) {
+      console.log(
+        `[createOrUpdateNotification] Kendi kendine bildirim oluşturulmaya çalışılıyor`
+      );
       return null;
     }
 
@@ -78,6 +90,10 @@ const createOrUpdateNotification = async (
           totalCount: 1,
         });
         await newNotification.save();
+        console.log(
+          `[createOrUpdateNotification] Yeni bildirim oluşturuldu:`,
+          newNotification._id
+        );
         return newNotification;
       }
     } else {
@@ -90,6 +106,10 @@ const createOrUpdateNotification = async (
         comment: commentId,
       });
       await newNotification.save();
+      console.log(
+        `[createOrUpdateNotification] Yeni bildirim oluşturuldu:`,
+        newNotification._id
+      );
       return newNotification;
     }
   } catch (error) {
@@ -108,6 +128,11 @@ exports.getNotifications = async (req, res) => {
     if (!userIdObj) {
       return res.json([]);
     }
+
+    // Kullanıcıyı da getir (pendingFollowRequests için)
+    const user = await User.findById(userIdObj).select(
+      "pendingFollowRequests followers"
+    );
 
     const notifications = await Notification.find({ recipient: userIdObj })
       .populate("sender", "username avatar")
@@ -183,9 +208,33 @@ exports.getNotifications = async (req, res) => {
           case "follow":
             message = `${notification.sender.username} seni takip etmeye başladı`;
             break;
+          case "follow_request":
+            message = `${notification.sender.username} seni takip etmek istiyor`;
+            break;
           case "mention":
             message = `${notification.sender.username} seni etiketledi`;
             break;
+        }
+
+        // Takip istekleri için status belirle
+        let status;
+        if (
+          notification.type === "follow" ||
+          notification.type === "follow_request"
+        ) {
+          if (
+            user.pendingFollowRequests
+              .map((id) => id.toString())
+              .includes(notification.sender._id.toString())
+          ) {
+            status = "pending";
+          } else if (
+            user.followers
+              .map((id) => id.toString())
+              .includes(notification.sender._id.toString())
+          ) {
+            status = "accepted";
+          }
         }
 
         return {
@@ -194,6 +243,7 @@ exports.getNotifications = async (req, res) => {
           user: notification.sender,
           post: notification.post,
           comment: notification.comment,
+          status,
         };
       }
     });
@@ -259,6 +309,27 @@ const formatTimestamp = (date) => {
   if (diff < 2592000) return `${Math.floor(diff / 86400)} gün önce`;
   if (diff < 31536000) return `${Math.floor(diff / 2592000)} ay önce`;
   return `${Math.floor(diff / 31536000)} yıl önce`;
+};
+
+// Okunmamış bildirim sayısını getir
+exports.getUnreadNotificationCount = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    if (!userId) {
+      return res.status(400).json({ message: "Kullanıcı ID gerekli" });
+    }
+    const unreadCount = await Notification.countDocuments({
+      recipient: userId,
+      isRead: false,
+    });
+    res.json({ unreadCount, userId });
+  } catch (err) {
+    console.error("Get unread notification count error:", err);
+    res.status(500).json({
+      message: "Okunmamış bildirim sayısı getirilemedi",
+      error: err.message,
+    });
+  }
 };
 
 // Dışa aktar

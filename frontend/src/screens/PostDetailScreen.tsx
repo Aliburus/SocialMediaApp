@@ -275,26 +275,18 @@ const PostDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={0}
-      >
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Post</Text>
-          <TouchableOpacity onPress={() => setShowOptionsModal(true)}>
-            <Ionicons
-              name="ellipsis-horizontal"
-              size={24}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-        </View>
-
+      {/* Üst bar */}
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Post</Text>
+        <TouchableOpacity onPress={() => setShowOptionsModal(true)}>
+          <Ionicons name="ellipsis-horizontal" size={24} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+      {/* İçerik */}
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Post Header */}
           <View style={styles.postHeader}>
@@ -489,7 +481,7 @@ const PostDetailScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         )}
-      </KeyboardAvoidingView>
+      </View>
       <ShareModal
         visible={showShareModal}
         onClose={() => setShowShareModal(false)}

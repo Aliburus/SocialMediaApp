@@ -16,9 +16,20 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getUserConversations, getUserFriends } from "../services/api";
+import {
+  getUserConversations,
+  getUserFriends,
+  getUnreadMessageCount,
+  markMessagesAsSeen,
+  deleteConversation,
+} from "../services/api";
+import socketService from "../services/socketService";
+import { Swipeable } from "react-native-gesture-handler";
 
-const DMListScreen: React.FC = () => {
+const DMListScreen: React.FC<{
+  setUnreadMessageCount?: (n: number) => void;
+  unreadMessageCount?: number;
+}> = ({ setUnreadMessageCount, unreadMessageCount }) => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -26,19 +37,44 @@ const DMListScreen: React.FC = () => {
   const [showFriendsModal, setShowFriendsModal] = React.useState(false);
   const [friendSearch, setFriendSearch] = React.useState("");
   const [friends, setFriends] = React.useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+  const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
   const filteredFriends = friends.filter((u) =>
     u.username.toLowerCase().includes(friendSearch.toLowerCase())
   );
+
   const loadConversations = async () => {
     try {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
       if (userObj?._id || userObj?.id) {
-        const list = await getUserConversations(userObj._id || userObj.id);
-        console.log("DMListScreen - Gelen conversation listesi:", list);
+        const userId = userObj._id || userObj.id;
+        setCurrentUserId(userId);
 
-        // Filtreleme kaldırıldı - tüm conversation'ları göster
+        // Önce conversation'ları yükle
+        const list = await getUserConversations(userId);
         setDmList(list);
+
+        // Okunmamış sohbetler için backend'e okundu bilgisini gönder
+        (list as any[]).forEach(async (dm: any) => {
+          if (dm.unreadCount > 0 && dm.conversationId) {
+            try {
+              await markMessagesAsSeen(userId, dm.conversationId);
+            } catch (e) {
+              console.log("Mesajları okundu işaretleme hatası:", e);
+            }
+          }
+        });
+
+        // Sonra okunmamış mesaj sayısını getir (ayrı thread'de)
+        setTimeout(async () => {
+          try {
+            const unreadData = await getUnreadMessageCount(userId);
+            setUnreadCount(unreadData.unreadCount || 0);
+          } catch (error) {
+            console.error("Okunmamış mesaj sayısı getirme hatası:", error);
+          }
+        }, 500); // 500ms geciktir
       }
     } catch (error) {
       console.error("DM listesi yükleme hatası:", error);
@@ -47,15 +83,34 @@ const DMListScreen: React.FC = () => {
 
   React.useEffect(() => {
     loadConversations();
-  }, []);
+
+    // Socket event listener'ları
+    if (currentUserId) {
+      socketService.onUnreadCountUpdate((data) => {
+        if (data.userId === currentUserId) {
+          setUnreadCount(data.unreadCount);
+        }
+      });
+    }
+
+    return () => {
+      socketService.off("unread_count_update");
+    };
+  }, [currentUserId]);
 
   // Ekran odaklandığında listeyi yenile
   React.useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", () => {
-      loadConversations();
+    const unsubscribe = navigation.addListener("focus", async () => {
+      await loadConversations();
+      // Sayaçları sıfırla
+      if (currentUserId) {
+        setUnreadCount(0);
+        if (setUnreadMessageCount) setUnreadMessageCount(0);
+      }
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, currentUserId]);
+
   React.useEffect(() => {
     if (showFriendsModal) {
       (async () => {
@@ -68,28 +123,85 @@ const DMListScreen: React.FC = () => {
       })();
     }
   }, [showFriendsModal]);
+
+  const handleDeleteConversation = async (conversationId: string) => {
+    if (!currentUserId) return;
+    try {
+      await deleteConversation(currentUserId, conversationId);
+      // Listeyi güncelle
+      await loadConversations();
+    } catch (e) {
+      console.log("DM silme hatası:", e);
+    }
+  };
+
+  const renderRightActions = (item: any) => (
+    <TouchableOpacity
+      style={{
+        justifyContent: "center",
+        alignItems: "center",
+        width: 64,
+        height: "100%",
+        backgroundColor: "red",
+      }}
+      onPress={() => handleDeleteConversation(item.id)}
+    >
+      <Ionicons name="trash-outline" size={28} color="#fff" />
+    </TouchableOpacity>
+  );
+
   const renderItem = ({ item }: { item: any }) => {
-    console.log("DMListScreen - Render edilen item:", item);
     return (
-      <TouchableOpacity
-        style={[styles.dmItem, { borderBottomColor: colors.border }]}
-        onPress={() => navigation.navigate("DMChat", { user: item.user })}
+      <Swipeable
+        renderRightActions={() => renderRightActions(item)}
+        onSwipeableOpen={() => handleDeleteConversation(item.id)}
       >
-        <Image source={{ uri: item.user?.avatar }} style={styles.avatar} />
-        <View style={styles.dmInfo}>
-          <Text style={[styles.username, { color: colors.text }]}>
-            {item.user?.username || "Bilinmeyen Kullanıcı"}
+        <TouchableOpacity
+          style={[styles.dmItem, { borderBottomColor: colors.border }]}
+          onPress={() => navigation.navigate("DMChat", { user: item.user })}
+        >
+          <View style={styles.avatarContainer}>
+            <Image source={{ uri: item.user?.avatar }} style={styles.avatar} />
+            {/* Okunmamış mesaj sayısı için kırmızı nokta */}
+            {item.unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>
+                  {item.unreadCount > 99 ? "99+" : item.unreadCount}
+                </Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.dmInfo}>
+            <Text style={[styles.username, { color: colors.text }]}>
+              {item.user?.username || "Bilinmeyen Kullanıcı"}
+            </Text>
+            <Text style={[styles.lastMessage, { color: colors.textSecondary }]}>
+              {item.lastMessage}
+            </Text>
+          </View>
+          <Text style={[styles.time, { color: colors.textSecondary }]}>
+            {item.time ? new Date(item.time).toLocaleDateString() : ""}
           </Text>
-          <Text style={[styles.lastMessage, { color: colors.textSecondary }]}>
-            {item.lastMessage}
-          </Text>
-        </View>
-        <Text style={[styles.time, { color: colors.textSecondary }]}>
-          {item.time ? new Date(item.time).toLocaleDateString() : ""}
-        </Text>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </Swipeable>
     );
   };
+
+  React.useEffect(() => {
+    if (typeof unreadMessageCount === "number") {
+      setUnreadCount(unreadMessageCount);
+    }
+  }, [unreadMessageCount]);
+
+  React.useEffect(() => {
+    // dmList değiştiğinde kaç farklı sohbette unreadCount > 0 varsa onu bildir
+    if (setUnreadMessageCount) {
+      const unreadConversations = dmList.filter(
+        (dm) => dm.unreadCount > 0
+      ).length;
+      setUnreadMessageCount(unreadConversations);
+    }
+  }, [dmList]);
 
   return (
     <SafeAreaView
@@ -114,26 +226,29 @@ const DMListScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
       {/* DM Listesi */}
-      {dmList.length === 0 ? (
-        <View
-          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-        >
-          <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
-            Henüz mesajlaşman yok
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={dmList}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id || item._id || item.username}
-          contentContainerStyle={{
-            paddingBottom: insets.bottom + 16,
-            paddingHorizontal: 8,
-          }}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {dmList.length === 0 ? (
+          <View
+            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
+              Henüz mesajlaşman yok
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={dmList}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id || item._id || item.username}
+            contentContainerStyle={{
+              paddingBottom: insets.bottom + 16,
+              paddingHorizontal: 8,
+              backgroundColor: colors.background,
+            }}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </View>
       {/* Arkadaşlar Modalı */}
       {showFriendsModal && (
         <View
@@ -263,6 +378,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
+  avatarContainer: {
+    position: "relative",
+  },
   avatar: {
     width: 54,
     height: 54,
@@ -283,6 +401,20 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 12,
     marginLeft: 8,
+  },
+  unreadBadge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    backgroundColor: "red",
+    borderRadius: 10,
+    paddingHorizontal: 2,
+    paddingVertical: 1,
+  },
+  unreadText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "bold",
   },
 });
 

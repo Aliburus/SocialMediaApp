@@ -68,35 +68,28 @@ const AddStoryScreen: React.FC = () => {
       alert("Story paylaşıldı!");
       navigation.goBack();
     } catch (err) {
-      console.log("[STORY PAYLAŞIM HATASI]", err, (err as any)?.response?.data);
       alert("Story paylaşılırken hata oluştu");
     }
   }
 
   const pickFromGallery = async () => {
-    console.log("Galeri butonuna tıklandı");
     try {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log("Galeri izni durumu:", status);
       if (status !== "granted") {
         alert("Galeriye erişim izni vermeniz gerekiyor.");
         return;
       }
-      console.log("Galeri açılıyor...");
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
-      console.log("Galeri sonucu:", result);
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        console.log("Fotoğraf seçildi:", result.assets[0].uri);
         setPreview(result.assets[0].uri);
       }
     } catch (err) {
-      console.log("[STORY GALERİ HATASI]", err);
       alert("Galeri açılırken bir hata oluştu.");
     }
   };

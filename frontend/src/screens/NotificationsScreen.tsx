@@ -18,18 +18,23 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "../context/ThemeContext";
+import FollowButton from "../components/FollowButton";
 import {
   getNotifications,
   acceptFollowRequest,
   rejectFollowRequest,
   followUser,
+  unfollowUser,
+  sendFollowRequest,
   getNotificationSettings,
   updateNotificationSettings,
+  markAllNotificationsAsRead,
 } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { Swipeable } from "react-native-gesture-handler";
+import { useUser } from "../context/UserContext";
 
 type RootStackParamList = {
   UserProfile: { user: any };
@@ -37,7 +42,11 @@ type RootStackParamList = {
   // diğer ekranlar...
 };
 
-function NotificationsScreen() {
+function NotificationsScreen({
+  setUnreadNotifCount,
+}: {
+  setUnreadNotifCount?: (n: number) => void;
+}) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -50,6 +59,7 @@ function NotificationsScreen() {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [commentEnabled, setCommentEnabled] = useState(true);
   const [followEnabled, setFollowEnabled] = useState(true);
+  const { user, refreshUser } = useUser();
 
   // Bildirimleri getir fonksiyonu
   const fetchNotifications = async (uid: string) => {
@@ -64,11 +74,14 @@ function NotificationsScreen() {
             n.type === "follow" &&
             n.status === "accepted" &&
             Array.isArray(n.user?.followers) &&
-            n.user.followers.some((f: any) => (f._id || f) == uid)
+            n.user.followers.some(
+              (f: any) => String(f._id || f) === String(uid)
+            )
         )
-        .map((n: any) => n.user?._id || n.user?.id)
+        .map((n: any) => String(n.user?._id || n.user?.id))
         .filter(Boolean);
       setFollowedIds(followed);
+      await refreshUser();
     } catch (err) {
       console.error("[NOTIFICATIONS_SCREEN] Bildirim getirme hatası:", err);
       setError("Bildirimler yüklenemedi");
@@ -94,6 +107,13 @@ function NotificationsScreen() {
     React.useCallback(() => {
       if (userId) {
         fetchNotifications(userId);
+        refreshUser();
+        // Bildirimleri okundu yap (backend)
+        markAllNotificationsAsRead(userId);
+        setNotifications((prev) =>
+          prev.map((notif) => ({ ...notif, isRead: true }))
+        );
+        if (setUnreadNotifCount) setUnreadNotifCount(0);
       }
     }, [userId])
   );
@@ -115,15 +135,27 @@ function NotificationsScreen() {
       const userId = userObj?._id || userObj?.id;
       if (!userId) return;
       await acceptFollowRequest(userId, requesterId);
+
+      // Sadece local state'i güncelle, tekrar fetch etme
       setNotifications((prev) =>
         prev.map((notif) =>
-          notif.id === notifId ? { ...notif, status: "accepted" } : notif
+          notif.id === notifId
+            ? {
+                ...notif,
+                status: "accepted",
+                type: "follow",
+                text: `${
+                  notif.user?.username || notif.from?.username
+                } seni takip etmeye başladı`,
+              }
+            : notif
         )
       );
     } catch (err) {
-      // Hata yönetimi eklenebilir
+      console.error("Accept follow request error:", err);
     }
   };
+
   const handleReject = async (notifId: string, requesterId: string) => {
     try {
       const userStr = await AsyncStorage.getItem("user");
@@ -136,6 +168,7 @@ function NotificationsScreen() {
       // Hata yönetimi eklenebilir
     }
   };
+
   const handleFollowToggle = (notifId: string) => {
     setNotifications((prev) =>
       prev.map((notif) =>
@@ -157,10 +190,41 @@ function NotificationsScreen() {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const currentUserId = userObj?._id || userObj?.id;
       if (!currentUserId) return;
-      await followUser(currentUserId, userId);
-      setFollowedIds((prev) => [...prev, userId]);
+
+      // Takip durumunu kontrol et
+      const isCurrentlyFollowed =
+        user &&
+        Array.isArray(user.following) &&
+        user.following.includes(userId);
+
+      if (isCurrentlyFollowed) {
+        // Takipten çık
+        await unfollowUser(currentUserId, userId);
+        setFollowedIds((prev) => prev.filter((id) => id !== userId));
+        await refreshUser();
+      } else {
+        // Kullanıcının gizli hesap olup olmadığını kontrol et
+        const targetUser = notifications.find(
+          (n) =>
+            (n.user?._id || n.user?.id) === userId ||
+            (n.from?._id || n.from?.id) === userId
+        );
+
+        if (
+          targetUser?.user?.privateAccount ||
+          targetUser?.from?.privateAccount
+        ) {
+          // Gizli hesap, takip isteği gönder
+          await sendFollowRequest(currentUserId, userId);
+        } else {
+          // Açık hesap, direkt takip et
+          await followUser(currentUserId, userId);
+          setFollowedIds((prev) => [...prev, userId]);
+          await refreshUser();
+        }
+      }
     } catch (err) {
-      // Hata yönetimi eklenebilir
+      console.error("Follow/Unfollow error:", err);
     }
   };
 
@@ -278,7 +342,14 @@ function NotificationsScreen() {
           height: "100%",
         }}
         onPress={() => {
-          handleDeleteNotification(item.id);
+          if (
+            (item.type === "follow" || item.type === "follow_request") &&
+            item.status === "pending"
+          ) {
+            handleReject(item.id, item.user?._id || item.from?._id);
+          } else {
+            handleDeleteNotification(item.id);
+          }
         }}
       >
         <Ionicons name="trash" size={32} color="#fff" />
@@ -353,10 +424,20 @@ function NotificationsScreen() {
   };
 
   const renderNotif = ({ item }: { item: any }) => {
+    // DEBUG: following dizisini logla
+    if (user && Array.isArray(user.following)) {
+      console.log(
+        "Kendi following dizisi:",
+        user.following.map((id: any) => String(id))
+      );
+    }
+    const itemUserId = String(
+      item.user?._id || item.user?.id || item.from?._id || item.from?.id
+    );
     const isFollowed =
-      Array.isArray(item.user?.followers) &&
-      userId &&
-      item.user.followers.some((f: any) => (f._id || f) == userId);
+      user &&
+      Array.isArray(user.following) &&
+      user.following.map((id: any) => String(id)).includes(itemUserId);
     const goToProfile = () => {
       const userParam = item.user?._id
         ? { ...item.user, id: item.user._id }
@@ -398,7 +479,10 @@ function NotificationsScreen() {
       }
       return null;
     };
-    if (item.type === "follow" && item.status === "pending") {
+    if (
+      (item.type === "follow" || item.type === "follow_request") &&
+      item.status === "pending"
+    ) {
       return (
         <TouchableOpacity
           onPress={goToProfile}
@@ -423,45 +507,37 @@ function NotificationsScreen() {
               seni takip etmek istiyor
             </Text>
             <View style={{ flexDirection: "row", marginTop: 8 }}>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: colors.primary,
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 6,
-                  marginRight: 8,
-                }}
+              <FollowButton
+                type="accept"
                 onPress={() =>
                   handleAccept(item.id, item.user?._id || item.from?._id)
                 }
-              >
-                <Text style={{ color: colors.background, fontWeight: "bold" }}>
-                  Takip Et
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: colors.surface,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderRadius: 6,
-                }}
+                style={{ marginRight: 8 }}
+              />
+              <FollowButton
+                type="reject"
                 onPress={() =>
                   handleReject(item.id, item.user?._id || item.from?._id)
                 }
-              >
-                <Text style={{ color: colors.text, fontWeight: "bold" }}>
-                  Takipten Çık
-                </Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         </TouchableOpacity>
       );
     }
     if (item.type === "follow" && item.status === "accepted") {
+      let followType: "unfollow" | "follow_back" | "follow" = "follow_back";
+      if (isFollowed) {
+        followType = "unfollow";
+      } else if (
+        user &&
+        Array.isArray(user.followers) &&
+        user.followers.map((id: any) => String(id)).includes(itemUserId)
+      ) {
+        followType = "follow_back";
+      } else {
+        followType = "follow";
+      }
       return (
         <TouchableOpacity
           onPress={goToProfile}
@@ -491,39 +567,11 @@ function NotificationsScreen() {
             </Text>{" "}
             seni takip etmeye başladı
           </Text>
-          {!isFollowed ? (
-            <TouchableOpacity
-              style={{
-                backgroundColor: colors.primary,
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 6,
-                marginLeft: 8,
-              }}
-              onPress={() => handleFollowBack(item.user?._id || item.user?.id)}
-            >
-              <Text style={{ color: colors.background, fontWeight: "bold" }}>
-                Takip Et
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={{
-                backgroundColor: colors.surface,
-                borderWidth: 1,
-                borderColor: colors.border,
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                borderRadius: 6,
-                marginLeft: 8,
-              }}
-              onPress={() => handleFollowBack(item.user?._id || item.user?.id)}
-            >
-              <Text style={{ color: colors.text, fontWeight: "bold" }}>
-                Takipten Çık
-              </Text>
-            </TouchableOpacity>
-          )}
+          <FollowButton
+            type={followType}
+            onPress={() => handleFollowBack(item.user?._id || item.user?.id)}
+            style={{ marginLeft: 8 }}
+          />
         </TouchableOpacity>
       );
     }

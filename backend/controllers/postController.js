@@ -201,14 +201,6 @@ exports.getUserPosts = async (req, res) => {
       ) ||
       userId === currentUserId;
 
-    console.log("Backend gizli hesap debug:", {
-      userId,
-      currentUserId,
-      isPrivateAccount,
-      followers: user.followers.map((f) => f.toString()),
-      canViewPosts,
-    });
-
     if (!canViewPosts) {
       return res.json([]); // Boş array dön, frontend gizli hesap mesajını gösterecek
     }

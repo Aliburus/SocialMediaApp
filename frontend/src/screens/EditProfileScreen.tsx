@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { mockUsers } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
 import { updateProfile, getProfile } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -21,7 +20,6 @@ import { useUser } from "../context/UserContext";
 
 const EditProfileScreen: React.FC = () => {
   const navigation = useNavigation();
-  const currentUser = mockUsers[0];
   const { colors } = useTheme();
   const { updateUser } = useUser();
 
@@ -50,7 +48,6 @@ const EditProfileScreen: React.FC = () => {
 
   const handleSave = async () => {
     try {
-      console.log("EditProfile: Saving with avatar:", avatar);
       const updated = await updateProfile({
         userId,
         name,
@@ -58,15 +55,11 @@ const EditProfileScreen: React.FC = () => {
         avatar,
         bio,
       });
-      console.log("EditProfile: Server response:", updated);
       setName(updated.name);
       setUsername(updated.username);
       setAvatar(updated.avatar);
       setBio(updated.bio);
-      console.log(
-        "EditProfile: Updating UserContext with avatar:",
-        updated.avatar
-      );
+
       updateUser({
         name: updated.name,
         username: updated.username,

@@ -8,17 +8,19 @@ import {
   FlatList,
   Dimensions,
   RefreshControl,
+  Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
+import FollowButton from "../components/FollowButton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  getProfile,
+  getUserPosts,
   followUser,
   unfollowUser,
   sendFollowRequest,
   cancelFollowRequest,
-  getUserPosts,
-  getProfile,
 } from "../services/api";
 import { useNavigation, useIsFocused } from "@react-navigation/native";
 import {
@@ -45,6 +47,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
   const [activeTab, setActiveTab] = useState<"grid" | "reels">("grid");
   const [loadingBtn, setLoadingBtn] = useState(false);
   const [currentUserId, setCurrentUserId] = useState("");
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const isFocused = useIsFocused();
   const [followed, setFollowed] = useState(false);
 
@@ -66,6 +69,12 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
         setUserPosts(sortedPosts);
+
+        // Mevcut kullanıcının profilini de çek
+        if (myUserId) {
+          const currentProfile = await getProfile(myUserId);
+          setCurrentUserProfile(currentProfile);
+        }
       } catch (error) {
         console.error("Error fetching user data:", error);
       }
@@ -97,7 +106,12 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
   const handleFollow = async () => {
     setLoadingBtn(true);
     try {
-      await followUser(currentUserId, profile._id || profile.id);
+      // Eğer hesap gizliyse takip isteği gönder, açıksa direkt takip et
+      if (profile?.privateAccount) {
+        await sendFollowRequest(currentUserId, profile._id || profile.id);
+      } else {
+        await followUser(currentUserId, profile._id || profile.id);
+      }
       // Profil ve post verilerini yeniden çek
       const profileData = await getProfile(profile._id || profile.id);
       setProfile(profileData);
@@ -110,6 +124,12 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       setUserPosts(sortedPosts);
+
+      // Mevcut kullanıcının profilini de güncelle
+      if (currentUserId) {
+        const currentProfile = await getProfile(currentUserId);
+        setCurrentUserProfile(currentProfile);
+      }
     } catch (error) {
       console.error("Error following user:", error);
     }
@@ -139,27 +159,6 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     setLoadingBtn(false);
   };
 
-  const handleSendRequest = async () => {
-    setLoadingBtn(true);
-    try {
-      await sendFollowRequest(currentUserId, profile._id || profile.id);
-      const profileData = await getProfile(profile._id || profile.id);
-      setProfile(profileData);
-      const posts = await getUserPosts(
-        profile._id || profile.id,
-        currentUserId
-      );
-      const sortedPosts = posts.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setUserPosts(sortedPosts);
-    } catch (error) {
-      console.error("Error sending follow request:", error);
-    }
-    setLoadingBtn(false);
-  };
-
   const handleCancelRequest = async () => {
     setLoadingBtn(true);
     try {
@@ -175,6 +174,12 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       setUserPosts(sortedPosts);
+
+      // Mevcut kullanıcının profilini de güncelle
+      if (currentUserId) {
+        const currentProfile = await getProfile(currentUserId);
+        setCurrentUserProfile(currentProfile);
+      }
     } catch (error) {
       console.error("Error canceling follow request:", error);
     }
@@ -184,8 +189,13 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
   const handleFollowBack = async () => {
     setLoadingBtn(true);
     try {
-      await followUser(currentUserId, profile._id || profile.id);
-      setFollowed(true);
+      // Eğer hesap gizliyse takip isteği gönder, açıksa direkt takip et
+      if (profile?.privateAccount) {
+        await sendFollowRequest(currentUserId, profile._id || profile.id);
+      } else {
+        await followUser(currentUserId, profile._id || profile.id);
+        setFollowed(true);
+      }
       const profileData = await getProfile(profile._id || profile.id);
       setProfile(profileData);
       const posts = await getUserPosts(
@@ -197,6 +207,12 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       setUserPosts(sortedPosts);
+
+      // Mevcut kullanıcının profilini de güncelle
+      if (currentUserId) {
+        const currentProfile = await getProfile(currentUserId);
+        setCurrentUserProfile(currentProfile);
+      }
     } catch (error) {
       console.error("Error following back:", error);
     }
@@ -206,8 +222,8 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
   const isPending = profile?.pendingFollowRequests?.some(
     (id: any) => id.toString() === currentUserId
   );
-  const isSent = profile?.sentFollowRequests?.some(
-    (id: any) => id.toString() === currentUserId
+  const isSent = currentUserProfile?.sentFollowRequests?.some(
+    (id: any) => id.toString() === (profile._id || profile.id)
   );
   const isFollowing = profile?.followers?.some(
     (id: any) => id.toString() === currentUserId
@@ -280,40 +296,35 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     }
     if (isFollowing || followed) {
       return {
-        text: "Takipten Çık",
+        type: "unfollow" as const,
         onPress: handleUnfollow,
-        style: [
-          styles.followButton,
-          styles.followingButton,
-          { backgroundColor: colors.surface },
-        ],
-        icon: <UserCheck size={16} color={colors.text} />,
-        textColor: colors.text,
       };
     }
     if (isFollowMe) {
+      // Eğer gizli hesap ve takip isteği gönderilmişse
+      if (profile?.privateAccount && isSent) {
+        return {
+          type: "pending_request" as const,
+          onPress: handleCancelRequest,
+        };
+      }
       return {
-        text: "Geri Takip Et",
+        type: profile?.privateAccount
+          ? ("follow" as const)
+          : ("follow_back" as const),
         onPress: handleFollowBack,
-        style: [
-          styles.followButton,
-          styles.followPrimaryButton,
-          { backgroundColor: colors.primary },
-        ],
-        icon: <UserPlus size={16} color="white" />,
-        textColor: "white",
+      };
+    }
+    // Eğer gizli hesap ve takip isteği gönderilmişse
+    if (profile?.privateAccount && isSent) {
+      return {
+        type: "pending_request" as const,
+        onPress: handleCancelRequest,
       };
     }
     return {
-      text: "Takip Et",
-      onPress: handleSendRequest,
-      style: [
-        styles.followButton,
-        styles.followPrimaryButton,
-        { backgroundColor: colors.primary },
-      ],
-      icon: <UserPlus size={16} color="white" />,
-      textColor: "white",
+      type: "follow" as const,
+      onPress: handleFollow,
     };
   };
 
@@ -321,16 +332,12 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     const btn = getFollowButton();
     if (!btn) return null;
     return (
-      <TouchableOpacity
-        style={btn.style}
+      <FollowButton
+        type={btn.type}
         onPress={btn.onPress}
         disabled={loadingBtn}
-      >
-        {btn.icon}
-        <Text style={[styles.followButtonText, { color: btn.textColor }]}>
-          {btn.text}
-        </Text>
-      </TouchableOpacity>
+        style={styles.followButton}
+      />
     );
   };
 
@@ -402,21 +409,27 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                 {profile?.isVerified && <UserCheck size={20} color="#1DA1F2" />}
               </View>
               {currentUserId === (profile._id || profile.id) ? (
-                <TouchableOpacity
-                  onPress={togglePrivateAccount}
-                  style={{
-                    backgroundColor: colors.primary,
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 6,
-                  }}
-                >
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <Text
-                    style={{ color: "white", fontSize: 12, fontWeight: "600" }}
+                    style={{
+                      color: colors.text,
+                      marginRight: 8,
+                      fontWeight: "600",
+                    }}
                   >
-                    {profile?.privateAccount ? "Gizli" : "Açık"}
+                    Gizli Hesap
                   </Text>
-                </TouchableOpacity>
+                  <Switch
+                    value={!!profile?.privateAccount}
+                    onValueChange={async (val) => {
+                      await togglePrivateAccount();
+                    }}
+                    trackColor={{ false: colors.border, true: colors.primary }}
+                    thumbColor={
+                      profile?.privateAccount ? colors.primary : colors.surface
+                    }
+                  />
+                </View>
               ) : (
                 <View style={{ width: 24 }} />
               )}

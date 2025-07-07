@@ -5,6 +5,7 @@ const {
   markAsRead,
   markAllAsRead,
   deleteNotification,
+  getUnreadNotificationCount,
 } = require("../controllers/notificationController");
 
 // Bildirimleri getir
@@ -18,5 +19,7 @@ router.put("/:userId/read-all", markAllAsRead);
 
 // Bildirimi sil
 router.delete("/:id", deleteNotification);
+
+router.get("/:userId/unread-count", getUnreadNotificationCount);
 
 module.exports = router;

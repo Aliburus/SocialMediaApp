@@ -81,8 +81,6 @@ const AddPostScreen: React.FC = () => {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
-      console.log("[POST PAYLAŞ] userObj:", userObj);
-      console.log("[POST PAYLAŞ] userId:", userId);
       if (!userId) {
         Alert.alert("Oturum Hatası", "Lütfen tekrar giriş yapın.");
         await AsyncStorage.removeItem("user");
@@ -98,7 +96,6 @@ const AddPostScreen: React.FC = () => {
         newPostId: newPost._id || newPost.id,
       });
     } catch (err: any) {
-      console.log("[POST PAYLAŞ HATA] Tam Hata:", err);
       if (err?.response) {
         console.log("[POST PAYLAŞ HATA] response:", err.response);
         console.log("[POST PAYLAŞ HATA] response.data:", err.response.data);

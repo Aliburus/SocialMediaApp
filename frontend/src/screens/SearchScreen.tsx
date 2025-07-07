@@ -8,6 +8,7 @@ import {
   Image,
   StyleSheet,
   Dimensions,
+  RefreshControl,
 } from "react-native";
 import {
   SafeAreaView,
@@ -22,6 +23,7 @@ import {
 } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import FollowButton from "../components/FollowButton";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -46,7 +48,6 @@ const SearchScreen: React.FC = () => {
 
   // Boş array kullan
   const posts: any[] = [];
-  console.log("SearchScreen: posts length:", posts.length);
 
   // Tab'a basıldığında refresh
   useFocusEffect(
@@ -60,7 +61,6 @@ const SearchScreen: React.FC = () => {
   // Tab'a basıldığında refresh
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("tabPress", () => {
-      console.log("Search tab pressed - refreshing...");
       setRefreshing(true);
       setSearchQuery("");
       setSearchResults([]);
@@ -126,10 +126,7 @@ const SearchScreen: React.FC = () => {
             : u
         )
       );
-      console.log(`Takip isteği gönderildi: ${userId}`);
-    } catch (err) {
-      console.log("Takip isteği gönderilemedi:", err);
-    }
+    } catch (err) {}
     setLoadingMap((prev) => ({ ...prev, [userId]: false }));
   };
 
@@ -150,10 +147,7 @@ const SearchScreen: React.FC = () => {
             : u
         )
       );
-      console.log(`Takip isteği iptal edildi: ${userId}`);
-    } catch (err) {
-      console.log("Takip isteği iptal edilemedi:", err);
-    }
+    } catch (err) {}
     setLoadingMap((prev) => ({ ...prev, [userId]: false }));
   };
 
@@ -189,36 +183,19 @@ const SearchScreen: React.FC = () => {
         </View>
         {userId !== currentUserId &&
           (requestSent ? (
-            <TouchableOpacity
-              style={[
-                styles.followButton,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.primary,
-                  borderWidth: 1,
-                },
-              ]}
+            <FollowButton
+              type="cancel_request"
               onPress={() => handleCancelRequest(userId)}
               disabled={loading}
-            >
-              <Text
-                style={[styles.followButtonText, { color: colors.primary }]}
-              >
-                İsteği İptal Et
-              </Text>
-            </TouchableOpacity>
+              style={styles.followButton}
+            />
           ) : (
-            <TouchableOpacity
-              style={[styles.followButton, { backgroundColor: colors.primary }]}
+            <FollowButton
+              type="follow"
               onPress={() => handleSendRequest(userId)}
               disabled={loading}
-            >
-              <Text
-                style={[styles.followButtonText, { color: colors.background }]}
-              >
-                Takip Et
-              </Text>
-            </TouchableOpacity>
+              style={styles.followButton}
+            />
           ))}
       </TouchableOpacity>
     );

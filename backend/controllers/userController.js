@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const Notification = require("../models/Notification");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { createOrUpdateNotification } = require("./notificationController");
@@ -9,6 +10,8 @@ const {
 const Post = require("../models/Post");
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
+const Story = require("../models/Story");
+const Comment = require("../models/Comment");
 
 function validateEmail(email) {
   return /^\S+@\S+\.\S+$/.test(email);
@@ -202,6 +205,7 @@ exports.getSavedPosts = async (req, res) => {
 exports.followUser = async (req, res) => {
   try {
     const { userId, targetUserId } = req.body;
+
     if (!userId || !targetUserId) {
       return res.status(400).json({ message: "Eksik veri" });
     }
@@ -213,16 +217,22 @@ exports.followUser = async (req, res) => {
     if (!user || !targetUser) {
       return res.status(404).json({ message: "Kullanıcı bulunamadı" });
     }
+
     if (!user.following.includes(targetUserId)) {
       user.following.push(targetUserId);
     }
     if (!targetUser.followers.includes(userId)) {
       targetUser.followers.push(userId);
     }
+
+    // Takip bildirimi gönder
+    await createOrUpdateNotification(targetUserId, userId, "follow");
+
     await user.save();
     await targetUser.save();
     res.json({ following: user.following, followers: targetUser.followers });
   } catch (err) {
+    console.error(`[followUser] Hata:`, err);
     res
       .status(500)
       .json({ message: "Takip işlemi başarısız", error: err.message });
@@ -253,9 +263,12 @@ exports.unfollowUser = async (req, res) => {
     targetUser.pendingFollowRequests = targetUser.pendingFollowRequests.filter(
       (id) => id.toString() !== userId
     );
-    targetUser.notifications = targetUser.notifications.filter(
-      (notif) => !(notif.type === "follow" && notif.from.toString() === userId)
-    );
+    // Bildirimi sil
+    await Notification.deleteMany({
+      recipient: targetUserId,
+      sender: userId,
+      type: { $in: ["follow", "follow_request"] },
+    });
     await user.save();
     await targetUser.save();
     res.json({ following: user.following, followers: targetUser.followers });
@@ -300,30 +313,17 @@ exports.sendFollowRequest = async (req, res) => {
     if (!targetUser || !user) {
       return res.status(404).json({ message: "Kullanıcı bulunamadı" });
     }
-    if (targetUser.privateAccount === false) {
-      // Hesap açık, direkt takip et
-      if (!user.following.includes(targetUserId)) {
-        user.following.push(targetUserId);
-      }
-      if (!targetUser.followers.includes(userId)) {
-        targetUser.followers.push(userId);
-      }
-      // Bildirim ekle - açık hesap için direkt takip bildirimi
-      await createOrUpdateNotification(targetUserId, userId, "follow");
-      await user.save();
-      await targetUser.save();
-      return res.json({
-        following: user.following,
-        followers: targetUser.followers,
-        message: "Takip edildi (açık hesap)",
-      });
-    }
+
     // Gizli hesap, takip isteği gönder
     if (!targetUser.pendingFollowRequests.includes(userId)) {
       targetUser.pendingFollowRequests.push(userId);
       // Bildirim ekle - gizli hesap için takip isteği bildirimi
-      await createOrUpdateNotification(targetUserId, userId, "follow");
+      await createOrUpdateNotification(targetUserId, userId, "follow_request");
       await targetUser.save();
+    }
+    if (!user.sentFollowRequests.includes(targetUserId)) {
+      user.sentFollowRequests.push(targetUserId);
+      await user.save();
     }
     if (!user.sentFollowRequests.includes(targetUserId)) {
       user.sentFollowRequests.push(targetUserId);
@@ -355,9 +355,12 @@ exports.cancelFollowRequest = async (req, res) => {
     targetUser.pendingFollowRequests = targetUser.pendingFollowRequests.filter(
       (id) => id.toString() !== userId
     );
-    targetUser.notifications = targetUser.notifications.filter(
-      (notif) => !(notif.type === "follow" && notif.from.toString() === userId)
-    );
+    // Bildirimi sil
+    await Notification.deleteMany({
+      recipient: targetUserId,
+      sender: userId,
+      type: { $in: ["follow", "follow_request"] },
+    });
     await targetUser.save();
     user.sentFollowRequests = user.sentFollowRequests.filter(
       (id) => id.toString() !== targetUserId
@@ -422,77 +425,6 @@ exports.togglePrivateAccount = async (req, res) => {
   }
 };
 
-// Bildirimleri getir
-exports.getNotifications = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const user = await User.findById(userId).populate({
-      path: "notifications.from",
-      select: "_id username avatar",
-      populate: [
-        { path: "followers", select: "_id" },
-        { path: "following", select: "_id" },
-      ],
-    });
-    if (!user) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
-    }
-    // Bildirimleri zenginleştir
-    const notifications = (user.notifications || []).map((notif) => {
-      let status;
-      if (notif.type === "follow") {
-        if (
-          user.pendingFollowRequests
-            .map((id) => id.toString())
-            .includes(notif.from._id.toString())
-        ) {
-          status = "pending";
-        } else if (
-          user.followers
-            .map((id) => id.toString())
-            .includes(notif.from._id.toString())
-        ) {
-          status = "accepted";
-        }
-      }
-      // followersCount ve followingCount ekle
-      const followersCount = Array.isArray(notif.from.followers)
-        ? notif.from.followers.length
-        : 0;
-      const followingCount = Array.isArray(notif.from.following)
-        ? notif.from.following.length
-        : 0;
-      return {
-        id:
-          notif._id?.toString() ||
-          notif.id?.toString() ||
-          Math.random().toString(),
-        type: notif.type,
-        user: {
-          ...notif.from._doc,
-          followersCount,
-          followingCount,
-        },
-        text:
-          notif.type === "follow"
-            ? status === "pending"
-              ? "seni takip etmek istiyor"
-              : "seni takip etmeye başladı"
-            : "",
-        timestamp: notif.date,
-        isRead: notif.read,
-        status,
-      };
-    });
-
-    res.json(notifications);
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Bildirimler getirilemedi", error: err.message });
-  }
-};
-
 // Takip isteğini kabul et
 exports.acceptFollowRequest = async (req, res) => {
   try {
@@ -529,16 +461,18 @@ exports.acceptFollowRequest = async (req, res) => {
       (id) => id.toString() !== userId
     );
 
-    // Takip isteği kabul edildiğinde bildirim oluştur
-    await createOrUpdateNotification(requesterId, userId, "follow");
-
-    // Bildirim güncelle (opsiyonel: okundu yap)
-    user.notifications = user.notifications.map((notif) => {
-      if (notif.type === "follow" && notif.from.toString() === requesterId) {
-        return { ...notif, read: true };
-      }
-      return notif;
-    });
+    // Eski takip isteği bildirimini güncelle (silme)
+    await Notification.findOneAndUpdate(
+      {
+        recipient: userId,
+        sender: requesterId,
+        type: "follow_request",
+      },
+      {
+        type: "follow",
+      },
+      { new: true }
+    );
 
     await user.save();
     await requester.save();
@@ -564,10 +498,12 @@ exports.rejectFollowRequest = async (req, res) => {
     user.pendingFollowRequests = user.pendingFollowRequests.filter(
       (id) => id.toString() !== requesterId
     );
-    user.notifications = user.notifications.filter(
-      (notif) =>
-        !(notif.type === "follow" && notif.from.toString() === requesterId)
-    );
+    // Bildirimi sil
+    await Notification.deleteMany({
+      recipient: userId,
+      sender: requesterId,
+      type: { $in: ["follow", "follow_request"] },
+    });
     await user.save();
     res.json({ pendingFollowRequests: user.pendingFollowRequests });
   } catch (err) {
@@ -599,43 +535,53 @@ exports.getUserConversations = async (req, res) => {
       .sort({ updatedAt: -1 });
 
     // Karşıdaki kullanıcıyı bul
-    const result = conversations.map((conv) => {
-      const otherUser = conv.users.find((u) => u._id.toString() !== userId);
+    const result = await Promise.all(
+      conversations.map(async (conv) => {
+        const otherUser = conv.users.find((u) => u._id.toString() !== userId);
 
-      // Son mesaj metnini belirle
-      let lastMessageText = "";
+        // Bu conversation'daki okunmamış mesaj sayısını hesapla
+        const unreadCount = await Message.countDocuments({
+          conversation: conv._id,
+          receiver: userId,
+          seenAt: null,
+        }).maxTimeMS(5000); // 5 saniye timeout
 
-      if (conv.lastMessage) {
-        const senderUsername =
-          conv.lastMessage?.sender?.username ||
-          (conv.lastMessage?.sender &&
-          typeof conv.lastMessage.sender === "string"
-            ? conv.lastMessage.sender
-            : "") ||
-          "Bilinmeyen";
-        if (conv.lastMessage.text) {
-          lastMessageText = conv.lastMessage.text;
-        } else if (conv.lastMessage.post) {
-          lastMessageText = `${senderUsername}’dan gönderi gönderildi`;
-        } else if (conv.lastMessage.story) {
-          lastMessageText = `${senderUsername}’dan hikaye gönderildi`;
+        // Son mesaj metnini belirle
+        let lastMessageText = "";
+
+        if (conv.lastMessage) {
+          const senderUsername =
+            conv.lastMessage?.sender?.username ||
+            (conv.lastMessage?.sender &&
+            typeof conv.lastMessage.sender === "string"
+              ? conv.lastMessage.sender
+              : "") ||
+            "Bilinmeyen";
+          if (conv.lastMessage.text) {
+            lastMessageText = conv.lastMessage.text;
+          } else if (conv.lastMessage.post) {
+            lastMessageText = `${senderUsername}'dan gönderi gönderildi`;
+          } else if (conv.lastMessage.story) {
+            lastMessageText = `${senderUsername}'dan hikaye gönderildi`;
+          }
         }
-      }
 
-      const mapped = {
-        id: conv._id,
-        user: otherUser,
-        lastMessage: lastMessageText,
-        time: conv.lastMessage?.createdAt || conv.updatedAt,
-        lastMessageType: conv.lastMessage?.post
-          ? "post"
-          : conv.lastMessage?.story
-          ? "story"
-          : "text",
-      };
+        const mapped = {
+          id: conv._id,
+          user: otherUser,
+          lastMessage: lastMessageText,
+          time: conv.lastMessage?.createdAt || conv.updatedAt,
+          lastMessageType: conv.lastMessage?.post
+            ? "post"
+            : conv.lastMessage?.story
+            ? "story"
+            : "text",
+          unreadCount: unreadCount,
+        };
 
-      return mapped;
-    });
+        return mapped;
+      })
+    );
 
     res.json(result);
   } catch (err) {
@@ -723,7 +669,6 @@ exports.sendMessage = async (req, res) => {
     }
 
     // Mesaj oluştur
-
     const message = await Message.create({
       conversation: conversation._id,
       sender: senderId,
@@ -731,6 +676,7 @@ exports.sendMessage = async (req, res) => {
       text: text ? text.trim() : undefined,
       post: postId || undefined,
       story: storyId || undefined,
+      readBy: [senderId], // Sadece gönderen mesajı okumuş sayılır
     });
 
     // Conversation'ın son mesajını güncelle
@@ -870,5 +816,115 @@ exports.updateMessagePrivacy = async (req, res) => {
     res
       .status(500)
       .json({ message: "Mesaj gizliliği güncellenemedi", error: err.message });
+  }
+};
+
+// Mesajları görüldü olarak işaretle
+exports.markMessagesAsSeen = async (req, res) => {
+  try {
+    const { userId, conversationId } = req.body;
+
+    if (!userId || !conversationId) {
+      return res.status(400).json({ message: "Eksik veri" });
+    }
+
+    // Conversation'ın geçerli olup olmadığını kontrol et
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation bulunamadı" });
+    }
+
+    // Kullanıcının bu conversation'da olup olmadığını kontrol et
+    if (!conversation.users.includes(userId)) {
+      return res
+        .status(403)
+        .json({ message: "Bu conversation'a erişim izniniz yok" });
+    }
+
+    // Bu kullanıcıya gönderilen ve henüz görülmemiş mesajları bul ve güncelle
+    const result = await Message.updateMany(
+      {
+        conversation: conversationId,
+        receiver: userId,
+        seenAt: null,
+      },
+      {
+        seenAt: new Date(),
+      }
+    );
+
+    // Güncellenen mesajları getir
+    const updatedMessages = await Message.find({
+      conversation: conversationId,
+      receiver: userId,
+      seenAt: { $ne: null },
+    }).populate("sender receiver", "_id username avatar");
+
+    res.json({
+      message: "Mesajlar görüldü olarak işaretlendi",
+      updatedCount: result.modifiedCount,
+      messages: updatedMessages,
+    });
+  } catch (err) {
+    console.error("Mark messages as seen error:", err);
+    res.status(500).json({
+      message: "Mesajlar görüldü olarak işaretlenemedi",
+      error: err.message,
+    });
+  }
+};
+
+// Okunmamış mesaj sayısını getir
+exports.getUnreadMessageCount = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: "Kullanıcı ID gerekli" });
+    }
+
+    // Farklı conversationId'leri distinct olarak bul
+    const unreadConversations = await Message.distinct("conversation", {
+      receiver: userId,
+      seenAt: null,
+    });
+
+    res.json({
+      unreadCount: unreadConversations.length,
+      userId,
+    });
+  } catch (err) {
+    console.error("Get unread message count error:", err);
+    res.status(500).json({
+      message: "Okunmamış mesaj sayısı getirilemedi",
+      error: err.message,
+    });
+  }
+};
+
+// DM (conversation) ve içindeki tüm mesajları sil
+exports.deleteConversation = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.body;
+    if (!conversationId || !userId) {
+      return res.status(400).json({ message: "Eksik veri" });
+    }
+    // Conversation kontrolü
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation bulunamadı" });
+    }
+    if (!conversation.users.includes(userId)) {
+      return res
+        .status(403)
+        .json({ message: "Bu conversation'a erişim izniniz yok" });
+    }
+    // Mesajları sil
+    await Message.deleteMany({ conversation: conversationId });
+    // Conversation'ı sil
+    await Conversation.findByIdAndDelete(conversationId);
+    res.json({ message: "DM ve tüm mesajlar silindi" });
+  } catch (err) {
+    res.status(500).json({ message: "DM silinemedi", error: err.message });
   }
 };

@@ -8,4 +8,8 @@ const conversationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Performans için index'ler
+conversationSchema.index({ users: 1 }); // Kullanıcı conversation'ları için
+conversationSchema.index({ updatedAt: -1 }); // Tarih sıralaması için
+
 module.exports = mongoose.model("Conversation", conversationSchema);

@@ -118,23 +118,13 @@ const ArchiveScreen: React.FC = () => {
   // Story'nin 24 saat geçip geçmediğini kontrol et
   const isStoryWithin24Hours = (story: any) => {
     if (!story.createdAt) {
-      console.log("Story createdAt yok:", story);
       return false;
     }
     const storyDate = new Date(story.createdAt);
     const now = new Date();
     const diffInHours =
       (now.getTime() - storyDate.getTime()) / (1000 * 60 * 60);
-    console.log(
-      "Story:",
-      story.username || "Unknown",
-      "Tarih:",
-      storyDate,
-      "Saat farkı:",
-      diffInHours,
-      "24 saat içinde:",
-      diffInHours < 24
-    );
+
     return diffInHours < 24;
   };
 

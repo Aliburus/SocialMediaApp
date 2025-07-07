@@ -323,8 +323,6 @@ const MapScreen: React.FC = () => {
         username = user?.username;
         userGender = user?.gender;
         setIsPlusUser(!!user?.isPlusUser);
-        console.log("MapScreen: User from context:", user);
-        console.log("MapScreen: Avatar URL:", avatarUrl);
 
         // Local dosya URL'sini base64'e çevir (WebView için)
         if (avatarUrl && avatarUrl.startsWith("file://")) {
@@ -333,7 +331,6 @@ const MapScreen: React.FC = () => {
               encoding: FileSystem.EncodingType.Base64,
             });
             avatarUrl = `data:image/jpeg;base64,${base64}`;
-            console.log("MapScreen: Converted to base64");
           } catch (error) {
             console.error(
               "MapScreen: Error converting avatar to base64:",
@@ -445,7 +442,6 @@ const MapScreen: React.FC = () => {
   // Tab'a basıldığında refresh
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
-      console.log("Map tab pressed - refreshing...");
       setRefreshing(true);
       // Map için konum izinlerini tekrar kontrol et
       setPermission("unknown");

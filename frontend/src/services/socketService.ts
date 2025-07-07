@@ -73,6 +73,13 @@ class SocketService {
     }
   }
 
+  // Mesajları görüldü olarak işaretle
+  markMessagesAsSeen(userId: string, conversationId: string) {
+    if (this.socket && this.isConnected) {
+      this.socket.emit("mark_messages_seen", { userId, conversationId });
+    }
+  }
+
   onNewMessage(callback: (data: any) => void) {
     if (this.socket) {
       this.socket.on("new_message", callback);
@@ -94,6 +101,20 @@ class SocketService {
   onUserStoppedTyping(callback: (data: any) => void) {
     if (this.socket) {
       this.socket.on("user_stopped_typing", callback);
+    }
+  }
+
+  // Mesajların görüldüğünü dinle
+  onMessagesSeen(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on("messages_seen", callback);
+    }
+  }
+
+  // Okunmamış mesaj sayısı güncellemesini dinle
+  onUnreadCountUpdate(callback: (data: any) => void) {
+    if (this.socket) {
+      this.socket.on("unread_count_update", callback);
     }
   }
 

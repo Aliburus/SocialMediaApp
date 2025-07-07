@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,14 +6,20 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { mockUsers } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getProfile, followUser, unfollowUser } from "../services/api";
+import {
+  getProfile,
+  followUser,
+  unfollowUser,
+  sendFollowRequest,
+} from "../services/api";
+import FollowButton from "../components/FollowButton";
 
 const FollowersScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -61,7 +67,11 @@ const FollowersScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  const handleFollowToggle = async (userId: string, isFollowing: boolean) => {
+  const handleFollowToggle = async (
+    userId: string,
+    isFollowing: boolean,
+    isPrivateAccount: boolean
+  ) => {
     try {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
@@ -71,7 +81,11 @@ const FollowersScreen: React.FC = () => {
       if (isFollowing) {
         await unfollowUser(myId, userId);
       } else {
-        await followUser(myId, userId);
+        if (isPrivateAccount) {
+          await sendFollowRequest(myId, userId);
+        } else {
+          await followUser(myId, userId);
+        }
       }
 
       // Güncel profil çek ve followers listesini güncelle
@@ -94,6 +108,11 @@ const FollowersScreen: React.FC = () => {
         })
       );
       setFollowersList(detailedFollowers);
+
+      // HomeScreen'de postları anında güncelle
+      if (typeof window !== "undefined" && (window as any).__onFollowChange) {
+        (window as any).__onFollowChange();
+      }
     } catch (err) {
       console.error("Follow toggle error:", err);
     }
@@ -118,32 +137,20 @@ const FollowersScreen: React.FC = () => {
           {item.fullName}
         </Text>
       </View>
-      <TouchableOpacity
-        style={[
-          styles.removeButton,
-          {
-            backgroundColor: item.isFollowing
-              ? colors.primary
-              : colors.background,
-            borderWidth: item.isFollowing ? 0 : 1,
-            borderColor: colors.primary,
-          },
-        ]}
+      <FollowButton
+        type={item.isFollowing ? "unfollow" : "follow"}
         onPress={() =>
-          handleFollowToggle(item._id || item.id, item.isFollowing)
+          handleFollowToggle(
+            item._id || item.id,
+            item.isFollowing,
+            item.privateAccount
+          )
         }
-      >
-        <Text
-          style={[
-            styles.removeButtonText,
-            { color: item.isFollowing ? colors.background : colors.primary },
-          ]}
-        >
-          {item.isFollowing ? "Takipten Çık" : "Takip Et"}
-        </Text>
-      </TouchableOpacity>
+      />
     </TouchableOpacity>
   );
+
+  const memoizedFollowers = useMemo(() => followersList, [followersList]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -158,7 +165,7 @@ const FollowersScreen: React.FC = () => {
         <View style={styles.placeholder} />
       </View>
       <FlatList
-        data={followersList}
+        data={memoizedFollowers}
         refreshing={refreshing}
         onRefresh={onRefresh}
         renderItem={renderFollowerItem}
@@ -167,6 +174,10 @@ const FollowersScreen: React.FC = () => {
         }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.followersList}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        removeClippedSubviews={true}
       />
     </SafeAreaView>
   );

@@ -9,7 +9,6 @@ import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
 import { UserProvider, useUser } from "./src/context/UserContext";
 import {
   Text,
-  Platform,
   View,
   Image,
   TouchableOpacity,
@@ -17,7 +16,6 @@ import {
   LogBox,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect } from "@react-navigation/native";
 import { getProfile } from "./src/services/api";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import socketService from "./src/services/socketService";
@@ -31,7 +29,6 @@ LogBox.ignoreLogs([
 // Screens
 import HomeScreen from "./src/screens/HomeScreen";
 import SearchScreen from "./src/screens/SearchScreen";
-import CameraScreen from "./src/screens/CameraScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
 import PostDetailScreen from "./src/screens/PostDetailScreen";
 import EditProfileScreen from "./src/screens/EditProfileScreen";
@@ -63,6 +60,75 @@ const Stack = createStackNavigator();
 function MainTabs({ onLogout }: { onLogout: () => void }) {
   const { colors, isDark } = useTheme();
   const { user } = useUser();
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+  // Okunmamış mesaj sayısını getir
+  const fetchUnreadCount = async () => {
+    try {
+      if (user?.id || user?._id) {
+        const userId = user.id || user._id;
+        if (userId) {
+          // Lazy import - performans için
+          const api = await import("./src/services/api");
+          const data = await api.getUnreadMessageCount(userId);
+          setUnreadMessageCount(data.unreadCount || 0);
+        }
+      }
+    } catch (error) {
+      console.error("Unread count fetch error:", error);
+      // Hata durumunda 0 olarak ayarla
+      setUnreadMessageCount(0);
+    }
+  };
+
+  // Okunmamış bildirim sayısını getir
+  const fetchUnreadNotifCount = async () => {
+    try {
+      if (user?.id || user?._id) {
+        const userId = user.id || user._id;
+        if (userId) {
+          const api = await import("./src/services/api");
+          const data = await api.getUnreadNotificationCount(userId);
+          setUnreadNotifCount(data.unreadCount || 0);
+        }
+      }
+    } catch (error) {
+      console.error("Unread notification count fetch error:", error);
+      // Hata durumunda 0 olarak ayarla
+      setUnreadNotifCount(0);
+    }
+  };
+
+  // Socket event listener'ı
+  useEffect(() => {
+    if (user?.id || user?._id) {
+      const userId = user.id || user._id;
+      socketService.onUnreadCountUpdate((data) => {
+        if (data.userId === userId) {
+          setUnreadMessageCount(data.unreadCount);
+        }
+      });
+
+      // İlk yükleme - geciktirilmiş (performans için)
+      const timer1 = setTimeout(() => {
+        fetchUnreadCount();
+      }, 1000);
+      const timer2 = setTimeout(() => {
+        fetchUnreadNotifCount();
+      }, 1200);
+
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        socketService.off("unread_count_update");
+      };
+    }
+
+    return () => {
+      socketService.off("unread_count_update");
+    };
+  }, [user]);
 
   const handleProfileLongPress = () => {
     Alert.alert(
@@ -141,6 +207,10 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
                 />
               </TouchableOpacity>
             );
+          } else if (route.name === "DMList") {
+            return null;
+          } else if (route.name === "Notifications") {
+            return null;
           } else {
             iconName = "home-outline";
           }
@@ -162,7 +232,7 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
           bottom: 0,
           zIndex: 10,
         },
-        headerShown: false,
+        headerShown: route.name === "Home",
         headerTitle: () => null,
         headerStyle: {
           backgroundColor: colors.background,
@@ -173,17 +243,98 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
         },
         headerRight: () =>
           route.name === "Home" ? (
-            <Ionicons
-              name="paper-plane-outline"
-              size={28}
-              color={colors.text}
-              style={{ marginRight: 16 }}
-              onPress={() => navigation.navigate("DMList")}
-            />
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginRight: 16,
+              }}
+            >
+              {/* DM İkonu */}
+              <TouchableOpacity
+                style={{ position: "relative", marginRight: 16 }}
+                onPress={() => navigation.navigate("DMList")}
+              >
+                <Ionicons
+                  name="paper-plane-outline"
+                  size={28}
+                  color={colors.text}
+                />
+                {unreadMessageCount > 0 && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -5,
+                      right: -5,
+                      backgroundColor: "red",
+                      borderRadius: 10,
+                      minWidth: 20,
+                      height: 20,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "white",
+                        fontSize: 12,
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              {/* Bildirim (Kalp) İkonu */}
+              <TouchableOpacity
+                style={{ position: "relative" }}
+                onPress={() => {
+                  navigation.navigate("Notifications");
+                  setUnreadNotifCount(0);
+                }}
+              >
+                <Ionicons name="heart-outline" size={28} color={colors.text} />
+                {unreadNotifCount > 0 && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -5,
+                      right: -5,
+                      backgroundColor: "red",
+                      borderRadius: 10,
+                      minWidth: 20,
+                      height: 20,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "white",
+                        fontSize: 12,
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {unreadNotifCount > 99 ? "99+" : unreadNotifCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           ) : null,
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Home">
+        {() => (
+          <HomeScreen
+            unreadMessageCount={unreadMessageCount}
+            unreadNotifCount={unreadNotifCount}
+          />
+        )}
+      </Tab.Screen>
       <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen
         name="AddPost"

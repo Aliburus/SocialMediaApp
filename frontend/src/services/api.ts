@@ -4,6 +4,25 @@ import { BACKEND_URL } from "@env";
 
 const API_URL: string = BACKEND_URL;
 
+// Basit cache sistemi
+const cache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
+
+const getCachedData = (key: string) => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.data;
+  }
+  return null;
+};
+
+const setCachedData = (key: string, data: any) => {
+  cache.set(key, {
+    data,
+    timestamp: Date.now(),
+  });
+};
+
 const api = axios.create({
   baseURL: API_URL + "/api",
   withCredentials: true,
@@ -13,7 +32,14 @@ export default api;
 
 // Tüm postları listele
 export const getAllPosts = async (userId?: string) => {
+  const cacheKey = `posts_${userId || "all"}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const res = await api.get("/posts" + (userId ? `?userId=${userId}` : ""));
+  setCachedData(cacheKey, res.data);
   return res.data;
 };
 
@@ -91,8 +117,15 @@ export const getProfile = async (userId: string) => {
 
 // Story'leri getir (kullanıcıya göre izlenmişlik için userId parametresi alır)
 export const getStories = async (userId?: string) => {
+  const cacheKey = `stories_${userId || "all"}`;
+  const cached = getCachedData(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const url = userId ? `/users/stories?userId=${userId}` : "/users/stories";
   const res = await api.get(url);
+  setCachedData(cacheKey, res.data);
   return res.data;
 };
 
@@ -267,6 +300,31 @@ export const sendMessage = async (payload: {
   return res.data;
 };
 
+// Mesajları görüldü olarak işaretle
+export const markMessagesAsSeen = async (
+  userId: string,
+  conversationId: string
+) => {
+  console.log("API markMessagesAsSeen - Gönderilecek:", {
+    userId,
+    conversationId,
+  });
+  const res = await api.post("/users/mark-messages-seen", {
+    userId,
+    conversationId,
+  });
+  console.log("API markMessagesAsSeen - Response:", res.data);
+  return res.data;
+};
+
+// Okunmamış mesaj sayısını getir
+export const getUnreadMessageCount = async (userId: string) => {
+  console.log("API getUnreadMessageCount - Gönderilecek:", { userId });
+  const res = await api.get(`/users/${userId}/unread-count`);
+  console.log("API getUnreadMessageCount - Response:", res.data);
+  return res.data;
+};
+
 // Kullanıcının arkadaş listesini getir
 export const getUserFriends = async (userId: string) => {
   const res = await api.get(`/users/${userId}/friends`);
@@ -305,5 +363,28 @@ export const updateNotificationSettings = async (
 
 export const archivePost = async (postId: string, archived: boolean = true) => {
   const res = await api.post(`/posts/${postId}/archive`, { archived });
+  return res.data;
+};
+
+// Okunmamış bildirim sayısını getir
+export const getUnreadNotificationCount = async (userId: string) => {
+  const res = await api.get(`/notifications/${userId}/unread-count`);
+  return res.data;
+};
+
+// DM silme
+export const deleteConversation = async (
+  userId: string,
+  conversationId: string
+) => {
+  const res = await api.post("/users/delete-conversation", {
+    userId,
+    conversationId,
+  });
+  return res.data;
+};
+
+export const markAllNotificationsAsRead = async (userId: string) => {
+  const res = await api.put(`/notifications/${userId}/read-all`);
   return res.data;
 };

@@ -18,7 +18,6 @@ import {
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import { mockUsers, mockPosts } from "../data/mockData";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getUserPosts, getProfile, getSavedPosts } from "../services/api";
@@ -26,10 +25,6 @@ import PostCard from "../components/PostCard";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
-
-const mockReels = mockPosts.slice(0, 6); // örnek için aynı postlar
-const mockSaved = mockPosts.slice(3, 9); // örnek için farklı postlar
-const mockTagged = mockPosts.slice(6, 12); // örnek için farklı postlar
 
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -129,7 +124,6 @@ const ProfileScreen: React.FC = () => {
   // Tab'a basıldığında refresh
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("tabPress", () => {
-      console.log("Profile tab pressed - refreshing...");
       setRefreshing(true);
       Promise.all([fetchUserData(), fetchUserPosts()]).finally(() => {
         setRefreshing(false);
@@ -194,17 +188,17 @@ const ProfileScreen: React.FC = () => {
   );
 
   let tabData = userPosts.filter((p) => !p.archived);
-  if (activeTab === "reels") tabData = mockReels.filter((p) => !p.archived);
+  if (activeTab === "reels")
+    tabData = userPosts.filter((p) => p.type === "reel" || p.isReel);
   if (activeTab === "saved") tabData = savedPosts.filter((p) => !p.archived);
-  if (activeTab === "tagged") tabData = mockTagged.filter((p) => !p.archived);
+  if (activeTab === "tagged")
+    tabData = userPosts.filter((p) => p.type === "tagged");
 
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchUserData();
     setRefreshing(false);
   };
-
-  const userReels = userPosts.filter((p) => p.type === "reel" || p.isReel);
 
   return (
     <SafeAreaView
@@ -213,7 +207,7 @@ const ProfileScreen: React.FC = () => {
     >
       <Animated.View style={{ flex: 1 }} {...panResponder.panHandlers}>
         <FlatList
-          data={activeTab === "reels" ? userReels : tabData}
+          data={activeTab === "reels" ? userPosts : tabData}
           keyExtractor={(item) => item._id || item.id}
           numColumns={3}
           renderItem={renderPostItem}

@@ -6,6 +6,7 @@ import { Story } from "../types";
 interface StoryItemProps {
   story: Story;
   onPress?: () => void;
+  onLongPress?: () => void;
   isActive?: boolean;
   isViewed?: boolean;
   totalStories?: number;
@@ -15,6 +16,7 @@ interface StoryItemProps {
 const StoryItem: React.FC<StoryItemProps> = ({
   story,
   onPress,
+  onLongPress,
   isActive,
   isViewed,
   totalStories,
@@ -34,7 +36,11 @@ const StoryItem: React.FC<StoryItemProps> = ({
     viewedStories < totalStories;
 
   return (
-    <TouchableOpacity onPress={onPress} style={styles.container}>
+    <TouchableOpacity
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={styles.container}
+    >
       <View style={styles.imageContainer}>
         {hasBeenViewed ? (
           <View style={styles.outerBorderGray}>

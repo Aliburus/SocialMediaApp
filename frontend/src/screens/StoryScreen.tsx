@@ -29,6 +29,7 @@ import {
   unarchiveStory,
 } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ShareModal } from "../components/ShareModal";
 
 const { width, height } = Dimensions.get("window");
 
@@ -59,6 +60,7 @@ const StoryScreen: React.FC = () => {
   const [progressValue, setProgressValue] = React.useState(0);
   const [remainingDuration, setRemainingDuration] = React.useState(8000);
   const [showOptions, setShowOptions] = React.useState(false);
+  const [showShareModal, setShowShareModal] = React.useState(false);
 
   // Story'nin 24 saat geçip geçmediğini kontrol et
   const isStoryWithin24Hours = (story: any) => {
@@ -69,13 +71,6 @@ const StoryScreen: React.FC = () => {
       (now.getTime() - storyDate.getTime()) / (1000 * 60 * 60);
     return diffInHours < 24;
   };
-
-  console.log("StoryScreen - fromArchive:", fromArchive);
-  console.log("StoryScreen - current story:", stories[current]);
-  console.log(
-    "StoryScreen - isStoryWithin24Hours:",
-    isStoryWithin24Hours(stories[current])
-  );
 
   const translateY = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
@@ -159,9 +154,7 @@ const StoryScreen: React.FC = () => {
   useEffect(() => {
     // Story izlenmiş olarak işaretle
     if (stories[current]?._id && userId) {
-      viewStory(stories[current]._id, userId).catch((err: any) => {
-        console.log("Story view error:", err);
-      });
+      viewStory(stories[current]._id, userId).catch((err: any) => {});
     }
   }, [current, userId]);
 
@@ -173,9 +166,7 @@ const StoryScreen: React.FC = () => {
         if (userId && stories.length > 0) {
           stories.forEach((story) => {
             if (story._id) {
-              viewStory(story._id, userId).catch((err: any) => {
-                console.log("Story view error:", err);
-              });
+              viewStory(story._id, userId).catch((err: any) => {});
             }
           });
         }
@@ -252,10 +243,9 @@ const StoryScreen: React.FC = () => {
   // Story silme fonksiyonu
   const handleDeleteStory = async () => {
     try {
-      console.log("Story silme başlatılıyor:", stories[current]?._id, userId);
       if (stories[current]?._id && userId) {
         const result = await deleteStory(stories[current]._id, userId);
-        console.log("Story silme sonucu:", result);
+
         setShowOptions(false);
         // Story silindikten sonra HomeScreen'e dön ve story'leri yenile
         if (navigation.canGoBack()) {
@@ -265,7 +255,6 @@ const StoryScreen: React.FC = () => {
         }
       }
     } catch (error) {
-      console.log("Story silme hatası:", error);
       // Hata durumunda da kapat
       setShowOptions(false);
     }
@@ -274,14 +263,8 @@ const StoryScreen: React.FC = () => {
   // Story arşivleme fonksiyonu
   const handleArchiveStory = async () => {
     try {
-      console.log(
-        "Story arşivleme başlatılıyor:",
-        stories[current]?._id,
-        userId
-      );
       if (stories[current]?._id && userId) {
         const result = await archiveStory(stories[current]._id, userId);
-        console.log("Story arşivleme sonucu:", result);
         setShowOptions(false);
         // Story arşivlendikten sonra HomeScreen'e dön ve story'leri yenile
         if (navigation.canGoBack()) {
@@ -291,7 +274,6 @@ const StoryScreen: React.FC = () => {
         }
       }
     } catch (error) {
-      console.log("Story arşivleme hatası:", error);
       // Hata durumunda da kapat
       setShowOptions(false);
     }
@@ -488,7 +470,10 @@ const StoryScreen: React.FC = () => {
                 placeholder="Send message"
                 placeholderTextColor="rgba(255,255,255,0.6)"
               />
-              <TouchableOpacity style={styles.actionButton}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => setShowShareModal(true)}
+              >
                 <Ionicons name="paper-plane-outline" size={28} color="#fff" />
               </TouchableOpacity>
             </View>
@@ -542,6 +527,13 @@ const StoryScreen: React.FC = () => {
           </View>
         )}
       </SafeAreaView>
+
+      {/* Share Modal */}
+      <ShareModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        story={stories[current]}
+      />
     </>
   );
 };
@@ -609,6 +601,7 @@ const styles = StyleSheet.create({
   },
   moreButton: {
     padding: 4,
+    marginLeft: 12,
   },
   inputRowContainer: {
     position: "absolute",
@@ -676,6 +669,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     marginLeft: 12,
+  },
+  shareButton: {
+    padding: 4,
+    marginRight: 8,
   },
 });
 

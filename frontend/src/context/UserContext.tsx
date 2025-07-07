@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getProfile } from "../services/api";
 
 interface User {
   _id?: string;
@@ -48,8 +49,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       const userStr = await AsyncStorage.getItem("user");
       if (userStr) {
         const userObj = JSON.parse(userStr);
-        console.log("UserContext: Refreshing user from storage:", userObj);
-        setUser(userObj);
+        const freshUser = await getProfile(userObj._id || userObj.id);
+        console.log("UserContext: Refreshing user from API:", freshUser);
+        setUser(freshUser);
+        AsyncStorage.setItem("user", JSON.stringify(freshUser));
       }
     } catch (error) {
       console.error("Error refreshing user:", error);

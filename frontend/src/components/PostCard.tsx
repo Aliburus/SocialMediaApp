@@ -10,6 +10,7 @@ import {
   FlatList,
   Alert,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import {
   PinchGestureHandler,
@@ -153,6 +154,8 @@ const PostCard: React.FC<PostCardProps> = ({
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const navigation = useNavigation<any>();
+  const [imageLoading, setImageLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Pinch-to-zoom için state'ler
   const scale = useRef(new Animated.Value(1)).current;
@@ -426,7 +429,16 @@ const PostCard: React.FC<PostCardProps> = ({
             <Image
               source={{ uri: post.image }}
               style={[styles.postImage, { backgroundColor: colors.background }]}
+              onLoad={() => setImageLoading(false)}
+              onError={() => setImageLoading(true)}
             />
+            {imageLoading && (
+              <ActivityIndicator
+                style={styles.loadingIndicator}
+                size="small"
+                color={colors.text}
+              />
+            )}
           </TouchableOpacity>
         </Animated.View>
       </PinchGestureHandler>
@@ -800,6 +812,12 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 16,
     fontWeight: "bold",
+  },
+  loadingIndicator: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -12 }, { translateY: -12 }],
   },
 });
 

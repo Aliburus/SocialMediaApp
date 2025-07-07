@@ -82,7 +82,6 @@ const CommentScreen: React.FC = () => {
       setInput("");
       fetchComments();
     } catch (err: any) {
-      console.log("Yorum ekleme hatası:", err, err?.response?.data);
       let msg = "Yorum eklenemedi";
       if (err?.response?.data?.message) msg = err.response.data.message;
       else if (err?.message) msg = err.message;
