@@ -13,12 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  getProfile,
-  followUser,
-  unfollowUser,
-  sendFollowRequest,
-} from "../services/api";
+import { getProfile } from "../services/api";
 import FollowButton from "../components/FollowButton";
 
 const FollowersScreen: React.FC = () => {
@@ -26,6 +21,7 @@ const FollowersScreen: React.FC = () => {
   const { colors } = useTheme();
   const [followersList, setFollowersList] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [myId, setMyId] = useState<string>("");
 
   const fetchFollowers = async () => {
     try {
@@ -57,6 +53,14 @@ const FollowersScreen: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    (async () => {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      setMyId(userObj?._id || userObj?.id || "");
+    })();
+  }, []);
+
   React.useEffect(() => {
     fetchFollowers();
   }, []);
@@ -65,57 +69,6 @@ const FollowersScreen: React.FC = () => {
     setRefreshing(true);
     await fetchFollowers();
     setRefreshing(false);
-  };
-
-  const handleFollowToggle = async (
-    userId: string,
-    isFollowing: boolean,
-    isPrivateAccount: boolean
-  ) => {
-    try {
-      const userStr = await AsyncStorage.getItem("user");
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      const myId = userObj?._id || userObj?.id;
-      if (!myId) return;
-
-      if (isFollowing) {
-        await unfollowUser(myId, userId);
-      } else {
-        if (isPrivateAccount) {
-          await sendFollowRequest(myId, userId);
-        } else {
-          await followUser(myId, userId);
-        }
-      }
-
-      // Güncel profil çek ve followers listesini güncelle
-      const updatedProfile = await getProfile(myId);
-      const followingIds = (updatedProfile.following || []).map(
-        (f: any) => f._id || f.id || f
-      );
-      const followers = updatedProfile.followers || [];
-
-      const detailedFollowers = await Promise.all(
-        followers.map(async (f: any) => {
-          let user = f;
-          if (!(typeof f === "object" && f.avatar)) {
-            user = await getProfile(f._id || f.id || f);
-          }
-          return {
-            ...user,
-            isFollowing: followingIds.includes(user._id || user.id || user),
-          };
-        })
-      );
-      setFollowersList(detailedFollowers);
-
-      // HomeScreen'de postları anında güncelle
-      if (typeof window !== "undefined" && (window as any).__onFollowChange) {
-        (window as any).__onFollowChange();
-      }
-    } catch (err) {
-      console.error("Follow toggle error:", err);
-    }
   };
 
   const renderFollowerItem = ({ item }: { item: any }) => (
@@ -138,14 +91,10 @@ const FollowersScreen: React.FC = () => {
         </Text>
       </View>
       <FollowButton
-        type={item.isFollowing ? "unfollow" : "follow"}
-        onPress={() =>
-          handleFollowToggle(
-            item._id || item.id,
-            item.isFollowing,
-            item.privateAccount
-          )
-        }
+        currentUserId={myId}
+        targetUserId={item._id || item.id}
+        username={item.username}
+        style={{ marginLeft: 8 }}
       />
     </TouchableOpacity>
   );

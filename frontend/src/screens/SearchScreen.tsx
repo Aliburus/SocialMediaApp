@@ -108,57 +108,9 @@ const SearchScreen: React.FC = () => {
 
   const filteredUsers: any[] = [];
 
-  const handleSendRequest = async (userId: string) => {
-    setLoadingMap((prev) => ({ ...prev, [userId]: true }));
-    try {
-      await sendFollowRequest(currentUserId, userId);
-      setRequestSentMap((prev) => ({ ...prev, [userId]: true }));
-      setSearchResults((prev) =>
-        prev.map((u) =>
-          u._id === userId || u.id === userId
-            ? {
-                ...u,
-                pendingFollowRequests: [
-                  ...(u.pendingFollowRequests || []),
-                  currentUserId,
-                ],
-              }
-            : u
-        )
-      );
-    } catch (err) {}
-    setLoadingMap((prev) => ({ ...prev, [userId]: false }));
-  };
-
-  const handleCancelRequest = async (userId: string) => {
-    setLoadingMap((prev) => ({ ...prev, [userId]: true }));
-    try {
-      await cancelFollowRequest(currentUserId, userId);
-      setRequestSentMap((prev) => ({ ...prev, [userId]: false }));
-      setSearchResults((prev) =>
-        prev.map((u) =>
-          u._id === userId || u.id === userId
-            ? {
-                ...u,
-                pendingFollowRequests: (u.pendingFollowRequests || []).filter(
-                  (id: string) => id !== currentUserId
-                ),
-              }
-            : u
-        )
-      );
-    } catch (err) {}
-    setLoadingMap((prev) => ({ ...prev, [userId]: false }));
-  };
-
   const renderUserItem = ({ item }: { item: any }) => {
     if (!item || !item.username) return null;
     const userId = item._id || item.id;
-    const requestSent =
-      requestSentMap[userId] ??
-      (item.pendingFollowRequests?.includes(currentUserId) ||
-        item.sentFollowRequests?.includes(userId));
-    const loading = loadingMap[userId] || false;
     return (
       <TouchableOpacity
         style={styles.userItem}
@@ -181,22 +133,14 @@ const SearchScreen: React.FC = () => {
             )}
           </View>
         </View>
-        {userId !== currentUserId &&
-          (requestSent ? (
-            <FollowButton
-              type="cancel_request"
-              onPress={() => handleCancelRequest(userId)}
-              disabled={loading}
-              style={styles.followButton}
-            />
-          ) : (
-            <FollowButton
-              type="follow"
-              onPress={() => handleSendRequest(userId)}
-              disabled={loading}
-              style={styles.followButton}
-            />
-          ))}
+        {userId !== currentUserId && (
+          <FollowButton
+            currentUserId={currentUserId}
+            targetUserId={userId}
+            username={item.username}
+            style={styles.followButton}
+          />
+        )}
       </TouchableOpacity>
     );
   };

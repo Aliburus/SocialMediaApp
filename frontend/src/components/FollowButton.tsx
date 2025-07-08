@@ -1,93 +1,138 @@
-import React from "react";
-import { TouchableOpacity, Text, StyleSheet } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
 import { useTheme } from "../context/ThemeContext";
-
-export type FollowButtonType =
-  | "follow"
-  | "unfollow"
-  | "accept"
-  | "reject"
-  | "follow_back"
-  | "cancel_request"
-  | "pending_request";
+import {
+  followUser,
+  unfollowUser,
+  sendFollowRequest,
+  cancelFollowRequest,
+  getFollowStatus,
+} from "../services/followApi";
 
 interface FollowButtonProps {
-  type: FollowButtonType;
-  onPress: () => void;
-  disabled?: boolean;
-  size?: "small" | "medium" | "large";
+  currentUserId: string;
+  targetUserId: string;
+  username: string;
+  onStatusChange?: () => void;
   style?: any;
+  size?: "small" | "medium" | "large";
 }
 
 const FollowButton: React.FC<FollowButtonProps> = ({
-  type,
-  onPress,
-  disabled = false,
-  size = "medium",
+  currentUserId,
+  targetUserId,
+  username,
+  onStatusChange,
   style,
+  size = "medium",
 }) => {
   const { colors } = useTheme();
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState({
+    isFollowing: false,
+    isFollowedBy: false,
+    isRequestedByMe: false,
+    isRequestedByOther: false,
+    isPrivate: false,
+  });
 
-  const getButtonConfig = () => {
-    switch (type) {
-      case "follow":
-        return {
-          text: "Takip Et",
-          backgroundColor: colors.primary,
-          textColor: colors.background,
-          borderColor: colors.primary,
-        };
-      case "unfollow":
-        return {
-          text: "Takipten Çık",
-          backgroundColor: colors.surface,
-          textColor: colors.text,
-          borderColor: colors.border,
-        };
-      case "accept":
-        return {
-          text: "Onayla",
-          backgroundColor: colors.primary,
-          textColor: colors.background,
-          borderColor: colors.primary,
-        };
-      case "reject":
-        return {
-          text: "Reddet",
-          backgroundColor: colors.surface,
-          textColor: colors.text,
-          borderColor: colors.border,
-        };
-      case "follow_back":
-        return {
-          text: "Geri Takip Et",
-          backgroundColor: colors.primary,
-          textColor: colors.background,
-          borderColor: colors.primary,
-        };
-      case "cancel_request":
-        return {
-          text: "İsteği İptal Et",
-          backgroundColor: colors.surface,
-          textColor: colors.text,
-          borderColor: colors.border,
-        };
-      case "pending_request":
-        return {
-          text: "Onay Bekliyor",
-          backgroundColor: colors.surface,
-          textColor: colors.text,
-          borderColor: colors.border,
-        };
-      default:
-        return {
-          text: "Takip Et",
-          backgroundColor: colors.primary,
-          textColor: colors.background,
-          borderColor: colors.primary,
-        };
+  const updateStatus = async () => {
+    try {
+      const s = await getFollowStatus(currentUserId, targetUserId);
+      setStatus(s);
+    } catch (e) {
+      // Hata yönetimi
+    } finally {
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    setLoading(true);
+    updateStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId, targetUserId]);
+
+  const handleFollow = async () => {
+    setLoading(true);
+    try {
+      if (status.isPrivate) {
+        await sendFollowRequest(currentUserId, targetUserId);
+      } else {
+        await followUser(currentUserId, targetUserId);
+      }
+      await updateStatus();
+      onStatusChange?.();
+    } catch (e) {
+      // Hata yönetimi
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnfollow = async () => {
+    Alert.alert(`${username} takipten çıkmak istiyor musun?`, "", [
+      { text: "İptal", style: "cancel" },
+      {
+        text: "Evet",
+        style: "destructive",
+        onPress: async () => {
+          setLoading(true);
+          await unfollowUser(currentUserId, targetUserId);
+          await updateStatus();
+          setLoading(false);
+          onStatusChange?.();
+        },
+      },
+    ]);
+  };
+
+  const handleCancelRequest = async () => {
+    Alert.alert("Takip isteğini iptal etmek istiyor musun?", "", [
+      { text: "İptal", style: "cancel" },
+      {
+        text: "Evet",
+        style: "destructive",
+        onPress: async () => {
+          setLoading(true);
+          await cancelFollowRequest(currentUserId, targetUserId);
+          await updateStatus();
+          setLoading(false);
+          onStatusChange?.();
+        },
+      },
+    ]);
+  };
+
+  // BUTON METNİ VE AKSİYON
+  let buttonText = "";
+  let onPress = handleFollow;
+
+  if (loading) {
+    buttonText = "";
+    onPress = async () => {};
+  } else if (status.isFollowing) {
+    buttonText = "Takiptesin";
+    onPress = handleUnfollow;
+  } else if (status.isPrivate && status.isRequestedByMe) {
+    buttonText = "İstek Gönderildi";
+    onPress = handleCancelRequest;
+  } else if (status.isPrivate && status.isRequestedByOther) {
+    buttonText = "Onay Bekleniyor";
+    onPress = async () => {};
+  } else if (!status.isFollowing && status.isFollowedBy) {
+    buttonText = "Geri Takip Et";
+    onPress = handleFollow;
+  } else {
+    buttonText = "Takip Et";
+    onPress = handleFollow;
+  }
 
   const getSizeConfig = () => {
     switch (size) {
@@ -105,7 +150,7 @@ const FollowButton: React.FC<FollowButtonProps> = ({
           fontSize: 16,
           borderRadius: 8,
         };
-      default: // medium
+      default:
         return {
           paddingHorizontal: 16,
           paddingVertical: 8,
@@ -114,8 +159,6 @@ const FollowButton: React.FC<FollowButtonProps> = ({
         };
     }
   };
-
-  const config = getButtonConfig();
   const sizeConfig = getSizeConfig();
 
   return (
@@ -123,32 +166,38 @@ const FollowButton: React.FC<FollowButtonProps> = ({
       style={[
         styles.button,
         {
-          backgroundColor: config.backgroundColor,
-          borderColor: config.borderColor,
+          backgroundColor: status.isFollowing ? colors.surface : colors.primary,
+          borderColor: status.isFollowing ? colors.border : colors.primary,
           borderWidth: 1,
           paddingHorizontal: sizeConfig.paddingHorizontal,
           paddingVertical: sizeConfig.paddingVertical,
           borderRadius: sizeConfig.borderRadius,
-          opacity: disabled ? 0.6 : 1,
+          opacity: loading || buttonText === "Onay Bekleniyor" ? 0.6 : 1,
         },
         style,
       ]}
       onPress={onPress}
-      disabled={disabled}
+      disabled={
+        loading || buttonText === "" || buttonText === "Onay Bekleniyor"
+      }
       activeOpacity={0.7}
     >
-      <Text
-        style={[
-          styles.text,
-          {
-            color: config.textColor,
-            fontSize: sizeConfig.fontSize,
-            fontWeight: "bold",
-          },
-        ]}
-      >
-        {config.text}
-      </Text>
+      {loading || buttonText === "" ? (
+        <ActivityIndicator color={colors.text} />
+      ) : (
+        <Text
+          style={[
+            styles.text,
+            {
+              color: status.isFollowing ? colors.text : colors.background,
+              fontSize: sizeConfig.fontSize,
+              fontWeight: "bold",
+            },
+          ]}
+        >
+          {buttonText}
+        </Text>
+      )}
     </TouchableOpacity>
   );
 };

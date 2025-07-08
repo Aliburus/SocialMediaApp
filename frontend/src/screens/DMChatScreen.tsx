@@ -23,7 +23,7 @@ import {
   sendMessage,
   markMessagesAsSeen,
   getUnreadMessageCount,
-} from "../services/api";
+} from "../services/messageApi";
 import socketService from "../services/socketService";
 import { StackNavigationProp } from "@react-navigation/stack";
 

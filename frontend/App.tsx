@@ -19,6 +19,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getProfile } from "./src/services/api";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import socketService from "./src/services/socketService";
+import { getUnreadMessageCount } from "./src/services/messageApi";
+import { getUnreadNotificationCount } from "./src/services/notificationApi";
+import { getUnreadMessageCount as oldGetUnreadMessageCount } from "./src/services/messageApi";
+import { getUnreadNotificationCount as oldGetUnreadNotificationCount } from "./src/services/notificationApi";
 
 // StatusBar uyarılarını kapat
 LogBox.ignoreLogs([

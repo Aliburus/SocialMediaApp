@@ -19,12 +19,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   getUserConversations,
   getUserFriends,
-  getUnreadMessageCount,
   markMessagesAsSeen,
   deleteConversation,
 } from "../services/api";
 import socketService from "../services/socketService";
 import { Swipeable } from "react-native-gesture-handler";
+import { getUnreadMessageCount } from "../services/messageApi";
 
 const DMListScreen: React.FC<{
   setUnreadMessageCount?: (n: number) => void;

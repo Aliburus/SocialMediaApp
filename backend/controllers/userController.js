@@ -119,10 +119,34 @@ exports.updateProfile = async (req, res) => {
 exports.getProfile = async (req, res) => {
   try {
     const { userId } = req.params;
+    const { currentUserId } = req.query;
     if (!userId)
       return res.status(400).json({ message: "Kullanıcı bulunamadı" });
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+
+    let isFollowing = false;
+    let isFollowedBy = false;
+    let isRequestedByMe = false;
+    let isRequestedByOther = false;
+    if (currentUserId) {
+      isFollowing = user.followers
+        .map((id) => id.toString())
+        .includes(currentUserId.toString());
+      isFollowedBy = user.following
+        .map((id) => id.toString())
+        .includes(currentUserId.toString());
+      isRequestedByMe = user.pendingFollowRequests
+        .map((id) => id.toString())
+        .includes(currentUserId.toString());
+      // Benim pending listemde bu user varsa, o bana istek göndermiştir
+      const me = await User.findById(currentUserId);
+      isRequestedByOther =
+        me &&
+        me.pendingFollowRequests
+          .map((id) => id.toString())
+          .includes(userId.toString());
+    }
 
     res.json({
       _id: user._id,
@@ -138,6 +162,11 @@ exports.getProfile = async (req, res) => {
       pendingFollowRequests: user.pendingFollowRequests,
       sentFollowRequests: user.sentFollowRequests,
       privateAccount: user.privateAccount,
+      isFollowing,
+      isFollowedBy,
+      isRequestedByMe,
+      isRequestedByOther,
+      isPrivate: user.privateAccount,
     });
   } catch (err) {
     res
@@ -305,34 +334,36 @@ exports.sendFollowRequest = async (req, res) => {
     if (!userId || !targetUserId) {
       return res.status(400).json({ message: "Eksik veri" });
     }
-    if (userId === targetUserId) {
-      return res.status(400).json({ message: "Kendine istek gönderemezsin" });
-    }
-    const targetUser = await User.findById(targetUserId);
     const user = await User.findById(userId);
-    if (!targetUser || !user) {
+    const targetUser = await User.findById(targetUserId);
+    if (!user || !targetUser) {
       return res.status(404).json({ message: "Kullanıcı bulunamadı" });
     }
-
-    // Gizli hesap, takip isteği gönder
+    // Zaten istek varsa tekrar ekleme
     if (!targetUser.pendingFollowRequests.includes(userId)) {
       targetUser.pendingFollowRequests.push(userId);
-      // Bildirim ekle - gizli hesap için takip isteği bildirimi
-      await createOrUpdateNotification(targetUserId, userId, "follow_request");
-      await targetUser.save();
     }
     if (!user.sentFollowRequests.includes(targetUserId)) {
       user.sentFollowRequests.push(targetUserId);
-      await user.save();
     }
-    if (!user.sentFollowRequests.includes(targetUserId)) {
-      user.sentFollowRequests.push(targetUserId);
-      await user.save();
-    }
-    res.json({
-      pendingFollowRequests: targetUser.pendingFollowRequests,
-      sentFollowRequests: user.sentFollowRequests,
+    await targetUser.save();
+    await user.save();
+    // Aynı follow_request bildirimi yoksa oluştur
+    const existingNotif = await Notification.findOne({
+      recipient: targetUserId,
+      sender: userId,
+      type: "follow_request",
     });
+    if (!existingNotif) {
+      await createOrUpdateNotification(
+        targetUserId,
+        userId,
+        "follow_request",
+        null,
+        null
+      );
+    }
+    res.json({ success: true });
   } catch (err) {
     res
       .status(500)
@@ -355,11 +386,11 @@ exports.cancelFollowRequest = async (req, res) => {
     targetUser.pendingFollowRequests = targetUser.pendingFollowRequests.filter(
       (id) => id.toString() !== userId
     );
-    // Bildirimi sil
+    // Bildirimi sil (sadece ilgili follow_request)
     await Notification.deleteMany({
       recipient: targetUserId,
       sender: userId,
-      type: { $in: ["follow", "follow_request"] },
+      type: "follow_request",
     });
     await targetUser.save();
     user.sentFollowRequests = user.sentFollowRequests.filter(
@@ -473,6 +504,9 @@ exports.acceptFollowRequest = async (req, res) => {
       },
       { new: true }
     );
+
+    // Takip isteği kabul edildiğinde, isteği atan kişiye bildirim oluştur (her durumda)
+    await createOrUpdateNotification(requesterId, userId, "follow", null, null);
 
     await user.save();
     await requester.save();

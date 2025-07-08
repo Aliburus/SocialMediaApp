@@ -18,16 +18,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "../context/ThemeContext";
-import FollowButton from "../components/FollowButton";
 import {
   getNotifications,
   acceptFollowRequest,
   rejectFollowRequest,
-  followUser,
-  unfollowUser,
-  sendFollowRequest,
-  getNotificationSettings,
-  updateNotificationSettings,
   markAllNotificationsAsRead,
 } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -35,6 +29,7 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { Swipeable } from "react-native-gesture-handler";
 import { useUser } from "../context/UserContext";
+import FollowButton from "../components/FollowButton";
 
 type RootStackParamList = {
   UserProfile: { user: any };
@@ -169,65 +164,6 @@ function NotificationsScreen({
     }
   };
 
-  const handleFollowToggle = (notifId: string) => {
-    setNotifications((prev) =>
-      prev.map((notif) =>
-        notif.id === notifId
-          ? {
-              ...notif,
-              user: {
-                ...notif.user,
-                isFollowing: !notif.user.isFollowing,
-              },
-            }
-          : notif
-      )
-    );
-  };
-  const handleFollowBack = async (userId: string) => {
-    try {
-      const userStr = await AsyncStorage.getItem("user");
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      const currentUserId = userObj?._id || userObj?.id;
-      if (!currentUserId) return;
-
-      // Takip durumunu kontrol et
-      const isCurrentlyFollowed =
-        user &&
-        Array.isArray(user.following) &&
-        user.following.includes(userId);
-
-      if (isCurrentlyFollowed) {
-        // Takipten çık
-        await unfollowUser(currentUserId, userId);
-        setFollowedIds((prev) => prev.filter((id) => id !== userId));
-        await refreshUser();
-      } else {
-        // Kullanıcının gizli hesap olup olmadığını kontrol et
-        const targetUser = notifications.find(
-          (n) =>
-            (n.user?._id || n.user?.id) === userId ||
-            (n.from?._id || n.from?.id) === userId
-        );
-
-        if (
-          targetUser?.user?.privateAccount ||
-          targetUser?.from?.privateAccount
-        ) {
-          // Gizli hesap, takip isteği gönder
-          await sendFollowRequest(currentUserId, userId);
-        } else {
-          // Açık hesap, direkt takip et
-          await followUser(currentUserId, userId);
-          setFollowedIds((prev) => [...prev, userId]);
-          await refreshUser();
-        }
-      }
-    } catch (err) {
-      console.error("Follow/Unfollow error:", err);
-    }
-  };
-
   const handleMarkAsRead = (notifId: string) => {
     setNotifications((prev) =>
       prev.map((notif) =>
@@ -331,97 +267,134 @@ function NotificationsScreen({
       }
     };
 
-    // Swipeable sağdan sola kaydırınca silme
-    const renderRightActions = () => (
-      <TouchableOpacity
-        style={{
-          width: 80,
-          backgroundColor: "red",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100%",
-        }}
-        onPress={() => {
-          if (
-            (item.type === "follow" || item.type === "follow_request") &&
-            item.status === "pending"
-          ) {
-            handleReject(item.id, item.user?._id || item.from?._id);
-          } else {
-            handleDeleteNotification(item.id);
-          }
-        }}
-      >
-        <Ionicons name="trash" size={32} color="#fff" />
-      </TouchableOpacity>
-    );
-
     return (
-      <Swipeable
-        renderRightActions={renderRightActions}
-        onSwipeableOpen={() => {
-          // Modal'ı kaldırdık, direkt silme işlemi yapılıyor
-        }}
+      <View
+        style={[
+          styles.notificationItem,
+          {
+            backgroundColor: item.isRead ? colors.background : colors.surface,
+          },
+        ]}
       >
-        <View
-          style={[
-            styles.notificationItem,
-            {
-              backgroundColor: item.isRead ? colors.background : colors.surface,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border,
-            },
-          ]}
-        >
-          {/* Profil fotoğrafı - tıklanabilir */}
-          <TouchableOpacity onPress={goToProfile}>
-            {renderUserAvatars() || (
-              <Image
-                source={{ uri: item.user?.avatar || item.from?.avatar }}
-                style={styles.avatar}
-              />
-            )}
-          </TouchableOpacity>
-
-          {/* Bildirim içeriği - tıklanabilir */}
-          <TouchableOpacity
-            style={styles.notificationContent}
-            onPress={() => handleMarkAsRead(item.id)}
-          >
-            <View style={styles.notificationText}>
-              <Text style={[styles.username, { color: colors.text }]}>
-                {item.user?.username || item.from?.username}
-              </Text>
-              <Text
-                style={[
-                  styles.notificationMessage,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {" "}
-                {item.text}
-              </Text>
-            </View>
-            <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-              {item.timestamp}
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.notificationIcon}>{getNotificationIcon()}</View>
-
-          {/* Gönderi thumbnail - tıklanabilir */}
-          {item.post && item.post.image && (
-            <TouchableOpacity onPress={goToPost}>
-              <Image
-                source={{ uri: item.post.image }}
-                style={styles.postThumbnail}
-              />
-            </TouchableOpacity>
+        {/* Profil fotoğrafı - tıklanabilir */}
+        <TouchableOpacity onPress={goToProfile}>
+          {renderUserAvatars() || (
+            <Image
+              source={{ uri: item.user?.avatar || item.from?.avatar }}
+              style={styles.avatar}
+            />
           )}
-        </View>
-      </Swipeable>
+        </TouchableOpacity>
+
+        {/* Bildirim içeriği - tıklanabilir */}
+        <TouchableOpacity
+          style={styles.notificationContent}
+          onPress={() => handleMarkAsRead(item.id)}
+        >
+          <View style={styles.notificationText}>
+            <Text style={[styles.username, { color: colors.text }]}>
+              {item.user?.username || item.from?.username}
+            </Text>
+            <Text
+              style={[
+                styles.notificationMessage,
+                { color: colors.textSecondary },
+              ]}
+            >
+              {" "}
+              {item.text}
+            </Text>
+          </View>
+          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
+            {item.timestamp}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.notificationIcon}>{getNotificationIcon()}</View>
+
+        {/* Gönderi thumbnail - tıklanabilir */}
+        {item.post && item.post.image && (
+          <TouchableOpacity onPress={goToPost}>
+            <Image
+              source={{ uri: item.post.image }}
+              style={styles.postThumbnail}
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Takip isteği için onayla/reddet butonları veya merkezi FollowButton */}
+        {item.type === "follow_request" && item.status !== "accepted" ? (
+          <View style={{ flexDirection: "row", marginLeft: 8 }}>
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.primary,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 6,
+                marginRight: 6,
+              }}
+              onPress={() =>
+                handleAccept(item.id, item.user?._id || item.from?._id)
+              }
+            >
+              <Text style={{ color: "#fff", fontWeight: "bold" }}>Onayla</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.surface,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+              onPress={() =>
+                handleReject(item.id, item.user?._id || item.from?._id)
+              }
+            >
+              <Text style={{ color: colors.text, fontWeight: "bold" }}>
+                Reddet
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        {item.type === "follow_request" && item.status === "accepted" && (
+          <FollowButton
+            currentUserId={userId || ""}
+            targetUserId={item.user?._id || item.from?._id}
+            username={item.user?.username || item.from?.username}
+            style={{ marginLeft: 8 }}
+          />
+        )}
+      </View>
     );
   };
+
+  // Swipeable sağdan sola kaydırınca silme (DMListScreen ile aynı yapı)
+  const renderRightActions = (item: any) => (
+    <TouchableOpacity
+      style={{
+        justifyContent: "center",
+        alignItems: "center",
+        width: 64,
+        height: "100%",
+        backgroundColor: "red",
+      }}
+      onPress={() => handleDeleteNotification(item.id)}
+    >
+      <Ionicons name="trash-outline" size={28} color="#fff" />
+    </TouchableOpacity>
+  );
+
+  // Bildirim item'ı için Swipeable ile sarmalanmış render fonksiyonu (DMListScreen ile aynı yapı)
+  const renderItem = ({ item }: { item: any }) => (
+    <Swipeable
+      renderRightActions={() => renderRightActions(item)}
+      onSwipeableOpen={() => handleDeleteNotification(item.id)}
+    >
+      {renderNotificationItem({ item })}
+    </Swipeable>
+  );
 
   const renderNotif = ({ item }: { item: any }) => {
     // DEBUG: following dizisini logla
@@ -506,21 +479,12 @@ function NotificationsScreen({
               </Text>{" "}
               seni takip etmek istiyor
             </Text>
-            <View style={{ flexDirection: "row", marginTop: 8 }}>
-              <FollowButton
-                type="accept"
-                onPress={() =>
-                  handleAccept(item.id, item.user?._id || item.from?._id)
-                }
-                style={{ marginRight: 8 }}
-              />
-              <FollowButton
-                type="reject"
-                onPress={() =>
-                  handleReject(item.id, item.user?._id || item.from?._id)
-                }
-              />
-            </View>
+            <FollowButton
+              currentUserId={userId || ""}
+              targetUserId={item.user?._id || item.user?.id}
+              username={item.user?.username}
+              style={{ marginTop: 8, marginLeft: 0 }}
+            />
           </View>
         </TouchableOpacity>
       );
@@ -568,8 +532,9 @@ function NotificationsScreen({
             seni takip etmeye başladı
           </Text>
           <FollowButton
-            type={followType}
-            onPress={() => handleFollowBack(item.user?._id || item.user?.id)}
+            currentUserId={userId || ""}
+            targetUserId={item.user?._id || item.user?.id}
+            username={item.user?.username}
             style={{ marginLeft: 8 }}
           />
         </TouchableOpacity>
@@ -627,11 +592,13 @@ function NotificationsScreen({
       ) : (
         <FlatList
           data={notifications}
-          renderItem={renderNotif}
-          keyExtractor={(_, i) => i.toString()}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
         />
       )}
     </SafeAreaView>
@@ -720,6 +687,9 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 16,
+  },
+  listContent: {
+    padding: 16,
   },
 });
 

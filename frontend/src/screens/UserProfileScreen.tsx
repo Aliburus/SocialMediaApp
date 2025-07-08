@@ -14,14 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import FollowButton from "../components/FollowButton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  getProfile,
-  getUserPosts,
-  followUser,
-  unfollowUser,
-  sendFollowRequest,
-  cancelFollowRequest,
-} from "../services/api";
+import { getProfile, getUserPosts } from "../services/api";
 import { useNavigation, useIsFocused } from "@react-navigation/native";
 import {
   ArrowLeft,
@@ -103,122 +96,6 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     setRefreshing(false);
   };
 
-  const handleFollow = async () => {
-    setLoadingBtn(true);
-    try {
-      // Eğer hesap gizliyse takip isteği gönder, açıksa direkt takip et
-      if (profile?.privateAccount) {
-        await sendFollowRequest(currentUserId, profile._id || profile.id);
-      } else {
-        await followUser(currentUserId, profile._id || profile.id);
-      }
-      // Profil ve post verilerini yeniden çek
-      const profileData = await getProfile(profile._id || profile.id);
-      setProfile(profileData);
-      const posts = await getUserPosts(
-        profile._id || profile.id,
-        currentUserId
-      );
-      const sortedPosts = posts.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setUserPosts(sortedPosts);
-
-      // Mevcut kullanıcının profilini de güncelle
-      if (currentUserId) {
-        const currentProfile = await getProfile(currentUserId);
-        setCurrentUserProfile(currentProfile);
-      }
-    } catch (error) {
-      console.error("Error following user:", error);
-    }
-    setLoadingBtn(false);
-  };
-
-  const handleUnfollow = async () => {
-    setLoadingBtn(true);
-    try {
-      await unfollowUser(currentUserId, profile._id || profile.id);
-      // Profil ve post verilerini yeniden çek
-      const profileData = await getProfile(profile._id || profile.id);
-      setProfile(profileData);
-      const posts = await getUserPosts(
-        profile._id || profile.id,
-        currentUserId
-      );
-      const sortedPosts = posts.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setUserPosts(sortedPosts);
-      setFollowed(false);
-    } catch (error) {
-      console.error("Error unfollowing user:", error);
-    }
-    setLoadingBtn(false);
-  };
-
-  const handleCancelRequest = async () => {
-    setLoadingBtn(true);
-    try {
-      await cancelFollowRequest(currentUserId, profile._id || profile.id);
-      const profileData = await getProfile(profile._id || profile.id);
-      setProfile(profileData);
-      const posts = await getUserPosts(
-        profile._id || profile.id,
-        currentUserId
-      );
-      const sortedPosts = posts.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setUserPosts(sortedPosts);
-
-      // Mevcut kullanıcının profilini de güncelle
-      if (currentUserId) {
-        const currentProfile = await getProfile(currentUserId);
-        setCurrentUserProfile(currentProfile);
-      }
-    } catch (error) {
-      console.error("Error canceling follow request:", error);
-    }
-    setLoadingBtn(false);
-  };
-
-  const handleFollowBack = async () => {
-    setLoadingBtn(true);
-    try {
-      // Eğer hesap gizliyse takip isteği gönder, açıksa direkt takip et
-      if (profile?.privateAccount) {
-        await sendFollowRequest(currentUserId, profile._id || profile.id);
-      } else {
-        await followUser(currentUserId, profile._id || profile.id);
-        setFollowed(true);
-      }
-      const profileData = await getProfile(profile._id || profile.id);
-      setProfile(profileData);
-      const posts = await getUserPosts(
-        profile._id || profile.id,
-        currentUserId
-      );
-      const sortedPosts = posts.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setUserPosts(sortedPosts);
-
-      // Mevcut kullanıcının profilini de güncelle
-      if (currentUserId) {
-        const currentProfile = await getProfile(currentUserId);
-        setCurrentUserProfile(currentProfile);
-      }
-    } catch (error) {
-      console.error("Error following back:", error);
-    }
-    setLoadingBtn(false);
-  };
-
   const isPending = profile?.pendingFollowRequests?.some(
     (id: any) => id.toString() === currentUserId
   );
@@ -288,58 +165,6 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
       </Text>
     </View>
   );
-
-  // Yardımcı fonksiyon: Buton metni ve aksiyonu
-  const getFollowButton = () => {
-    if (currentUserId === (profile._id || profile.id)) {
-      return null;
-    }
-    if (isFollowing || followed) {
-      return {
-        type: "unfollow" as const,
-        onPress: handleUnfollow,
-      };
-    }
-    if (isFollowMe) {
-      // Eğer gizli hesap ve takip isteği gönderilmişse
-      if (profile?.privateAccount && isSent) {
-        return {
-          type: "pending_request" as const,
-          onPress: handleCancelRequest,
-        };
-      }
-      return {
-        type: profile?.privateAccount
-          ? ("follow" as const)
-          : ("follow_back" as const),
-        onPress: handleFollowBack,
-      };
-    }
-    // Eğer gizli hesap ve takip isteği gönderilmişse
-    if (profile?.privateAccount && isSent) {
-      return {
-        type: "pending_request" as const,
-        onPress: handleCancelRequest,
-      };
-    }
-    return {
-      type: "follow" as const,
-      onPress: handleFollow,
-    };
-  };
-
-  const renderFollowButton = () => {
-    const btn = getFollowButton();
-    if (!btn) return null;
-    return (
-      <FollowButton
-        type={btn.type}
-        onPress={btn.onPress}
-        disabled={loadingBtn}
-        style={styles.followButton}
-      />
-    );
-  };
 
   // Mesaj butonu render fonksiyonu
   const renderMessageButton = () => {
@@ -553,7 +378,15 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                 )}
               </View>
 
-              {renderFollowButton()}
+              {/* Takip butonu */}
+              {!isOwnProfile && (
+                <FollowButton
+                  currentUserId={currentUserId}
+                  targetUserId={profile._id || profile.id}
+                  username={profile.username}
+                  style={styles.followButton}
+                />
+              )}
               {renderMessageButton()}
             </View>
 
