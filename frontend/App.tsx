@@ -32,7 +32,7 @@ LogBox.ignoreLogs([
 
 // Screens
 import HomeScreen from "./src/screens/HomeScreen";
-import SearchScreen from "./src/screens/SearchScreen";
+import ExploreScreen from "./src/screens/ExploreScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
 import PostDetailScreen from "./src/screens/PostDetailScreen";
 import EditProfileScreen from "./src/screens/EditProfileScreen";
@@ -174,6 +174,8 @@ function MainTabs({
             iconName = focused ? "home" : "home-outline";
           } else if (route.name === "Search") {
             iconName = focused ? "search" : "search-outline";
+          } else if (route.name === "Explore") {
+            iconName = focused ? "compass" : "compass-outline";
           } else if (route.name === "AddPost") {
             return (
               <View
@@ -348,7 +350,7 @@ function MainTabs({
           />
         )}
       </Tab.Screen>
-      <Tab.Screen name="Search" component={SearchScreen} />
+      <Tab.Screen name="Search" component={ExploreScreen} />
       <Tab.Screen
         name="AddPost"
         component={AddPostScreen}

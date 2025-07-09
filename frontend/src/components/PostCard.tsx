@@ -33,6 +33,7 @@ import {
   deletePost,
   archivePost,
 } from "../services/api";
+import api from "../services/api";
 import { useNavigation } from "@react-navigation/native";
 import { ShareModal } from "./ShareModal";
 
@@ -237,6 +238,17 @@ const PostCard: React.FC<PostCardProps> = ({
           ? updatedPost.likes.includes(userObj._id)
           : false
       );
+
+      // Davranış takibi
+      try {
+        await api.post("/explore/track", {
+          contentId: postId,
+          behaviorType: !prevLiked ? "like" : "view",
+        });
+      } catch (trackError) {
+        console.error("Davranış takibi hatası:", trackError);
+      }
+
       onLike?.();
     } catch (err) {
       setIsLiked(prevLiked);
@@ -256,6 +268,17 @@ const PostCard: React.FC<PostCardProps> = ({
       if (!userId || !postId) return;
       const res = await savePost(userId, postId);
       setIsSaved((res.savedBy || []).includes(userId));
+
+      // Davranış takibi
+      try {
+        await api.post("/explore/track", {
+          contentId: postId,
+          behaviorType: "save",
+        });
+      } catch (trackError) {
+        console.error("Davranış takibi hatası:", trackError);
+      }
+
       console.log(
         "[PostCard/handleSave] response.savedBy:",
         res.savedBy,

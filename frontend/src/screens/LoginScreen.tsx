@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import { login as loginService } from "../services/authService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { messages } from "../utils/messages";
 
 const { width } = Dimensions.get("window");
@@ -42,6 +43,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     setLoading(true);
     try {
       const user = await loginService({ emailOrUsername: email, password });
+      await AsyncStorage.setItem("user", JSON.stringify(user));
       setLoading(false);
       if (onLogin) {
         onLogin(user);

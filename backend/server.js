@@ -8,6 +8,7 @@ const userRoutes = require("./routes/userRoutes");
 const connectDB = require("./config/db");
 const postRoutes = require("./routes/postRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const exploreRoutes = require("./routes/exploreRoutes");
 
 dotenv.config();
 
@@ -174,6 +175,7 @@ io.on("connection", (socket) => {
 app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/explore", exploreRoutes);
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, "0.0.0.0", () => {

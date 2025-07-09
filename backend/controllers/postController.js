@@ -1,6 +1,7 @@
 const Post = require("../models/Post");
 const Comment = require("../models/Comment");
 const { createOrUpdateNotification } = require("./notificationController");
+const { updateContentEmbedding } = require("./exploreController");
 
 // Post oluşturma
 exports.createPost = async (req, res) => {
@@ -10,6 +11,14 @@ exports.createPost = async (req, res) => {
     if (!user)
       return res.status(400).json({ message: "Kullanıcı bilgisi zorunlu" });
     const post = await Post.create({ user, image, description });
+
+    // İçerik embedding'ini oluştur
+    try {
+      await updateContentEmbedding(post._id);
+    } catch (embeddingError) {
+      console.error("Embedding oluşturma hatası:", embeddingError);
+    }
+
     res.status(201).json(post);
   } catch (err) {
     res
@@ -121,6 +130,14 @@ exports.toggleLike = async (req, res) => {
     }
 
     await post.save();
+
+    // İçerik embedding'ini güncelle
+    try {
+      await updateContentEmbedding(postId);
+    } catch (embeddingError) {
+      console.error("Embedding güncelleme hatası:", embeddingError);
+    }
+
     const populatedPost = await Post.findById(postId).populate(
       "user",
       "username name avatar"
