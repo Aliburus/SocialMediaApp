@@ -26,9 +26,13 @@ import {
   X,
 } from "lucide-react-native";
 import { Ionicons } from "@expo/vector-icons";
+import StoryItem from "../components/StoryItem";
+import { getStories } from "../services/storyApi";
+import { LinearGradient } from "expo-linear-gradient";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
+const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User";
 
 const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
   const { user } = route.params;
@@ -43,6 +47,11 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
   const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
   const isFocused = useIsFocused();
   const [followed, setFollowed] = useState(false);
+  const [stories, setStories] = useState<any[]>([]);
+  const PAGE_SIZE = 15;
+  const [displayedData, setDisplayedData] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
   const fetchUserData = async () => {
     setLoading(true);
@@ -75,9 +84,21 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     setLoading(false);
   };
 
+  const fetchStories = async () => {
+    if (profile?._id || profile?.id) {
+      try {
+        const userStories = await getStories(profile._id || profile.id);
+        setStories(userStories || []);
+      } catch {
+        setStories([]);
+      }
+    }
+  };
+
   useEffect(() => {
     fetchUserData();
-  }, [user]);
+    fetchStories();
+  }, []);
 
   useEffect(() => {
     if (navigation && navigation.getParent) {
@@ -89,6 +110,21 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
       }
     }
   }, [isFocused, navigation]);
+
+  useEffect(() => {
+    setPage(1);
+    setDisplayedData(userPosts.slice(0, PAGE_SIZE));
+    setHasMore(userPosts.length > PAGE_SIZE);
+  }, [activeTab, userPosts]);
+
+  const loadMore = () => {
+    if (!hasMore) return;
+    const nextPage = page + 1;
+    const newData = userPosts.slice(0, nextPage * PAGE_SIZE);
+    setDisplayedData(newData);
+    setPage(nextPage);
+    setHasMore(userPosts.length > nextPage * PAGE_SIZE);
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -213,13 +249,15 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
       edges={["top", "bottom"]}
     >
       <FlatList
-        data={canViewPosts && activeTab === "grid" ? userPosts : []}
+        data={canViewPosts && activeTab === "grid" ? displayedData : []}
         renderItem={renderPostItem}
         keyExtractor={(item) => item._id || item.id}
         numColumns={3}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.2}
         ListHeaderComponent={
           <View>
             {/* Header */}
@@ -263,23 +301,77 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
             {/* Profile Info */}
             <View style={styles.profileInfo}>
               <View style={styles.profileHeader}>
-                {/* Story bar: sadece hikaye varsa ve hesap gizli değilse */}
-                {userPosts.some((p) => p.type === "story" || p.isStory) &&
-                !profile?.isPrivate ? (
-                  <View
-                    style={[styles.storyBar, { borderColor: colors.primary }]}
+                {/* Story bar: ProfileScreen'deki gibi mantık */}
+                {Array.isArray(stories) &&
+                stories.length > 0 &&
+                ((!profile?.privateAccount && (isOwnProfile || isFollowing)) ||
+                  (profile?.privateAccount && isFollowing)) ? (
+                  <TouchableOpacity
+                    onPress={() =>
+                      navigation.navigate("Story", {
+                        userId: profile?._id || profile?.id,
+                        stories: stories,
+                      })
+                    }
+                    activeOpacity={0.8}
                   >
-                    <Image
-                      source={{ uri: profile?.avatar || "" }}
-                      style={[
-                        styles.profileImage,
-                        { backgroundColor: colors.background },
-                      ]}
-                    />
-                  </View>
+                    {(stories || []).some((s: any) => !s.isViewed) ? (
+                      <LinearGradient
+                        colors={[
+                          "#f09433",
+                          "#e6683c",
+                          "#dc2743",
+                          "#cc2366",
+                          "#bc1888",
+                        ]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{
+                          width: 90,
+                          height: 90,
+                          borderRadius: 45,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Image
+                          source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                          style={{
+                            width: 84,
+                            height: 84,
+                            borderRadius: 42,
+                            backgroundColor: "#fff",
+                          }}
+                        />
+                      </LinearGradient>
+                    ) : (
+                      <View
+                        style={{
+                          width: 90,
+                          height: 90,
+                          borderRadius: 45,
+                          borderWidth: 3,
+                          borderColor: "#bbb",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: "#fff",
+                        }}
+                      >
+                        <Image
+                          source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                          style={{
+                            width: 84,
+                            height: 84,
+                            borderRadius: 42,
+                            backgroundColor: "#fff",
+                          }}
+                        />
+                      </View>
+                    )}
+                  </TouchableOpacity>
                 ) : (
                   <Image
-                    source={{ uri: profile?.avatar || "" }}
+                    source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
                     style={[
                       styles.profileImage,
                       { backgroundColor: colors.background },
@@ -289,7 +381,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                 <View style={styles.statsContainer}>
                   <View style={styles.statItem}>
                     <Text style={[styles.statNumber, { color: colors.text }]}>
-                      {userPosts.length}
+                      {Array.isArray(userPosts) ? userPosts.length : 0}
                     </Text>
                     <Text
                       style={[
@@ -303,7 +395,9 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                   <View style={styles.statItem}>
                     <Text style={[styles.statNumber, { color: colors.text }]}>
                       {profile?.followersCount ||
-                        profile?.followers?.length ||
+                        (Array.isArray(profile?.followers)
+                          ? profile.followers.length
+                          : 0) ||
                         0}
                     </Text>
                     <Text
@@ -318,7 +412,9 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                   <View style={styles.statItem}>
                     <Text style={[styles.statNumber, { color: colors.text }]}>
                       {profile?.followingCount ||
-                        profile?.following?.length ||
+                        (Array.isArray(profile?.following)
+                          ? profile.following.length
+                          : 0) ||
                         0}
                     </Text>
                     <Text

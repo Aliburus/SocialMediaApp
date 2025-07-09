@@ -21,10 +21,14 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getUserPosts, getProfile, getSavedPosts } from "../services/api";
+import { getStories } from "../services/storyApi";
 import PostCard from "../components/PostCard";
+import StoryItem from "../components/StoryItem";
+import { LinearGradient } from "expo-linear-gradient";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
+const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User";
 
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -44,6 +48,11 @@ const ProfileScreen: React.FC = () => {
 
   const translateX = useRef(new Animated.Value(0)).current;
 
+  const PAGE_SIZE = 15;
+  const [displayedData, setDisplayedData] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+
   const panResponder = React.useMemo(
     () =>
       PanResponder.create({
@@ -55,14 +64,14 @@ const ProfileScreen: React.FC = () => {
         onPanResponderRelease: (_, gestureState) => {
           if (gestureState.dx > 50) {
             // Sağa kaydırma - önceki tab
-            if (activeTab === "reels") setActiveTab("grid");
+            if (activeTab === "grid") setActiveTab("saved");
             else if (activeTab === "saved") setActiveTab("reels");
-            else if (activeTab === "tagged") setActiveTab("saved");
+            else if (activeTab === "reels") setActiveTab("grid");
           } else if (gestureState.dx < -50) {
             // Sola kaydırma - sonraki tab
             if (activeTab === "grid") setActiveTab("reels");
             else if (activeTab === "reels") setActiveTab("saved");
-            else if (activeTab === "saved") setActiveTab("tagged");
+            else if (activeTab === "saved") setActiveTab("grid");
           }
           Animated.spring(translateX, {
             toValue: 0,
@@ -90,14 +99,30 @@ const ProfileScreen: React.FC = () => {
     setLoading(false);
   };
 
+  const fetchStories = async () => {
+    const userStr = await AsyncStorage.getItem("user");
+    const userObj = userStr ? JSON.parse(userStr) : null;
+    const userId = userObj?._id || userObj?.id;
+    if (userId) {
+      try {
+        const userStories = await getStories(userId);
+        setStories(userStories || []);
+      } catch {
+        setStories([]);
+      }
+    }
+  };
+
   useEffect(() => {
     fetchUserData();
+    fetchStories();
   }, []);
 
   useFocusEffect(
     React.useCallback(() => {
       fetchUserData();
       fetchUserPosts();
+      fetchStories();
       const fetchSaved = async () => {
         const userStr = await AsyncStorage.getItem("user");
         const userObj = userStr ? JSON.parse(userStr) : null;
@@ -194,6 +219,21 @@ const ProfileScreen: React.FC = () => {
   if (activeTab === "tagged")
     tabData = userPosts.filter((p) => p.type === "tagged");
 
+  useEffect(() => {
+    setPage(1);
+    setDisplayedData(tabData.slice(0, PAGE_SIZE));
+    setHasMore(tabData.length > PAGE_SIZE);
+  }, [activeTab, userPosts, savedPosts]);
+
+  const loadMore = () => {
+    if (!hasMore) return;
+    const nextPage = page + 1;
+    const newData = tabData.slice(0, nextPage * PAGE_SIZE);
+    setDisplayedData(newData);
+    setPage(nextPage);
+    setHasMore(tabData.length > nextPage * PAGE_SIZE);
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchUserData();
@@ -207,7 +247,7 @@ const ProfileScreen: React.FC = () => {
     >
       <Animated.View style={{ flex: 1 }} {...panResponder.panHandlers}>
         <FlatList
-          data={activeTab === "reels" ? userPosts : tabData}
+          data={displayedData}
           keyExtractor={(item) => item._id || item.id}
           numColumns={3}
           renderItem={renderPostItem}
@@ -215,6 +255,8 @@ const ProfileScreen: React.FC = () => {
           scrollEnabled={true}
           refreshing={refreshing}
           onRefresh={onRefresh}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.2}
           ListHeaderComponent={
             <>
               {/* Header */}
@@ -241,17 +283,82 @@ const ProfileScreen: React.FC = () => {
               {/* Profile Info */}
               <View style={styles.profileInfo}>
                 <View style={styles.profileHeader}>
-                  <Image
-                    source={{ uri: profile?.avatar || "" }}
-                    style={[
-                      styles.profileImage,
-                      { backgroundColor: colors.background },
-                    ]}
-                  />
+                  {Array.isArray(stories) && stories.length > 0 ? (
+                    <TouchableOpacity
+                      onPress={() =>
+                        navigation.navigate("Story", {
+                          userId: profile?._id || profile?.id,
+                          stories: Array.isArray(stories) ? stories : [],
+                        })
+                      }
+                      activeOpacity={0.8}
+                    >
+                      {(stories || []).some((s: any) => !s.isViewed) ? (
+                        <LinearGradient
+                          colors={[
+                            "#f09433",
+                            "#e6683c",
+                            "#dc2743",
+                            "#cc2366",
+                            "#bc1888",
+                          ]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={{
+                            width: 90,
+                            height: 90,
+                            borderRadius: 45,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Image
+                            source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                            style={{
+                              width: 84,
+                              height: 84,
+                              borderRadius: 42,
+                              backgroundColor: "#fff",
+                            }}
+                          />
+                        </LinearGradient>
+                      ) : (
+                        <View
+                          style={{
+                            width: 90,
+                            height: 90,
+                            borderRadius: 45,
+                            borderWidth: 3,
+                            borderColor: "#bbb",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: "#fff",
+                          }}
+                        >
+                          <Image
+                            source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                            style={{
+                              width: 84,
+                              height: 84,
+                              borderRadius: 42,
+                              backgroundColor: "#fff",
+                            }}
+                          />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ) : (
+                    <Image
+                      source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                      style={styles.profileImage}
+                    />
+                  )}
                   <View style={styles.statsContainer}>
                     <View style={styles.statItem}>
                       <Text style={[styles.statNumber, { color: colors.text }]}>
-                        {userPosts.filter((p) => !p.archived).length}
+                        {Array.isArray(userPosts)
+                          ? userPosts.filter((p) => !p.archived).length
+                          : 0}
                       </Text>
                       <Text
                         style={[
@@ -319,63 +426,6 @@ const ProfileScreen: React.FC = () => {
                     Edit Profile
                   </Text>
                 </TouchableOpacity>
-              </View>
-
-              {/* Story Highlights */}
-              <View
-                style={[
-                  styles.highlightsContainer,
-                  { borderBottomColor: colors.border },
-                ]}
-              >
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <TouchableOpacity
-                    style={styles.addHighlight}
-                    onPress={() => navigation.navigate("AddStory")}
-                  >
-                    <View
-                      style={[
-                        styles.addHighlightCircle,
-                        { borderColor: colors.border },
-                      ]}
-                    >
-                      <Ionicons
-                        name="add"
-                        size={24}
-                        color={colors.textSecondary}
-                      />
-                    </View>
-                    <Text
-                      style={[
-                        styles.highlightText,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      New
-                    </Text>
-                  </TouchableOpacity>
-                  {stories &&
-                    stories.length > 0 &&
-                    stories.map((story: any) => (
-                      <TouchableOpacity
-                        key={story._id || story.id}
-                        style={styles.addHighlight}
-                      >
-                        <Image
-                          source={{ uri: story.image }}
-                          style={styles.profileImage}
-                        />
-                        <Text
-                          style={[
-                            styles.highlightText,
-                            { color: colors.textSecondary },
-                          ]}
-                        >
-                          {story.user?.username || "Story"}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                </ScrollView>
               </View>
 
               {/* Tabs */}
@@ -540,28 +590,6 @@ const styles = StyleSheet.create({
   editButtonText: {
     fontSize: 16,
     fontWeight: "600",
-  },
-  highlightsContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  addHighlight: {
-    alignItems: "center",
-    marginRight: 16,
-  },
-  addHighlightCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderStyle: "dashed",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  highlightText: {
-    fontSize: 12,
   },
   postsContainer: {
     flex: 1,
