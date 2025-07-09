@@ -1,147 +1,138 @@
-# SocialApp
+# Social Media Mobile App
 
-## Project Description
+## Overview
 
-SocialApp is a full-featured mobile social media application that enables users to connect, share media, and communicate in real time. The app provides a seamless experience for discovering new content, interacting with other users, and managing personal profiles securely.
+This project is a full-stack social media mobile application that enables users to share short videos, interact with content, and discover personalized recommendations. The app features:
 
-## Core Features
+- User registration and authentication
+- Video (reel) sharing and feed
+- Personalized content recommendations based on user behavior
+- Like, comment, save, and follow functionalities
+- Real-time notifications and messaging
+- User profiles and story sharing
+  -Explore Screen
+- Secure, scalable backend and modern mobile UI
 
-- User registration and secure authentication
-- Profile management (avatar, bio, privacy settings)
-- Media sharing (photos, stories, reels)
-- Real-time messaging and chat
-- Follow/unfollow system with private account support
-- Notifications for interactions and requests
-- User and content search
-- Save and archive posts
-- Light/Dark theme support
+## Tech Stack
 
-## Tech Stack / Technologies Used
-
-### Frontend
-
-- React Native (TypeScript)
-- React Navigation
-- Context API (state management)
-- Axios (API requests)
-- Expo (optional)
-
-### Backend
-
-- Node.js (Express)
-- MongoDB (Mongoose)
-- Socket.io (real-time features)
-- JWT (authentication)
-- CORS, dotenv, bcryptjs, and other middleware
-
-### Additional Libraries & Tools
-
-- AsyncStorage
-- react-native-safe-area-context
-- react-native-vector-icons
-- Other supporting libraries
+- **Frontend:** React Native (TypeScript), Expo
+- **Backend:** Node.js, Express.js
+- **Database:** MongoDB (Mongoose ODM)
+- **Other:** Socket.io (real-time), AsyncStorage, JWT Auth
 
 ## Installation Instructions
 
-### 1. Clone the Repository
+### Prerequisites
 
-```sh
-git clone https://github.com/Aliburus/SocialApp.git
-cd SocialApp
+- Node.js (v16+ recommended)
+- npm or yarn
+- MongoDB instance (local or cloud)
+- Expo CLI (for mobile development)
+
+### Backend Setup
+
+1. Navigate to the `backend/` directory:
+   ```bash
+   cd backend
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
+3. Create a `.env` file in `backend/` with the following variables:
+   ```env
+   MONGO_URI=your_mongodb_connection_string
+   JWT_SECRET=your_jwt_secret
+   PORT=5000
+   ```
+4. Start the backend server:
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   ```
+
+### Frontend Setup
+
+1. Navigate to the `frontend/` directory:
+   ```bash
+   cd frontend
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
+3. Create an `.env` file or use `app.json` to set the backend URL:
+   ```env
+   BACKEND_URL=http://localhost:5000
+   ```
+4. Start the Expo development server:
+   ```bash
+   npx expo start
+   ```
+
+## Environment Variables
+
+- **Backend:**
+  - `MONGO_URI`: MongoDB connection string
+  - `JWT_SECRET`: Secret key for JWT authentication
+  - `PORT`: (optional) Port for backend server (default: 5000)
+- **Frontend:**
+  - `BACKEND_URL`: Base URL for backend API (e.g., http://localhost:5000)
+
+## Running the App (Development Mode)
+
+- Start the backend server (see above)
+- Start the frontend with Expo (`npx expo start`)
+- Use a physical device with Expo Go or an emulator/simulator to run the app
+
+## API Overview
+
+The backend exposes a RESTful API for all core features, including:
+
+- User authentication and profile management
+- Video (reel) CRUD operations
+- Feed and recommendation endpoints
+- Comments, likes, saves, follows
+- Notifications and messaging
+- Story and explore endpoints
+
+> For detailed API documentation, see the `/backend/routes/` and controller files, or generate docs with tools like Swagger if needed.
+
+## Folder Structure
+
+```
+project-root/
+  backend/
+    controllers/
+    models/
+    routes/
+    middleware/
+    config/
+    server.js
+  frontend/
+    src/
+      components/
+      screens/
+      context/
+      services/
+      types/
+      utils/
+    App.tsx
 ```
 
-### 2. Backend Setup
+## Contribution Guidelines
 
-```sh
-cd backend
-npm install
-cp .env.example .env
-# Edit the .env file with your MongoDB connection string and FRONTEND_URL
-npm start
-```
-
-### 3. Frontend Setup
-
-```sh
-cd ../frontend
-npm install
-cp .env.example .env
-# Edit the .env file with your API_URL
-npm start
-# or if using Expo:
-# npx expo start
-```
-
-### 4. Environment Variables
-
-Check the `.env.example` file in both directories and create your own `.env` files accordingly.
-
-## Usage
-
-- Start both backend and frontend servers
-- Register or log in
-- Edit your profile
-- Share photos, stories, or reels
-- Search and follow other users
-- Use messaging and notification features
-- Switch between light and dark themes
-
-## API Documentation
-
-### Example Routes
-
-#### User Registration
-
-```
-POST /api/users/register
-Body: { username, email, password, ... }
-Response: { _id, username, email, ... }
-```
-
-#### Login
-
-```
-POST /api/users/login
-Body: { emailOrUsername, password }
-Response: { token, _id, username, ... }
-```
-
-#### Get User Profile
-
-```
-GET /api/users/profile/:id?currentUserId=xxx
-Response: { _id, username, avatar, isFollowing, isFollowedBy, ... }
-```
-
-#### Follow User
-
-```
-POST /api/users/follow
-Body: { userId, targetUserId }
-Response: { success: true }
-```
-
-For more API routes, see the backend/routes directory.
-
-## Screenshots / Demo
-
-> You can add screenshots or demo videos here.
-
-## Contributing
-
-1. Fork this repository
-2. Create a new branch (`git checkout -b feature/your-feature`)
-3. Commit your changes (`git commit -am 'Add new feature'`)
-4. Push to the branch (`git push origin feature/your-feature`)
-5. Open a Pull Request
-
-Please follow the code style and project structure when submitting PRs.
+1. Fork the repository and create a feature branch.
+2. Write clear, well-documented code and meaningful commit messages.
+3. Ensure all new code is covered by tests where applicable.
+4. Open a pull request describing your changes.
+5. Follow the code of conduct and respect review feedback.
 
 ## License
 
-This project is licensed under the MIT License.
-
-## Contact / Support
-
-- GitHub: [Aliburus](https://github.com/Aliburus)
-- LinkedIn: [Ali Burus](https://linkedin.com/in/aliburus)
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

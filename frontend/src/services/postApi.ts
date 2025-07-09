@@ -11,9 +11,11 @@ export const getPostById = async (id: string) => {
 };
 
 export const createPost = async (data: {
-  image: string;
+  image?: string;
   description?: string;
   user: string;
+  type?: string;
+  video?: string;
 }) => {
   const res = await api.post("/posts", data);
   return res.data;

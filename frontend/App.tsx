@@ -408,8 +408,13 @@ function AppContent() {
   useEffect(() => {
     const checkLogin = async () => {
       try {
-        const user = await AsyncStorage.getItem("user");
-        setIsLoggedIn(!!user);
+        const userStr = await AsyncStorage.getItem("user");
+        let valid = false;
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user && user.token) valid = true;
+        }
+        setIsLoggedIn(valid);
       } catch (e) {
         setIsLoggedIn(false);
       } finally {
@@ -446,7 +451,18 @@ function AppContent() {
   };
 
   if (loading) {
-    return null; // veya bir loading spinner
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: colors.background,
+        }}
+      >
+        <Text style={{ color: colors.text }}>Yükleniyor...</Text>
+      </View>
+    );
   }
 
   if (!isLoggedIn) {

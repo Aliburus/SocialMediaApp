@@ -17,6 +17,8 @@ import { useTheme } from "../context/ThemeContext";
 import { searchUsers as searchUsersApi } from "../services/api";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useNavigation } from "@react-navigation/native";
+import api from "../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const UserSearchScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -25,6 +27,15 @@ const UserSearchScreen: React.FC = () => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const [currentUserId, setCurrentUserId] = useState("");
+
+  React.useEffect(() => {
+    (async () => {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      setCurrentUserId(userObj?._id || userObj?.id || "");
+    })();
+  }, []);
 
   // Pagination için state'ler
   const [displayedResults, setDisplayedResults] = useState<any[]>([]);
@@ -45,6 +56,15 @@ const UserSearchScreen: React.FC = () => {
         setDisplayedResults(results.slice(0, RESULTS_PER_PAGE));
         setCurrentPage(1);
         setHasMoreResults(results.length > RESULTS_PER_PAGE);
+
+        if (results.length > 0 && currentUserId) {
+          results.forEach((user: any) => {
+            api.post("/explore/track", {
+              contentId: user._id || user.id,
+              behaviorType: "search",
+            });
+          });
+        }
       } catch (err) {
         setSearchResults([]);
         setDisplayedResults([]);

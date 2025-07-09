@@ -29,6 +29,7 @@ import { Ionicons } from "@expo/vector-icons";
 import StoryItem from "../components/StoryItem";
 import { getStories } from "../services/storyApi";
 import { LinearGradient } from "expo-linear-gradient";
+import api from "../services/api";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -116,6 +117,15 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     setDisplayedData(userPosts.slice(0, PAGE_SIZE));
     setHasMore(userPosts.length > PAGE_SIZE);
   }, [activeTab, userPosts]);
+
+  useEffect(() => {
+    if (profile?._id && currentUserId && profile._id !== currentUserId) {
+      api.post("/explore/track", {
+        contentId: profile._id,
+        behaviorType: "profile_visit",
+      });
+    }
+  }, [profile?._id, currentUserId]);
 
   const loadMore = () => {
     if (!hasMore) return;

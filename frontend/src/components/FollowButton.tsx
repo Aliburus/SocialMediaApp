@@ -14,6 +14,7 @@ import {
   cancelFollowRequest,
   getFollowStatus,
 } from "../services/followApi";
+import api from "../services/api";
 
 interface FollowButtonProps {
   currentUserId: string;
@@ -69,6 +70,12 @@ const FollowButton: React.FC<FollowButtonProps> = ({
       }
       await updateStatus();
       onStatusChange?.();
+      if (targetUserId && currentUserId) {
+        api.post("/explore/track", {
+          contentId: targetUserId,
+          behaviorType: "follow",
+        });
+      }
     } catch (e) {
       // Hata yönetimi
     } finally {

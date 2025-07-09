@@ -7,6 +7,8 @@ const PostSchema = new mongoose.Schema({
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   comments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Comment" }],
   savedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  type: { type: String, enum: ["post", "reel"], default: "post" },
+  video: { type: String },
   createdAt: { type: Date, default: Date.now },
   archived: { type: Boolean, default: false },
   archivedAt: { type: Date },

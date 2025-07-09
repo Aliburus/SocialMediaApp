@@ -25,14 +25,19 @@ import { useNavigation, NavigationProp } from "@react-navigation/native";
 import FollowButton from "../components/FollowButton";
 import PostCard from "../components/PostCard";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { Video, ResizeMode } from "expo-av";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 const ITEM_WIDTH = width / 3 - 2;
+const ITEM_HEIGHT = ITEM_WIDTH * 1.3; // oranı koru
+const SEARCH_INPUT_HEIGHT = 80;
+const ROWS_ON_SCREEN = Math.floor((height - SEARCH_INPUT_HEIGHT) / ITEM_HEIGHT);
+const PAGE_SIZE = 2 * ROWS_ON_SCREEN * 3;
 
 interface Post {
   _id: string;
   image: string;
-  caption: string;
+  description: string;
   user: {
     _id: string;
     username: string;
@@ -41,6 +46,8 @@ interface Post {
   likes: string[];
   comments: any[];
   createdAt: string;
+  type: string; // 'reel' veya 'image'
+  video?: string; // Sadece 'reel' tipinde olabilir
 }
 
 const ExploreScreen: React.FC = () => {
@@ -49,6 +56,7 @@ const ExploreScreen: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [displayedPosts, setDisplayedPosts] = useState<Post[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -124,29 +132,45 @@ const ExploreScreen: React.FC = () => {
 
   const handleLoadMore = () => {
     if (hasMore && !loadingMore) {
-      loadExploreFeed(page + 1);
+      const nextPage = page + 1;
+      setDisplayedPosts(posts.slice(0, nextPage * PAGE_SIZE));
+      setPage(nextPage);
+      if (posts.length <= nextPage * PAGE_SIZE) setHasMore(false);
     }
   };
 
-  const renderPostItem = ({ item }: { item: Post }) => (
-    <TouchableOpacity
-      style={styles.postItem}
-      onPress={() => handlePostPress(item)}
-      activeOpacity={0.8}
-    >
-      <Image source={{ uri: item.image }} style={styles.postImage} />
-      <View style={styles.postOverlay}>
-        <View style={styles.postStats}>
-          <Text style={[styles.statText, { color: colors.text }]}>
-            ❤️ {item.likes?.length || 0}
-          </Text>
-          <Text style={[styles.statText, { color: colors.text }]}>
-            💬 {item.comments?.length || 0}
-          </Text>
+  const renderPostItem = ({ item }: { item: Post }) => {
+    if (item.type !== "reel") return null;
+    return (
+      <TouchableOpacity
+        style={styles.postItem}
+        onPress={() => handlePostPress(item)}
+        activeOpacity={0.8}
+      >
+        {item.video ? (
+          <Video
+            source={{ uri: item.video }}
+            style={styles.postImage}
+            resizeMode={ResizeMode.COVER}
+            shouldPlay={false}
+            isLooping={false}
+          />
+        ) : (
+          <Image source={{ uri: item.image }} style={styles.postImage} />
+        )}
+        <View style={styles.postOverlay}>
+          <View style={styles.postStats}>
+            <Text style={[styles.statText, { color: colors.text }]}>
+              ❤️ {item.likes?.length || 0}
+            </Text>
+            <Text style={[styles.statText, { color: colors.text }]}>
+              💬 {item.comments?.length || 0}
+            </Text>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderFooter = () => {
     if (!loadingMore) return null;
@@ -158,8 +182,9 @@ const ExploreScreen: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!currentUserId) return;
     loadExploreFeed();
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     (async () => {
@@ -168,6 +193,11 @@ const ExploreScreen: React.FC = () => {
       setCurrentUserId(userObj?._id || userObj?.id || "");
     })();
   }, []);
+
+  useEffect(() => {
+    setDisplayedPosts(posts.slice(0, PAGE_SIZE));
+    setPage(1);
+  }, [posts]);
 
   const renderUserItem = ({ item }: { item: any }) => {
     if (!item || !item.username) return null;
@@ -248,7 +278,7 @@ const ExploreScreen: React.FC = () => {
       </View>
       {/* Reels listesi inputun altında */}
       <FlatList
-        data={posts}
+        data={displayedPosts}
         renderItem={renderPostItem}
         keyExtractor={(item) => item._id}
         numColumns={3}
@@ -266,7 +296,33 @@ const ExploreScreen: React.FC = () => {
         ListFooterComponent={renderFooter}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.text }]}>Yok</Text>
+            <Ionicons
+              name="videocam-outline"
+              size={64}
+              color={colors.primary}
+              style={{ marginBottom: 12 }}
+            />
+            <Text
+              style={[
+                styles.emptyText,
+                {
+                  color: colors.text,
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  marginBottom: 4,
+                },
+              ]}
+            >
+              Şu anda keşfedecek yeni reels yok!
+            </Text>
+            <Text
+              style={[
+                styles.emptyText,
+                { color: colors.textSecondary, fontSize: 14 },
+              ]}
+            >
+              Yakında yeni içerikler burada olacak.
+            </Text>
           </View>
         }
       />

@@ -30,6 +30,7 @@ import {
 } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ShareModal } from "../components/ShareModal";
+import api from "../services/api";
 
 const { width, height } = Dimensions.get("window");
 
@@ -155,6 +156,10 @@ const StoryScreen: React.FC = () => {
     // Story izlenmiş olarak işaretle
     if (stories[current]?._id && userId) {
       viewStory(stories[current]._id, userId).catch((err: any) => {});
+      api.post("/explore/track", {
+        contentId: stories[current]._id,
+        behaviorType: "story_view",
+      });
     }
   }, [current, userId]);
 

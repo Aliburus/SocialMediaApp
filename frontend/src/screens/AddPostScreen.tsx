@@ -87,14 +87,16 @@ const AddPostScreen: React.FC = () => {
         navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
         return;
       }
-      const newPost = await createPost({ image, description, user: userId });
+      const newPost = await createPost({
+        type: "reel",
+        video: image,
+        description,
+        user: userId,
+      });
       Alert.alert("Başarılı", "Post paylaşıldı!");
       setImage(null);
       setDescription("");
-      navigation.navigate("Home", {
-        scrollToTop: true,
-        newPostId: newPost._id || newPost.id,
-      });
+      navigation.navigate("Home", { scrollToTop: true });
     } catch (err: any) {
       if (err?.response) {
         console.log("[POST PAYLAŞ HATA] response:", err.response);
