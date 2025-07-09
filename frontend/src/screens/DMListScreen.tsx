@@ -42,6 +42,11 @@ const DMListScreen: React.FC<{
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [loadingMore, setLoadingMore] = React.useState(false);
+  const [hasMore, setHasMore] = React.useState(true);
+  const [page, setPage] = React.useState(1);
+  const [allConversations, setAllConversations] = React.useState<any[]>([]);
+  const ITEMS_PER_PAGE = 10;
   const filteredFriends = friends.filter((u) => {
     const q = friendSearch.toLowerCase();
     return (
@@ -53,8 +58,14 @@ const DMListScreen: React.FC<{
     );
   });
 
-  const loadConversations = async () => {
-    setLoading(true);
+  const loadConversations = async (isInitial = true) => {
+    if (isInitial) {
+      setLoading(true);
+      setPage(1);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
@@ -62,9 +73,27 @@ const DMListScreen: React.FC<{
         const userId = userObj._id || userObj.id;
         setCurrentUserId(userId);
 
-        // Önce conversation'ları yükle
+        // Conversation'ları yükle
         const list = await getUserConversations(userId);
-        setDmList(list);
+
+        if (isInitial) {
+          // İlk yüklemede 2 sayfa göster
+          const initialItems = list.slice(0, ITEMS_PER_PAGE * 2);
+          setDmList(initialItems);
+          setAllConversations(list);
+          setHasMore(list.length > ITEMS_PER_PAGE * 2);
+          setPage(3); // Sonraki sayfa 3 olacak
+        } else {
+          // Daha fazla yükle
+          const currentItems = dmList;
+          const nextItems = list.slice(
+            (page - 1) * ITEMS_PER_PAGE,
+            page * ITEMS_PER_PAGE
+          );
+          setDmList([...currentItems, ...nextItems]);
+          setHasMore(list.length > page * ITEMS_PER_PAGE);
+          setPage(page + 1);
+        }
 
         // Okunmamış sohbetler için backend'e okundu bilgisini gönder
         (list as any[]).forEach(async (dm: any) => {
@@ -85,12 +114,19 @@ const DMListScreen: React.FC<{
           } catch (error) {
             console.error("Okunmamış mesaj sayısı getirme hatası:", error);
           }
-        }, 500); // 500ms geciktir
+        }, 500);
       }
     } catch (error) {
       console.error("DM listesi yükleme hatası:", error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMoreConversations = () => {
+    if (!loadingMore && hasMore) {
+      loadConversations(false);
     }
   };
 
@@ -283,6 +319,17 @@ const DMListScreen: React.FC<{
               backgroundColor: colors.background,
             }}
             showsVerticalScrollIndicator={false}
+            onEndReached={loadMoreConversations}
+            onEndReachedThreshold={0.1}
+            ListFooterComponent={
+              loadingMore ? (
+                <View
+                  style={{ paddingVertical: 20, alignItems: "center", flex: 1 }}
+                >
+                  <LoadingSpinner size="small" />
+                </View>
+              ) : null
+            }
           />
         )}
       </View>

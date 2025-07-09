@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import LoadingSpinner from "../components/LoadingSpinner";
 import {
   StyleSheet,
   useColorScheme,
@@ -697,18 +698,7 @@ const MapScreen: React.FC = () => {
         </View>
       </Modal>
       {vpnChecking ? (
-        <View style={styles.center}>
-          <Text
-            style={{
-              color: colors.text,
-              fontSize: 18,
-              textAlign: "center",
-              marginBottom: 24,
-            }}
-          >
-            Güvenlik kontrolü yapılıyor...
-          </Text>
-        </View>
+        <LoadingSpinner />
       ) : vpnBlocked ? (
         <View style={styles.center}>
           <Ionicons
