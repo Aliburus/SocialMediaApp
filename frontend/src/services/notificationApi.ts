@@ -11,6 +11,6 @@ export const getUnreadNotificationCount = async (userId: string) => {
 };
 
 export const markAllNotificationsAsRead = async (userId: string) => {
-  const res = await api.post(`/notifications/mark-all-read`, { userId });
+  const res = await api.put(`/notifications/${userId}/read-all`);
   return res.data;
 };

@@ -17,3 +17,6 @@ export * from "./storyApi";
 export * from "./notificationApi";
 export * from "./messageApi";
 export * from "./followApi";
+
+// Message API fonksiyonlarını doğrudan export et
+export { getUnreadMessageCount } from "./messageApi";

@@ -7,13 +7,14 @@ import {
   Image,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
 } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -25,6 +26,7 @@ import {
 import socketService from "../services/socketService";
 import { Swipeable } from "react-native-gesture-handler";
 import { getUnreadMessageCount } from "../services/messageApi";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 const DMListScreen: React.FC<{
   setUnreadMessageCount?: (n: number) => void;
@@ -39,11 +41,20 @@ const DMListScreen: React.FC<{
   const [friends, setFriends] = React.useState<any[]>([]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
-  const filteredFriends = friends.filter((u) =>
-    u.username.toLowerCase().includes(friendSearch.toLowerCase())
-  );
+  const [loading, setLoading] = React.useState(true);
+  const filteredFriends = friends.filter((u) => {
+    const q = friendSearch.toLowerCase();
+    return (
+      (u.username && u.username.toLowerCase().includes(q)) ||
+      (u.fullName && u.fullName.toLowerCase().includes(q)) ||
+      (u.name && u.name.toLowerCase().includes(q)) ||
+      (u.firstName && u.firstName.toLowerCase().includes(q)) ||
+      (u.lastName && u.lastName.toLowerCase().includes(q))
+    );
+  });
 
   const loadConversations = async () => {
+    setLoading(true);
     try {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
@@ -78,6 +89,8 @@ const DMListScreen: React.FC<{
       }
     } catch (error) {
       console.error("DM listesi yükleme hatası:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -98,18 +111,16 @@ const DMListScreen: React.FC<{
     };
   }, [currentUserId]);
 
-  // Ekran odaklandığında listeyi yenile
-  React.useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", async () => {
-      await loadConversations();
-      // Sayaçları sıfırla
+  // Ekran odaklandığında listeyi yenile ve count'ları sıfırla
+  useFocusEffect(
+    React.useCallback(() => {
       if (currentUserId) {
+        loadConversations();
         setUnreadCount(0);
         if (setUnreadMessageCount) setUnreadMessageCount(0);
       }
-    });
-    return unsubscribe;
-  }, [navigation, currentUserId]);
+    }, [currentUserId])
+  );
 
   React.useEffect(() => {
     if (showFriendsModal) {
@@ -118,11 +129,16 @@ const DMListScreen: React.FC<{
         const userObj = userStr ? JSON.parse(userStr) : null;
         if (userObj?._id || userObj?.id) {
           const list = await getUserFriends(userObj._id || userObj.id);
+          console.log("[DMListScreen] getUserFriends list:", list);
           setFriends(list);
         }
       })();
     }
   }, [showFriendsModal]);
+
+  React.useEffect(() => {
+    console.log("[DMListScreen] friends state:", friends);
+  }, [friends]);
 
   const handleDeleteConversation = async (conversationId: string) => {
     if (!currentUserId) return;
@@ -187,6 +203,33 @@ const DMListScreen: React.FC<{
     );
   };
 
+  const renderFriendItem = ({ item }: { item: any }) => (
+    <TouchableOpacity
+      onPress={() => {
+        setShowFriendsModal(false);
+        setTimeout(() => {
+          navigation.navigate("DMChat", { user: item });
+        }, 0);
+      }}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 10,
+      }}
+    >
+      <Image
+        source={{ uri: item.avatar }}
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          marginRight: 12,
+        }}
+      />
+      <Text style={{ color: colors.text, fontSize: 16 }}>{item.username}</Text>
+    </TouchableOpacity>
+  );
+
   React.useEffect(() => {
     if (typeof unreadMessageCount === "number") {
       setUnreadCount(unreadMessageCount);
@@ -227,14 +270,8 @@ const DMListScreen: React.FC<{
       </View>
       {/* DM Listesi */}
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        {dmList.length === 0 ? (
-          <View
-            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-          >
-            <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
-              Henüz mesajlaşman yok
-            </Text>
-          </View>
+        {loading ? (
+          <LoadingSpinner />
         ) : (
           <FlatList
             data={dmList}
@@ -304,42 +341,15 @@ const DMListScreen: React.FC<{
             </View>
             <FlatList
               data={filteredFriends}
+              renderItem={renderFriendItem}
               keyExtractor={(item) => item.id || item._id || item.username}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowFriendsModal(false);
-                    setTimeout(() => {
-                      navigation.navigate("DMChat", { user: item });
-                    }, 0);
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingVertical: 10,
-                  }}
-                >
-                  <Image
-                    source={{ uri: item.avatar }}
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
-                      marginRight: 12,
-                    }}
-                  />
-                  <Text style={{ color: colors.text, fontSize: 16 }}>
-                    {item.username}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              style={{ maxHeight: 300 }}
+              showsVerticalScrollIndicator={false}
               ListEmptyComponent={
                 <Text
                   style={{
                     color: colors.textSecondary,
                     textAlign: "center",
-                    marginTop: 16,
+                    marginTop: 24,
                   }}
                 >
                   Arkadaş bulunamadı

@@ -652,7 +652,7 @@ exports.getConversationMessages = async (req, res) => {
       })
       .populate({
         path: "story",
-        select: "_id image user",
+        select: "_id image user createdAt archived",
         populate: {
           path: "user",
           select: "_id username avatar",
@@ -730,7 +730,7 @@ exports.sendMessage = async (req, res) => {
       })
       .populate({
         path: "story",
-        select: "_id image user",
+        select: "_id image user createdAt archived",
         populate: {
           path: "user",
           select: "_id username avatar",
@@ -856,7 +856,8 @@ exports.updateMessagePrivacy = async (req, res) => {
 // Mesajları görüldü olarak işaretle
 exports.markMessagesAsSeen = async (req, res) => {
   try {
-    const { userId, conversationId } = req.body;
+    const { userId } = req.params;
+    const { conversationId } = req.body;
 
     if (!userId || !conversationId) {
       return res.status(400).json({ message: "Eksik veri" });

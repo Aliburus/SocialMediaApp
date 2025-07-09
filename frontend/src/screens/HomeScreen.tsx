@@ -29,6 +29,7 @@ import {
 } from "../services/api";
 import { ShareModal } from "../components/ShareModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 const HomeScreen: React.FC<{
   unreadMessageCount?: number;
@@ -120,9 +121,6 @@ const HomeScreen: React.FC<{
 
       // Profile işleme
       setMyAvatar(profileData.avatar || "");
-      setFollowingIds(
-        (profileData.following || []).map((id: any) => id.toString())
-      );
 
       // My posts işleme
       setMyPosts(myPostsData);
@@ -554,24 +552,7 @@ const HomeScreen: React.FC<{
       >
         {/* Posts List with Stories Header */}
         {loading ? (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              padding: 32,
-            }}
-          >
-            <Text
-              style={{
-                color: colors.textSecondary,
-                fontSize: 18,
-                textAlign: "center",
-              }}
-            >
-              Yükleniyor...
-            </Text>
-          </View>
+          <LoadingSpinner />
         ) : displayedPosts.length === 0 ? (
           <>
             {renderListHeader()}
@@ -612,14 +593,7 @@ const HomeScreen: React.FC<{
             ListFooterComponent={
               loadingMore ? (
                 <View style={styles.loadingMore}>
-                  <Text
-                    style={[
-                      styles.loadingText,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    Daha fazla yükleniyor...
-                  </Text>
+                  <LoadingSpinner size="small" />
                 </View>
               ) : null
             }

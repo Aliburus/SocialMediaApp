@@ -56,7 +56,7 @@ router.get(
   getConversationMessages
 );
 router.post("/send-message", sendMessage);
-router.post("/mark-messages-seen", markMessagesAsSeen);
+router.post("/:userId/mark-messages-seen", markMessagesAsSeen);
 router.get("/:userId/unread-count", getUnreadMessageCount);
 router.post("/change-password", changePassword);
 router.get("/:userId/notification-settings", getNotificationSettings);

@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import {
   SafeAreaView,
@@ -26,6 +27,20 @@ import {
 } from "../services/messageApi";
 import socketService from "../services/socketService";
 import { StackNavigationProp } from "@react-navigation/stack";
+import LoadingSpinner from "../components/LoadingSpinner";
+
+// Story'nin süresinin bitip bitmediğini kontrol eden fonksiyon
+const isStoryExpired = (storyTimestamp: string | Date) => {
+  const storyDate = new Date(storyTimestamp);
+  const now = new Date();
+  const hoursDiff = (now.getTime() - storyDate.getTime()) / (1000 * 60 * 60);
+  console.log("Story timestamp:", storyTimestamp);
+  console.log("Story date:", storyDate);
+  console.log("Now:", now);
+  console.log("Hours diff:", hoursDiff);
+  console.log("Is expired:", hoursDiff >= 24);
+  return hoursDiff >= 24; // 24 saat sonra story süresi biter
+};
 
 const DMChatScreen: React.FC = () => {
   const route = useRoute();
@@ -43,9 +58,11 @@ const DMChatScreen: React.FC = () => {
   );
   const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
   const [unreadMessageCount, setUnreadMessageCount] = React.useState(0);
+  const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     (async () => {
+      setLoading(true);
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
       if (userObj?._id || userObj?.id) {
@@ -95,6 +112,7 @@ const DMChatScreen: React.FC = () => {
           }
         }
       }
+      setLoading(false);
     })();
 
     // Socket.io event listeners
@@ -232,49 +250,99 @@ const DMChatScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Üst bar */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={26} color={colors.text} />
-        </TouchableOpacity>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
+      {/* Enhanced Header */}
+      <View
+        style={[
+          styles.header,
+          {
+            borderBottomColor: colors.border,
+            backgroundColor: colors.background,
+          },
+        ]}
+      >
         <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.headerUserInfo}
           onPress={() => navigation.navigate("UserProfile", { user })}
         >
-          <Image
-            source={{
-              uri: user?.avatar || "https://placehold.co/100x100/000/fff",
-            }}
-            style={styles.avatar}
-          />
+          <View style={styles.avatarContainer}>
+            <Image
+              source={{
+                uri:
+                  user?.avatar ||
+                  "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
+              }}
+              style={styles.avatar}
+            />
+            <View
+              style={[styles.onlineIndicator, { backgroundColor: "#4CAF50" }]}
+            />
+          </View>
+          <View style={styles.userInfo}>
+            <Text style={[styles.username, { color: colors.text }]}>
+              {user?.username || "kullanici"}
+            </Text>
+            <Text style={[styles.userStatus, { color: colors.textSecondary }]}>
+              Aktif
+            </Text>
+          </View>
         </TouchableOpacity>
-        <Text style={[styles.username, { color: colors.text }]}>
-          {user?.username || "kullanici"}
-        </Text>
+
         <TouchableOpacity
           onPress={() => navigation.navigate("ChatHistory", { user })}
           style={styles.infoButton}
         >
           <Ionicons
             name="information-circle-outline"
-            size={26}
+            size={24}
             color={colors.text}
           />
         </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.keyboardView}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={0}
       >
-        {/* Mesajlar */}
-        {messages.length === 0 ? (
-          <View
-            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-          >
-            <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
+        {/* Messages */}
+        {loading ? (
+          <LoadingSpinner />
+        ) : messages.length === 0 ? (
+          <View style={styles.emptyStateContainer}>
+            <View
+              style={[
+                styles.emptyStateIcon,
+                { backgroundColor: colors.surface },
+              ]}
+            >
+              <Ionicons
+                name="chatbubble-outline"
+                size={48}
+                color={colors.textSecondary}
+              />
+            </View>
+            <Text
+              style={[styles.emptyStateText, { color: colors.textSecondary }]}
+            >
               Henüz mesaj yok
+            </Text>
+            <Text
+              style={[
+                styles.emptyStateSubtext,
+                { color: colors.textSecondary },
+              ]}
+            >
+              İlk mesajınızı gönderin
             </Text>
           </View>
         ) : (
@@ -286,6 +354,26 @@ const DMChatScreen: React.FC = () => {
                   { backgroundColor: colors.surface },
                 ]}
               >
+                <View style={styles.typingDots}>
+                  <View
+                    style={[
+                      styles.typingDot,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.typingDot,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.typingDot,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  />
+                </View>
                 <Text
                   style={[styles.typingText, { color: colors.textSecondary }]}
                 >
@@ -293,14 +381,32 @@ const DMChatScreen: React.FC = () => {
                 </Text>
               </View>
             )}
+
             <FlatList
-              data={messages}
+              data={messages.filter((msg) => {
+                if (msg.story) {
+                  console.log(
+                    "Story object:",
+                    JSON.stringify(msg.story, null, 2)
+                  );
+                  const expired = isStoryExpired(msg.story.createdAt);
+                  const archived = msg.story.archived === true;
+                  console.log(
+                    "Message has story, expired:",
+                    expired,
+                    "archived:",
+                    archived
+                  );
+                  return !expired && !archived;
+                }
+                return true;
+              })}
               keyExtractor={(item) => item.id}
               renderItem={({ item, index }) => {
-                // Sadece en son kendi attığım mesajda ve seenAt varsa göster
                 const lastMyMessageIndex = messages.findIndex((m) => m.fromMe);
                 const isLastMyMessage =
                   item.fromMe && index === lastMyMessageIndex;
+
                 return (
                   <View
                     style={[
@@ -315,18 +421,19 @@ const DMChatScreen: React.FC = () => {
                         onPress={() =>
                           navigation.navigate("UserProfile", { user })
                         }
-                        style={styles.avatarContainer}
+                        style={styles.messageAvatarContainer}
                       >
                         <Image
                           source={{
                             uri:
                               user?.avatar ||
-                              "https://placehold.co/100x100/000/fff",
+                              "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
                           }}
                           style={styles.messageAvatar}
                         />
                       </TouchableOpacity>
                     )}
+
                     <View
                       style={[
                         styles.messageBubble,
@@ -341,143 +448,274 @@ const DMChatScreen: React.FC = () => {
                             ],
                       ]}
                     >
-                      {/* Post paylaşımı ise detaylı kart */}
+                      {/* Enhanced Post sharing */}
                       {item.post && (
                         <TouchableOpacity
-                          style={{
-                            backgroundColor: "transparent",
-                          }}
+                          style={[
+                            styles.postContainer,
+                            {
+                              backgroundColor: item.fromMe
+                                ? "rgba(255,255,255,0.05)"
+                                : colors.background,
+                              borderColor: item.fromMe
+                                ? "rgba(255,255,255,0.1)"
+                                : colors.border,
+                            },
+                          ]}
                           onPress={() =>
                             navigation.navigate("PostDetail", {
                               post: item.post,
                             })
                           }
                         >
-                          {/* Üstte küçük avatar ve username yatay, sol üstte */}
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              marginBottom: 6,
-                              marginLeft: 2,
-                            }}
-                          >
+                          <View style={styles.postHeader}>
                             <Image
                               source={{
                                 uri:
                                   item.post.user?.avatar ||
-                                  "https://placehold.co/100x100/000/fff",
+                                  "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
                               }}
-                              style={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: 14,
-                                marginRight: 8,
-                              }}
+                              style={styles.postAvatar}
                             />
-                            <Text
-                              style={{
-                                fontSize: 14,
-                                fontWeight: "600",
-                                color: colors.text,
-                              }}
-                            >
-                              {item.post.user?.username || "Kullanıcı"}
-                            </Text>
+                            <View style={styles.postHeaderText}>
+                              <Text
+                                style={[
+                                  styles.postUsername,
+                                  {
+                                    color: item.fromMe
+                                      ? "#ffffff"
+                                      : colors.text,
+                                  },
+                                ]}
+                              >
+                                {item.post.user?.username || "kullanici"}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.postTime,
+                                  {
+                                    color: item.fromMe
+                                      ? "rgba(255,255,255,0.7)"
+                                      : colors.textSecondary,
+                                  },
+                                ]}
+                              >
+                                2s
+                              </Text>
+                            </View>
+                            <TouchableOpacity style={styles.postMoreButton}>
+                              <Ionicons
+                                name="ellipsis-horizontal"
+                                size={16}
+                                color={
+                                  item.fromMe
+                                    ? "rgba(255,255,255,0.8)"
+                                    : colors.textSecondary
+                                }
+                              />
+                            </TouchableOpacity>
                           </View>
-                          {/* Ortada büyük görsel */}
-                          <Image
-                            source={{ uri: item.post.image }}
-                            style={{
-                              width: 220,
-                              height: 220,
-                              borderRadius: 8,
-                              alignSelf: "flex-start",
-                              backgroundColor: "#111",
-                            }}
-                          />
-                        </TouchableOpacity>
-                      )}
 
-                      {/* Story paylaşımı ise detaylı kart */}
-                      {item.story && (
-                        <TouchableOpacity
-                          style={[
-                            styles.shareCard,
-                            {
-                              backgroundColor: item.fromMe
-                                ? colors.background
-                                : colors.surface,
-                              borderColor: colors.border,
-                            },
-                          ]}
-                          onPress={() =>
-                            navigation.navigate("StoryScreen", {
-                              story: item.story,
-                            })
-                          }
-                        >
-                          <View style={styles.shareCardHeader}>
-                            <Image
-                              source={{
-                                uri:
-                                  item.story.user?.avatar ||
-                                  "https://placehold.co/100x100/000/fff",
-                              }}
-                              style={styles.shareCardAvatar}
-                            />
+                          <Image
+                            source={{
+                              uri:
+                                item.post.image ||
+                                "https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop",
+                            }}
+                            style={styles.postImage}
+                          />
+
+                          <View style={styles.postActions}>
+                            <View style={styles.postActionsLeft}>
+                              <TouchableOpacity style={styles.postActionButton}>
+                                <Ionicons
+                                  name="heart-outline"
+                                  size={20}
+                                  color={item.fromMe ? "#ffffff" : colors.text}
+                                />
+                              </TouchableOpacity>
+                              <TouchableOpacity style={styles.postActionButton}>
+                                <Ionicons
+                                  name="chatbubble-outline"
+                                  size={20}
+                                  color={item.fromMe ? "#ffffff" : colors.text}
+                                />
+                              </TouchableOpacity>
+                              <TouchableOpacity style={styles.postActionButton}>
+                                <Ionicons
+                                  name="paper-plane-outline"
+                                  size={20}
+                                  color={item.fromMe ? "#ffffff" : colors.text}
+                                />
+                              </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity>
+                              <Ionicons
+                                name="bookmark-outline"
+                                size={20}
+                                color={item.fromMe ? "#ffffff" : colors.text}
+                              />
+                            </TouchableOpacity>
+                          </View>
+
+                          <View style={styles.postFooter}>
                             <Text
                               style={[
-                                styles.shareCardUsername,
+                                styles.postLikes,
                                 {
-                                  color: item.fromMe
-                                    ? colors.background
-                                    : colors.text,
+                                  color: item.fromMe ? "#ffffff" : colors.text,
                                 },
                               ]}
                             >
-                              {item.story.user?.username || "Kullanıcı"}
+                              142 beğenme
                             </Text>
-                            <Ionicons
-                              name="camera"
-                              size={16}
-                              color={
-                                item.fromMe ? colors.background : colors.primary
-                              }
-                              style={{ marginLeft: 8 }}
-                            />
+                            {item.post.caption && (
+                              <Text
+                                style={[
+                                  styles.postCaption,
+                                  {
+                                    color: item.fromMe
+                                      ? "rgba(255,255,255,0.9)"
+                                      : colors.text,
+                                  },
+                                ]}
+                                numberOfLines={2}
+                              >
+                                <Text style={styles.postCaptionUsername}>
+                                  {item.post.user?.username || "kullanici"}{" "}
+                                </Text>
+                                {item.post.caption || "Güzel bir gönderi"}
+                              </Text>
+                            )}
                           </View>
-                          <View style={{ position: "relative" }}>
-                            <Image
-                              source={{ uri: item.story.image }}
-                              style={styles.shareCardImage}
-                            />
-                            <View
-                              style={{
-                                position: "absolute",
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                height: 40,
-                                backgroundColor: "rgba(0,0,0,0.3)",
-                              }}
-                            />
-                          </View>
-                          <Text
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Enhanced Story sharing */}
+                      {item.story &&
+                        (item.story.archived ||
+                        isStoryExpired(item.story.createdAt) ? (
+                          <View
                             style={[
-                              styles.shareCardDescription,
+                              styles.storyContainer,
                               {
-                                color: item.fromMe
-                                  ? colors.background
-                                  : colors.textSecondary,
+                                backgroundColor: colors.border,
+                                borderColor: colors.border,
+                                opacity: 0.7,
+                                padding: 16,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                minHeight: 80,
                               },
                             ]}
                           >
-                            Hikaye
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                      {/* Normal mesaj metni */}
+                            <Text
+                              style={{
+                                color: colors.textSecondary,
+                                fontSize: 14,
+                                textAlign: "center",
+                              }}
+                            >
+                              Gönderi yüklenemiyor veya silindi
+                            </Text>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={[
+                              styles.storyContainer,
+                              {
+                                backgroundColor: item.fromMe
+                                  ? "rgba(255,255,255,0.05)"
+                                  : colors.background,
+                                borderColor: item.fromMe
+                                  ? "rgba(255,255,255,0.1)"
+                                  : colors.border,
+                              },
+                            ]}
+                            onPress={() =>
+                              navigation.navigate("StoryScreen", {
+                                story: item.story,
+                              })
+                            }
+                          >
+                            <View style={styles.storyHeader}>
+                              <View
+                                style={[
+                                  styles.storyAvatarRing,
+                                  {
+                                    borderColor: colors.primary,
+                                    borderWidth: 2,
+                                  },
+                                ]}
+                              >
+                                <Image
+                                  source={{
+                                    uri:
+                                      item.story.user?.avatar ||
+                                      "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
+                                  }}
+                                  style={styles.storyAvatar}
+                                />
+                              </View>
+                              <View style={styles.storyHeaderText}>
+                                <Text
+                                  style={[
+                                    styles.storyUsername,
+                                    {
+                                      color: item.fromMe
+                                        ? "#ffffff"
+                                        : colors.text,
+                                    },
+                                  ]}
+                                >
+                                  {item.story.user?.username || "kullanici"}
+                                </Text>
+                                <Text
+                                  style={[
+                                    styles.storyTime,
+                                    {
+                                      color: item.fromMe
+                                        ? "rgba(255,255,255,0.7)"
+                                        : colors.textSecondary,
+                                    },
+                                  ]}
+                                >
+                                  5dk
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View style={styles.storyImageWrapper}>
+                              <View style={styles.storyProgressBar}>
+                                <View
+                                  style={[
+                                    styles.storyProgress,
+                                    { backgroundColor: colors.primary },
+                                  ]}
+                                />
+                              </View>
+                              <Image
+                                source={{
+                                  uri:
+                                    item.story.image ||
+                                    "https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop",
+                                }}
+                                style={styles.storyImage}
+                              />
+                              <View style={styles.storyOverlay}>
+                                <View style={styles.storyPlayIcon}>
+                                  <Ionicons
+                                    name="play"
+                                    size={12}
+                                    color="#fff"
+                                  />
+                                </View>
+                              </View>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+
+                      {/* Enhanced Message text */}
                       {item.text && (
                         <Text
                           style={[
@@ -492,12 +730,14 @@ const DMChatScreen: React.FC = () => {
                           {item.text}
                         </Text>
                       )}
+
+                      {/* Enhanced Message time */}
                       <Text
                         style={[
                           styles.messageTime,
                           {
                             color: item.fromMe
-                              ? colors.background
+                              ? "rgba(255,255,255,0.7)"
                               : colors.textSecondary,
                           },
                         ]}
@@ -512,18 +752,17 @@ const DMChatScreen: React.FC = () => {
                             )
                           : ""}
                       </Text>
-                      {/* GÖRÜLDÜ etiketi */}
+
+                      {/* Enhanced Seen indicator */}
                       {isLastMyMessage && item.seenAt && (
-                        <Text
-                          style={{
-                            color: colors.background,
-                            fontSize: 11,
-                            marginTop: 2,
-                            alignSelf: "flex-end",
-                          }}
-                        >
-                          Görüldü
-                        </Text>
+                        <View style={styles.seenContainer}>
+                          <Ionicons
+                            name="checkmark-done"
+                            size={14}
+                            color="rgba(255,255,255,0.8)"
+                          />
+                          <Text style={styles.seenText}>Görüldü</Text>
+                        </View>
                       )}
                     </View>
                   </View>
@@ -531,11 +770,12 @@ const DMChatScreen: React.FC = () => {
               }}
               contentContainerStyle={styles.messagesList}
               inverted
+              showsVerticalScrollIndicator={false}
             />
           </>
         )}
 
-        {/* Mesaj yazma kutusu */}
+        {/* Enhanced Input bar */}
         <View
           style={[
             styles.inputBar,
@@ -545,31 +785,42 @@ const DMChatScreen: React.FC = () => {
             },
           ]}
         >
-          <TextInput
-            style={[
-              styles.input,
-              { color: colors.text, backgroundColor: colors.surface },
-            ]}
-            placeholder="Mesaj yaz..."
-            placeholderTextColor={colors.textSecondary}
-            value={newMessage}
-            onChangeText={handleTyping}
-            onSubmitEditing={handleSendMessage}
-            returnKeyType="send"
-            multiline
-            maxLength={1000}
-          />
-          <TouchableOpacity
-            onPress={handleSendMessage}
-            disabled={!newMessage.trim() || sending}
-            style={{ opacity: !newMessage.trim() || sending ? 0.5 : 1 }}
+          <View
+            style={[styles.inputContainer, { backgroundColor: colors.surface }]}
           >
-            <Ionicons
-              name="send"
-              size={24}
-              color={newMessage.trim() ? colors.primary : colors.textSecondary}
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              placeholder="Mesaj yaz..."
+              placeholderTextColor={colors.textSecondary}
+              value={newMessage}
+              onChangeText={handleTyping}
+              onSubmitEditing={handleSendMessage}
+              returnKeyType="send"
+              multiline
+              maxLength={1000}
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleSendMessage}
+              disabled={!newMessage.trim() || sending}
+              style={[
+                styles.sendButton,
+                {
+                  backgroundColor: newMessage.trim()
+                    ? colors.primary
+                    : colors.surface,
+                  opacity: !newMessage.trim() || sending ? 0.5 : 1,
+                },
+              ]}
+            >
+              <Ionicons
+                name="send"
+                size={18}
+                color={
+                  newMessage.trim() ? colors.background : colors.textSecondary
+                }
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -583,33 +834,117 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    marginHorizontal: 10,
+  backButton: {
+    padding: 8,
+    marginRight: 4,
   },
-  username: {
-    fontWeight: "bold",
-    fontSize: 18,
+  headerUserInfo: {
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
+  avatarContainer: {
+    position: "relative",
+    marginRight: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  onlineIndicator: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  userInfo: {
+    flex: 1,
+  },
+  username: {
+    fontWeight: "700",
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  userStatus: {
+    fontSize: 12,
+    opacity: 0.7,
+  },
   infoButton: {
-    marginLeft: 8,
+    padding: 8,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  emptyStateIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    opacity: 0.8,
+  },
+  typingIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 20,
+  },
+  typingDots: {
+    flexDirection: "row",
+    marginRight: 8,
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 1,
+  },
+  typingText: {
+    fontSize: 14,
+    fontStyle: "italic",
   },
   messagesList: {
     flexGrow: 1,
     justifyContent: "flex-end",
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   messageContainer: {
     flexDirection: "row",
     alignItems: "flex-end",
-    marginBottom: 10,
+    marginBottom: 12,
   },
   myMessageContainer: {
     justifyContent: "flex-end",
@@ -617,155 +952,272 @@ const styles = StyleSheet.create({
   theirMessageContainer: {
     justifyContent: "flex-start",
   },
-  avatarContainer: {
+  messageAvatarContainer: {
     marginRight: 8,
     marginBottom: 4,
   },
   messageAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
   },
   messageBubble: {
     maxWidth: "75%",
-    borderRadius: 18,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   myMessage: {
     alignSelf: "flex-end",
+    borderBottomRightRadius: 8,
   },
   theirMessage: {
     alignSelf: "flex-start",
+    borderBottomLeftRadius: 8,
+  },
+  postContainer: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 8,
+    maxWidth: 300,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  postHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  postAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 8,
+  },
+  postHeaderText: {
+    flex: 1,
+  },
+  postUsername: {
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  postTime: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  postMoreButton: {
+    padding: 4,
+  },
+  postImage: {
+    width: "100%",
+    height: 240,
+    backgroundColor: "#000",
+  },
+  postActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  postActionsLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  postActionButton: {
+    marginRight: 16,
+    padding: 4,
+  },
+  postFooter: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  postLikes: {
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  postCaption: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  postCaptionUsername: {
+    fontWeight: "700",
+  },
+  storyContainer: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 8,
+    maxWidth: 200,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+
+  storyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  storyAvatarRing: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  storyAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+  },
+  storyHeaderText: {
+    flex: 1,
+  },
+  storyUsername: {
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  storyTime: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  storyImageWrapper: {
+    position: "relative",
+  },
+  storyProgressBar: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    right: 8,
+    height: 2,
+    backgroundColor: "rgba(255,255,255,0.3)",
+    borderRadius: 1,
+    zIndex: 2,
+  },
+  storyProgress: {
+    height: "100%",
+    width: "60%",
+    borderRadius: 1,
+  },
+  storyImage: {
+    width: "100%",
+    height: 180,
+    backgroundColor: "#000",
+  },
+  storyOverlay: {
+    position: "absolute",
+    bottom: 12,
+    right: 12,
+  },
+  storyPlayIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  storyImageContainer: {
+    position: "relative",
+  },
+  storyGradient: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  storyPlayButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.3)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   messageText: {
-    fontSize: 15,
+    fontSize: 16,
+    lineHeight: 20,
+    marginBottom: 4,
   },
   messageTime: {
     fontSize: 11,
-    marginTop: 4,
     alignSelf: "flex-end",
+    opacity: 0.8,
   },
-  typingIndicator: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 16,
+  seenContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-end",
+    marginTop: 2,
   },
-  typingText: {
-    fontSize: 14,
-    fontStyle: "italic",
+  seenText: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 10,
+    marginLeft: 2,
   },
   inputBar: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     borderTopWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: 16,
+  },
+  inputContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   input: {
     flex: 1,
     fontSize: 16,
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    maxHeight: 100,
     paddingVertical: 8,
-    marginRight: 8,
+    paddingRight: 8,
+    lineHeight: 20,
   },
-  shareCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: "hidden",
-    marginBottom: 8,
-    maxWidth: 220,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  shareCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    paddingBottom: 8,
-  },
-  shareCardAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    marginRight: 10,
-  },
-  shareCardUsername: {
-    fontSize: 13,
-    fontWeight: "600",
-    flex: 1,
-  },
-  shareCardImage: {
-    width: "100%",
-    height: 140,
-    resizeMode: "cover",
-  },
-  shareCardDescription: {
-    fontSize: 12,
-    padding: 12,
-    paddingTop: 8,
-    lineHeight: 16,
-  },
-  shareCardModern: {
+  sendButton: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
-    borderWidth: 1,
-    overflow: "hidden",
-    marginBottom: 12,
-    maxWidth: 260,
-    backgroundColor: "#222",
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.13,
-    shadowRadius: 6,
-    elevation: 4,
-    alignSelf: "center",
-  },
-  shareCardModernHeader: {
-    flexDirection: "column",
-    alignItems: "center",
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: "transparent",
-  },
-  shareCardModernAvatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    marginBottom: 6,
-  },
-  shareCardModernUsername: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#fff",
-    textAlign: "center",
-  },
-  shareCardModernImage: {
-    width: 240,
-    height: 240,
-    borderRadius: 12,
-    alignSelf: "center",
-    marginVertical: 8,
-    backgroundColor: "#111",
-  },
-  shareCardModernFooter: {
-    backgroundColor: "#333",
-    paddingVertical: 8,
-    alignItems: "center",
-  },
-  shareCardModernFooterText: {
-    color: "#bbb",
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
 });
 

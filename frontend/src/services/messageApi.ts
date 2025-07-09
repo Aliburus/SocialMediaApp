@@ -31,7 +31,6 @@ export const markMessagesAsSeen = async (
   conversationId: string
 ) => {
   const res = await api.post(`/users/${userId}/mark-messages-seen`, {
-    userId,
     conversationId,
   });
   return res.data;

@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
 import { searchUsers as searchUsersApi } from "../services/api";
+import LoadingSpinner from "../components/LoadingSpinner";
 import { useNavigation } from "@react-navigation/native";
 
 const UserSearchScreen: React.FC = () => {
@@ -147,11 +148,7 @@ const UserSearchScreen: React.FC = () => {
           ListFooterComponent={
             loadingMore ? (
               <View style={styles.loadingMore}>
-                <Text
-                  style={[styles.loadingText, { color: colors.textSecondary }]}
-                >
-                  Daha fazla yükleniyor...
-                </Text>
+                <LoadingSpinner size="small" />
               </View>
             ) : null
           }

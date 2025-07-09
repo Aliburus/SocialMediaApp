@@ -61,11 +61,20 @@ import ChatHistoryScreen from "./src/screens/ChatHistoryScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-function MainTabs({ onLogout }: { onLogout: () => void }) {
+function MainTabs({
+  onLogout,
+  setUnreadNotifCount,
+  setUnreadMessageCount,
+  unreadNotifCount,
+}: {
+  onLogout: () => void;
+  setUnreadNotifCount: (count: number) => void;
+  setUnreadMessageCount: (count: number) => void;
+  unreadNotifCount: number;
+}) {
   const { colors, isDark } = useTheme();
   const { user } = useUser();
-  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
-  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [unreadMessageCount, setUnreadMessageCountLocal] = useState(0);
 
   // Okunmamış mesaj sayısını getir
   const fetchUnreadCount = async () => {
@@ -76,13 +85,13 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
           // Lazy import - performans için
           const api = await import("./src/services/api");
           const data = await api.getUnreadMessageCount(userId);
-          setUnreadMessageCount(data.unreadCount || 0);
+          setUnreadMessageCountLocal(data.unreadCount || 0);
         }
       }
     } catch (error) {
       console.error("Unread count fetch error:", error);
       // Hata durumunda 0 olarak ayarla
-      setUnreadMessageCount(0);
+      setUnreadMessageCountLocal(0);
     }
   };
 
@@ -110,7 +119,7 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
       const userId = user.id || user._id;
       socketService.onUnreadCountUpdate((data) => {
         if (data.userId === userId) {
-          setUnreadMessageCount(data.unreadCount);
+          setUnreadMessageCountLocal(data.unreadCount);
         }
       });
 
@@ -254,9 +263,45 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
                 marginRight: 16,
               }}
             >
-              {/* DM İkonu */}
+              {/* Bildirim (Kalp) İkonu */}
               <TouchableOpacity
                 style={{ position: "relative", marginRight: 16 }}
+                onPress={() => {
+                  navigation.navigate("Notifications");
+                  setUnreadNotifCount(0);
+                }}
+              >
+                <Ionicons name="heart-outline" size={28} color={colors.text} />
+                {unreadNotifCount > 0 && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -5,
+                      right: -5,
+                      backgroundColor: "red",
+                      borderRadius: 10,
+                      minWidth: 20,
+                      height: 20,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "white",
+                        fontSize: 12,
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {unreadNotifCount > 99 ? "99+" : unreadNotifCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              {/* DM İkonu */}
+              <TouchableOpacity
+                style={{ position: "relative" }}
                 onPress={() => navigation.navigate("DMList")}
               >
                 <Ionicons
@@ -287,42 +332,6 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
                       }}
                     >
                       {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              {/* Bildirim (Kalp) İkonu */}
-              <TouchableOpacity
-                style={{ position: "relative" }}
-                onPress={() => {
-                  navigation.navigate("Notifications");
-                  setUnreadNotifCount(0);
-                }}
-              >
-                <Ionicons name="heart-outline" size={28} color={colors.text} />
-                {unreadNotifCount > 0 && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: -5,
-                      right: -5,
-                      backgroundColor: "red",
-                      borderRadius: 10,
-                      minWidth: 20,
-                      height: 20,
-                      justifyContent: "center",
-                      alignItems: "center",
-                      paddingHorizontal: 4,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "white",
-                        fontSize: 12,
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {unreadNotifCount > 99 ? "99+" : unreadNotifCount}
                     </Text>
                   </View>
                 )}
@@ -391,6 +400,8 @@ function AppContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   useEffect(() => {
     const checkLogin = async () => {
@@ -479,7 +490,14 @@ function AppContent() {
         />
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="MainTabs">
-            {() => <MainTabs onLogout={handleLogout} />}
+            {() => (
+              <MainTabs
+                onLogout={handleLogout}
+                setUnreadNotifCount={setUnreadNotifCount}
+                setUnreadMessageCount={setUnreadMessageCount}
+                unreadNotifCount={unreadNotifCount}
+              />
+            )}
           </Stack.Screen>
           <Stack.Screen name="PostDetail" component={PostDetailScreen} />
           <Stack.Screen name="EditProfile" component={EditProfileScreen} />
@@ -487,9 +505,17 @@ function AppContent() {
           <Stack.Screen name="Following" component={FollowingScreen} />
           <Stack.Screen name="Comment" component={CommentScreen} />
           <Stack.Screen name="Story" component={StoryScreen} />
-          <Stack.Screen name="DMList" component={DMListScreen} />
+          <Stack.Screen name="DMList">
+            {() => (
+              <DMListScreen setUnreadMessageCount={setUnreadMessageCount} />
+            )}
+          </Stack.Screen>
           <Stack.Screen name="DMChat" component={DMChatScreen} />
-          <Stack.Screen name="Notifications" component={NotificationsScreen} />
+          <Stack.Screen name="Notifications">
+            {() => (
+              <NotificationsScreen setUnreadNotifCount={setUnreadNotifCount} />
+            )}
+          </Stack.Screen>
           <Stack.Screen name="AddStory" component={AddStoryScreen} />
           <Stack.Screen name="ReelDetail" component={ReelDetailScreen} />
           <Stack.Screen name="SavedDetail" component={SavedDetailScreen} />

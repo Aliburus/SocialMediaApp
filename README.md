@@ -1,160 +1,147 @@
-# InstagramClone
+# SocialApp
 
-A full-stack mobile application inspired by Instagram. This app allows users to share photos, follow others, send messages, and interact in a social environment.
+## Project Description
 
-## Features
+SocialApp is a full-featured mobile social media application that enables users to connect, share media, and communicate in real time. The app provides a seamless experience for discovering new content, interacting with other users, and managing personal profiles securely.
 
-- User registration & authentication
-- Profile management
-- Post creation, feed, and explore
-- Like, comment, and save posts
-- Stories (view, add, archive)
-- Follow/unfollow users
-- Private/public account support
-- Direct messaging (DM)
-- Notifications
-- Search users
-- Dark & light theme support
+## Core Features
 
-## Tech Stack
+- User registration and secure authentication
+- Profile management (avatar, bio, privacy settings)
+- Media sharing (photos, stories, reels)
+- Real-time messaging and chat
+- Follow/unfollow system with private account support
+- Notifications for interactions and requests
+- User and content search
+- Save and archive posts
+- Light/Dark theme support
 
-- **Frontend:** React Native (TypeScript)
-- **Backend:** Node.js, Express
-- **Database:** MongoDB (Mongoose)
-- **Other:** AsyncStorage, Expo, JWT, bcrypt, socket.io
+## Tech Stack / Technologies Used
+
+### Frontend
+
+- React Native (TypeScript)
+- React Navigation
+- Context API (state management)
+- Axios (API requests)
+- Expo (optional)
+
+### Backend
+
+- Node.js (Express)
+- MongoDB (Mongoose)
+- Socket.io (real-time features)
+- JWT (authentication)
+- CORS, dotenv, bcryptjs, and other middleware
+
+### Additional Libraries & Tools
+
+- AsyncStorage
+- react-native-safe-area-context
+- react-native-vector-icons
+- Other supporting libraries
+
+## Installation Instructions
+
+### 1. Clone the Repository
+
+```sh
+git clone https://github.com/Aliburus/SocialApp.git
+cd SocialApp
+```
+
+### 2. Backend Setup
+
+```sh
+cd backend
+npm install
+cp .env.example .env
+# Edit the .env file with your MongoDB connection string and FRONTEND_URL
+npm start
+```
+
+### 3. Frontend Setup
+
+```sh
+cd ../frontend
+npm install
+cp .env.example .env
+# Edit the .env file with your API_URL
+npm start
+# or if using Expo:
+# npx expo start
+```
+
+### 4. Environment Variables
+
+Check the `.env.example` file in both directories and create your own `.env` files accordingly.
+
+## Usage
+
+- Start both backend and frontend servers
+- Register or log in
+- Edit your profile
+- Share photos, stories, or reels
+- Search and follow other users
+- Use messaging and notification features
+- Switch between light and dark themes
+
+## API Documentation
+
+### Example Routes
+
+#### User Registration
+
+```
+POST /api/users/register
+Body: { username, email, password, ... }
+Response: { _id, username, email, ... }
+```
+
+#### Login
+
+```
+POST /api/users/login
+Body: { emailOrUsername, password }
+Response: { token, _id, username, ... }
+```
+
+#### Get User Profile
+
+```
+GET /api/users/profile/:id?currentUserId=xxx
+Response: { _id, username, avatar, isFollowing, isFollowedBy, ... }
+```
+
+#### Follow User
+
+```
+POST /api/users/follow
+Body: { userId, targetUserId }
+Response: { success: true }
+```
+
+For more API routes, see the backend/routes directory.
 
 ## Screenshots / Demo
 
-<!-- Add screenshots or GIFs here -->
-
-## Installation Guide
-
-### Prerequisites
-
-- Node.js >= 14.x
-- npm or yarn
-- MongoDB instance (local or cloud)
-- Expo CLI (for React Native)
-
-### Backend Setup
-
-```bash
-cd backend
-npm install
-```
-
-### Frontend Setup
-
-```bash
-cd frontend
-npm install
-```
-
-## Environment Variables
-
-### Backend (.env example)
-
-```
-MONGODB_URI=mongodb://localhost:27017/instagramclone
-JWT_SECRET=your_jwt_secret
-PORT=5000
-```
-
-### Frontend (.env example)
-
-```
-BACKEND_URL=http://localhost:5000/api
-```
-
-## Folder Structure
-
-```
-InstagramClone/
-  backend/
-    config/
-    controllers/
-    models/
-    routes/
-    utils/
-    server.js
-    package.json
-  frontend/
-    src/
-      components/
-      context/
-      screens/
-      services/
-      types/
-      utils/
-    App.tsx
-    package.json
-```
-
-## API Endpoints (Major)
-
-### Auth & User
-
-- `POST   /api/users/register` – Register
-- `POST   /api/users/login` – Login
-- `POST   /api/users/update-profile` – Update profile
-- `GET    /api/users/profile/:userId` – Get profile
-- `PUT    /api/users/:userId/toggle-private` – Toggle private account
-
-### Posts
-
-- `GET    /api/posts?userId=...` – Get feed posts
-- `GET    /api/posts/user/:userId` – Get user posts
-- `POST   /api/posts` – Create post
-- `DELETE /api/posts/:postId` – Delete post
-
-### Follow
-
-- `POST   /api/users/follow` – Follow user
-- `POST   /api/users/unfollow` – Unfollow user
-- `POST   /api/users/send-follow-request` – Send follow request
-- `POST   /api/users/accept-follow-request` – Accept follow request
-- `POST   /api/users/reject-follow-request` – Reject follow request
-
-### Stories
-
-- `GET    /api/users/stories` – Get stories
-- `POST   /api/users/stories` – Add story
-- `DELETE /api/users/stories/:id` – Delete story
-
-### Messaging
-
-- `GET    /api/users/:userId/conversations` – Get DM list
-- `POST   /api/users/send-message` – Send message
-
-### Notifications
-
-- `GET    /api/notifications/:userId` – Get notifications
-
-## How to Run Locally
-
-1. **Start MongoDB** (local or Atlas)
-2. **Backend:**
-   ```bash
-   cd backend
-   npm run dev
-   # or: node server.js
-   ```
-3. **Frontend:**
-   ```bash
-   cd frontend
-   npx expo start
-   ```
-4. **Configure .env files** as shown above.
-5. **Open app** on emulator or real device (Expo Go recommended).
+> You can add screenshots or demo videos here.
 
 ## Contributing
 
-- Fork the repo
-- Create a feature branch (`git checkout -b feature/your-feature`)
-- Commit your changes
-- Open a Pull Request
-- Please follow code style and add clear commit messages
+1. Fork this repository
+2. Create a new branch (`git checkout -b feature/your-feature`)
+3. Commit your changes (`git commit -am 'Add new feature'`)
+4. Push to the branch (`git push origin feature/your-feature`)
+5. Open a Pull Request
+
+Please follow the code style and project structure when submitting PRs.
 
 ## License
 
-MIT
+This project is licensed under the MIT License.
+
+## Contact / Support
+
+- GitHub: [Aliburus](https://github.com/Aliburus)
+- LinkedIn: [Ali Burus](https://linkedin.com/in/aliburus)

@@ -18,18 +18,18 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "../context/ThemeContext";
+import { acceptFollowRequest, rejectFollowRequest } from "../services/api";
 import {
   getNotifications,
-  acceptFollowRequest,
-  rejectFollowRequest,
   markAllNotificationsAsRead,
-} from "../services/api";
+} from "../services/notificationApi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { Swipeable } from "react-native-gesture-handler";
 import { useUser } from "../context/UserContext";
 import FollowButton from "../components/FollowButton";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 type RootStackParamList = {
   UserProfile: { user: any };
@@ -58,10 +58,13 @@ function NotificationsScreen({
 
   // Bildirimleri getir fonksiyonu
   const fetchNotifications = async (uid: string) => {
+    console.log("fetchNotifications çağrıldı, uid:", uid);
     setLoading(true);
     setError(null);
     try {
+      console.log("getNotifications API çağrısı yapılıyor...");
       const notifs = await getNotifications(uid);
+      console.log("getNotifications sonucu:", notifs);
       setNotifications(notifs);
       const followed = (notifs as any[])
         .filter(
@@ -77,6 +80,14 @@ function NotificationsScreen({
         .filter(Boolean);
       setFollowedIds(followed);
       await refreshUser();
+      console.log("fetchNotifications başarıyla tamamlandı");
+
+      // Bildirimleri okundu yap ve count'u sıfırla
+      await markAllNotificationsAsRead(uid);
+      setNotifications((prev) =>
+        prev.map((notif) => ({ ...notif, isRead: true }))
+      );
+      if (setUnreadNotifCount) setUnreadNotifCount(0);
     } catch (err) {
       console.error("[NOTIFICATIONS_SCREEN] Bildirim getirme hatası:", err);
       setError("Bildirimler yüklenemedi");
@@ -97,21 +108,13 @@ function NotificationsScreen({
     })();
   }, []);
 
-  // userId değişince veya sayfa açılınca bildirimleri getir
-  useFocusEffect(
-    React.useCallback(() => {
-      if (userId) {
-        fetchNotifications(userId);
-        refreshUser();
-        // Bildirimleri okundu yap (backend)
-        markAllNotificationsAsRead(userId);
-        setNotifications((prev) =>
-          prev.map((notif) => ({ ...notif, isRead: true }))
-        );
-        if (setUnreadNotifCount) setUnreadNotifCount(0);
-      }
-    }, [userId])
-  );
+  // userId değiştiğinde bildirimleri getir
+  React.useEffect(() => {
+    if (userId) {
+      fetchNotifications(userId);
+      refreshUser();
+    }
+  }, [userId]);
 
   // Pull to refresh fonksiyonu
   const onRefresh = async () => {
@@ -560,15 +563,7 @@ function NotificationsScreen({
         </Text>
       </View>
       {loading ? (
-        <Text
-          style={{
-            textAlign: "center",
-            marginTop: 32,
-            color: colors.textSecondary,
-          }}
-        >
-          Yükleniyor...
-        </Text>
+        <LoadingSpinner />
       ) : error ? (
         <Text
           style={{
