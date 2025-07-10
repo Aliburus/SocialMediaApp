@@ -1,9 +1,11 @@
 const express = require("express");
-const mongoose = require("mongoose");
+
 const dotenv = require("dotenv");
 const cors = require("cors");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
+const multer = require("multer");
+const path = require("path");
 const userRoutes = require("./routes/userRoutes");
 const connectDB = require("./config/db");
 const postRoutes = require("./routes/postRoutes");
@@ -15,6 +17,45 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
+// Multer konfigürasyonu
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "uploads/");
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(
+      null,
+      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname)
+    );
+  },
+});
+
+// Uploads klasörünü oluştur
+const fs = require("fs");
+const uploadsDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const upload = multer({
+  storage: storage,
+  fileFilter: function (req, file, cb) {
+    console.log("File upload attempt:", file.originalname, file.mimetype);
+    if (
+      file.mimetype.startsWith("image/") ||
+      file.mimetype.startsWith("video/")
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("Sadece resim ve video dosyaları yüklenebilir!"), false);
+    }
+  },
+  limits: {
+    fileSize: 300 * 1024 * 1024, // 100MB
+  },
+});
+
 // Socket.io server
 const io = new Server(httpServer, {
   cors: {
@@ -25,7 +66,15 @@ const io = new Server(httpServer, {
 });
 
 app.use(cors({ origin: "*", credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: "3r00mb" }));
+app.use(express.urlencoded({ extended: true, limit: "300mb" }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Multer middleware'ini global olarak ekle
+app.use((req, res, next) => {
+  req.upload = upload;
+  next();
+});
 
 connectDB();
 

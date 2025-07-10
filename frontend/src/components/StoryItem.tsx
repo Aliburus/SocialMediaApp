@@ -2,6 +2,8 @@ import React from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Story } from "../types";
+import api from "../services/api";
+import { Ionicons } from "@expo/vector-icons";
 
 interface StoryItemProps {
   story: Story;
@@ -22,7 +24,12 @@ const StoryItem: React.FC<StoryItemProps> = ({
   totalStories,
   viewedStories,
 }) => {
-  const avatar = story.user?.avatar || "https://ui-avatars.com/api/?name=User";
+  const avatar = story.user?.avatar?.startsWith("http")
+    ? story.user.avatar
+    : story.user?.avatar
+    ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${story.user.avatar}`
+    : "https://ui-avatars.com/api/?name=User";
+
   const username = story.user?.username || "Kullanıcı";
 
   // isViewed prop'u veya story'nin kendi viewed durumu
@@ -34,6 +41,14 @@ const StoryItem: React.FC<StoryItemProps> = ({
     viewedStories &&
     viewedStories > 0 &&
     viewedStories < totalStories;
+
+  const mediaUri = story.video
+    ? story.video.startsWith("http")
+      ? story.video
+      : `${api.defaults.baseURL?.replace(/\/api$/, "")}${story.video}`
+    : story.image && !story.image.startsWith("http")
+    ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${story.image}`
+    : story.image || avatar;
 
   return (
     <TouchableOpacity

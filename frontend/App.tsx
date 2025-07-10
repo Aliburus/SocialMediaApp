@@ -16,6 +16,7 @@ import {
   LogBox,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "./src/services/api";
 import { getProfile } from "./src/services/api";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import socketService from "./src/services/socketService";
@@ -57,6 +58,7 @@ import ArchiveScreen from "./src/screens/ArchiveScreen";
 import NotificationSettingsScreen from "./src/screens/NotificationSettingsScreen";
 import MapScreen from "./src/screens/MapScreen";
 import ChatHistoryScreen from "./src/screens/ChatHistoryScreen";
+import VideoDetailScreen from "./src/screens/VideoDetailScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -208,9 +210,13 @@ function MainTabs({
               >
                 <Image
                   source={{
-                    uri:
-                      user?.avatar ||
-                      "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
+                    uri: user?.avatar?.startsWith("http")
+                      ? user.avatar
+                      : user?.avatar
+                      ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                          user.avatar
+                        }`
+                      : "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
                   }}
                   style={{
                     width: 28,
@@ -376,10 +382,15 @@ function MainTabs({
         options={{
           tabBarIcon: ({ focused }) => (
             <Image
+              key={user?.avatar}
               source={{
-                uri:
-                  user?.avatar ||
-                  "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
+                uri: user?.avatar?.startsWith("http")
+                  ? user.avatar
+                  : user?.avatar
+                  ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                      user.avatar
+                    }`
+                  : "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
               }}
               style={{
                 width: 28,
@@ -399,6 +410,7 @@ function MainTabs({
 
 function AppContent() {
   const { colors, isDark } = useTheme();
+  const { setUser } = useUser();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -444,6 +456,7 @@ function AppContent() {
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem("user");
+    setUser(null); // UserContext'i sıfırla
     setIsLoggedIn(false);
 
     // Socket.io bağlantısını kapat
@@ -518,6 +531,7 @@ function AppContent() {
             )}
           </Stack.Screen>
           <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+          <Stack.Screen name="VideoDetail" component={VideoDetailScreen} />
           <Stack.Screen name="EditProfile" component={EditProfileScreen} />
           <Stack.Screen name="Followers" component={FollowersScreen} />
           <Stack.Screen name="Following" component={FollowingScreen} />

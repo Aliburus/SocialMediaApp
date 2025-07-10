@@ -30,6 +30,7 @@ import StoryItem from "../components/StoryItem";
 import { getStories } from "../services/storyApi";
 import { LinearGradient } from "expo-linear-gradient";
 import api from "../services/api";
+import { Video, ResizeMode } from "expo-av";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -114,8 +115,14 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
 
   useEffect(() => {
     setPage(1);
-    setDisplayedData(userPosts.slice(0, PAGE_SIZE));
-    setHasMore(userPosts.length > PAGE_SIZE);
+    let filteredData = userPosts;
+    if (activeTab === "grid") {
+      filteredData = userPosts.filter((p) => p.type === "post" && !p.archived);
+    } else if (activeTab === "reels") {
+      filteredData = userPosts.filter((p) => p.type === "reel" && !p.archived);
+    }
+    setDisplayedData(filteredData.slice(0, PAGE_SIZE));
+    setHasMore(filteredData.length > PAGE_SIZE);
   }, [activeTab, userPosts]);
 
   useEffect(() => {
@@ -130,10 +137,16 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
   const loadMore = () => {
     if (!hasMore) return;
     const nextPage = page + 1;
-    const newData = userPosts.slice(0, nextPage * PAGE_SIZE);
+    let filteredData = userPosts;
+    if (activeTab === "grid") {
+      filteredData = userPosts.filter((p) => p.type === "post" && !p.archived);
+    } else if (activeTab === "reels") {
+      filteredData = userPosts.filter((p) => p.type === "reel" && !p.archived);
+    }
+    const newData = filteredData.slice(0, nextPage * PAGE_SIZE);
     setDisplayedData(newData);
     setPage(nextPage);
-    setHasMore(userPosts.length > nextPage * PAGE_SIZE);
+    setHasMore(filteredData.length > nextPage * PAGE_SIZE);
   };
 
   const onRefresh = async () => {
@@ -191,9 +204,36 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
   const renderPostItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={styles.postItem}
-      onPress={() => navigation.navigate("PostDetail", { post: item })}
+      onPress={() => {
+        if (item.video) {
+          navigation.navigate("VideoDetail", { post: item });
+        } else {
+          navigation.navigate("PostDetail", { post: item });
+        }
+      }}
     >
-      <Image source={{ uri: item.image }} style={styles.postImage} />
+      {item.type === "reel" && item.video ? (
+        <Video
+          source={{
+            uri: item.video.startsWith("http")
+              ? item.video
+              : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.video}`,
+          }}
+          style={styles.postImage}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay={false}
+          isMuted={true}
+        />
+      ) : (
+        <Image
+          source={{
+            uri: item.image.startsWith("http")
+              ? item.image
+              : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`,
+          }}
+          style={styles.postImage}
+        />
+      )}
     </TouchableOpacity>
   );
 
@@ -259,7 +299,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
       edges={["top", "bottom"]}
     >
       <FlatList
-        data={canViewPosts && activeTab === "grid" ? displayedData : []}
+        data={canViewPosts ? displayedData : []}
         renderItem={renderPostItem}
         keyExtractor={(item) => item._id || item.id}
         numColumns={3}
@@ -381,7 +421,15 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                   </TouchableOpacity>
                 ) : (
                   <Image
-                    source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                    source={{
+                      uri: profile?.avatar?.startsWith("http")
+                        ? profile.avatar
+                        : profile?.avatar
+                        ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                            profile.avatar
+                          }`
+                        : DEFAULT_AVATAR,
+                    }}
                     style={[
                       styles.profileImage,
                       { backgroundColor: colors.background },

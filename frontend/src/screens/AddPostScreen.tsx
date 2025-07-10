@@ -20,15 +20,20 @@ import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Dimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Video, ResizeMode } from "expo-av";
 
 const { height: screenHeight } = Dimensions.get("window");
 
 const AddPostScreen: React.FC = () => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const [image, setImage] = useState<string | null>(null);
+  const [media, setMedia] = useState<{
+    uri: string;
+    type: "image" | "video";
+  } | null>(null);
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const navigation = useNavigation<any>();
 
   useEffect(() => {
@@ -42,41 +47,68 @@ const AddPostScreen: React.FC = () => {
           "Galeriye ve kameraya erişim izni vermeniz gerekiyor."
         );
       } else {
-        pickImage();
+        pickMedia();
       }
     })();
   }, []);
 
-  const takePhoto = async () => {
+  const takePhotoOrVideo = async () => {
     let result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImage(result.assets[0].uri);
+      const asset = result.assets[0];
+      setMedia({
+        uri: asset.uri,
+        type: asset.type?.startsWith("video") ? "video" : "image",
+      });
     }
   };
 
-  const pickImage = async () => {
+  const pickMedia = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImage(result.assets[0].uri);
+      const asset = result.assets[0];
+      setMedia({
+        uri: asset.uri,
+        type: asset.type?.startsWith("video") ? "video" : "image",
+      });
     }
+  };
+
+  const getFileName = (uri: string) => {
+    return uri.split("/").pop() || `media_${Date.now()}`;
+  };
+  const getMimeType = (uri: string, type: "image" | "video") => {
+    if (type === "image") return "image/jpeg";
+    if (type === "video") return "video/mp4";
+    return "application/octet-stream";
   };
 
   const handleShare = async () => {
-    if (!image) {
-      Alert.alert("Hata", "Lütfen bir fotoğraf seçin.");
+    if (!media) {
+      Alert.alert("Hata", "Lütfen bir fotoğraf veya video seçin.");
       return;
     }
     setLoading(true);
+    setUploadProgress(0);
+
+    // Progress simülasyonu başlat
+    const progressInterval = setInterval(() => {
+      setUploadProgress((prev) => {
+        if (prev >= 90) return prev;
+        return prev + Math.random() * 10;
+      });
+    }, 200);
+
     try {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
@@ -87,16 +119,28 @@ const AddPostScreen: React.FC = () => {
         navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
         return;
       }
+      const mediaFile = {
+        uri: media.uri,
+        name: getFileName(media.uri),
+        type: getMimeType(media.uri, media.type),
+      };
       const newPost = await createPost({
-        type: "reel",
-        video: image,
+        type: media.type === "video" ? "reel" : "post",
         description,
         user: userId,
+        mediaFile,
       });
-      Alert.alert("Başarılı", "Post paylaşıldı!");
-      setImage(null);
-      setDescription("");
-      navigation.navigate("Home", { scrollToTop: true });
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      setTimeout(() => {
+        Alert.alert("Başarılı", "Post paylaşıldı!");
+        setMedia(null);
+        setDescription("");
+        setUploadProgress(0);
+        navigation.navigate("Home", { scrollToTop: true });
+      }, 500);
     } catch (err: any) {
       if (err?.response) {
         console.log("[POST PAYLAŞ HATA] response:", err.response);
@@ -119,7 +163,9 @@ const AddPostScreen: React.FC = () => {
       }
       Alert.alert("Hata", msg);
     } finally {
+      clearInterval(progressInterval);
       setLoading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -144,12 +190,12 @@ const AddPostScreen: React.FC = () => {
           </Text>
           <TouchableOpacity
             onPress={handleShare}
-            disabled={loading || !image}
+            disabled={loading || !media}
             style={[
               styles.shareButton,
               {
                 backgroundColor: colors.primary,
-                opacity: loading || !image ? 0.5 : 1,
+                opacity: loading || !media ? 0.5 : 1,
               },
             ]}
           >
@@ -159,10 +205,44 @@ const AddPostScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Progress Bar */}
+        {loading && (
+          <View style={styles.progressContainer}>
+            <View
+              style={[styles.progressBar, { backgroundColor: colors.surface }]}
+            >
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    backgroundColor: colors.primary,
+                    width: `${uploadProgress}%`,
+                  },
+                ]}
+              />
+            </View>
+            <Text
+              style={[styles.progressText, { color: colors.textSecondary }]}
+            >
+              {Math.round(uploadProgress)}% yükleniyor...
+            </Text>
+          </View>
+        )}
+
         {/* Image Section */}
-        <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-          {image ? (
-            <Image source={{ uri: image }} style={styles.image} />
+        <TouchableOpacity style={styles.imagePicker} onPress={pickMedia}>
+          {media ? (
+            media.type === "video" ? (
+              <Video
+                source={{ uri: media.uri }}
+                style={styles.image}
+                useNativeControls
+                resizeMode={ResizeMode.COVER}
+                isLooping
+              />
+            ) : (
+              <Image source={{ uri: media.uri }} style={styles.image} />
+            )
           ) : (
             <View style={styles.placeholderContainer}>
               <Ionicons
@@ -176,7 +256,7 @@ const AddPostScreen: React.FC = () => {
                   { color: colors.textSecondary },
                 ]}
               >
-                Fotoğraf seçmek için tıkla
+                Fotoğraf veya video seçmek için tıkla
               </Text>
             </View>
           )}
@@ -185,7 +265,7 @@ const AddPostScreen: React.FC = () => {
         {/* Camera Button */}
         <TouchableOpacity
           style={[styles.cameraButton, { backgroundColor: colors.surface }]}
-          onPress={takePhoto}
+          onPress={takePhotoOrVideo}
         >
           <Ionicons name="camera" size={24} color={colors.primary} />
           <Text style={[styles.cameraButtonText, { color: colors.primary }]}>
@@ -288,6 +368,24 @@ const styles = StyleSheet.create({
   input: {
     fontSize: 16,
     minHeight: 100,
+  },
+  progressContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  progressBar: {
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  progressText: {
+    fontSize: 12,
+    textAlign: "center",
   },
 });
 

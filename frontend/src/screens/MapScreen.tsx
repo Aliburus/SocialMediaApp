@@ -320,7 +320,14 @@ const MapScreen: React.FC = () => {
         let username = undefined;
         let userGender = undefined;
         // UserContext'ten kullanıcı bilgilerini al
-        avatarUrl = user?.avatar;
+        avatarUrl = user?.avatar?.startsWith("http")
+          ? user.avatar
+          : user?.avatar
+          ? `${require("../services/api").default.defaults.baseURL?.replace(
+              /\/api$/,
+              ""
+            )}${user.avatar}`
+          : undefined;
         username = user?.username;
         userGender = user?.gender;
         setIsPlusUser(!!user?.isPlusUser);

@@ -19,6 +19,7 @@ import { useTheme } from "../context/ThemeContext";
 import { getComments, toggleLike, savePost } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ShareModal } from "../components/ShareModal";
+import api from "../services/api";
 
 const { width, height } = Dimensions.get("window");
 
@@ -234,19 +235,33 @@ const ReelDetailScreen: React.FC = () => {
           </View>
 
           {/* Reel Video */}
-          <Video
-            source={{
-              uri:
-                reel?.video ||
-                reel?.media ||
-                "https://www.w3schools.com/html/mov_bbb.mp4",
-            }}
-            style={styles.video}
-            useNativeControls
-            resizeMode={ResizeMode.COVER}
-            shouldPlay
-            isLooping
-          />
+          {reel.video ? (
+            <Video
+              source={{
+                uri: reel.video.startsWith("http")
+                  ? reel.video
+                  : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                      reel.video
+                    }`,
+              }}
+              style={styles.video}
+              useNativeControls
+              resizeMode={ResizeMode.COVER}
+              shouldPlay
+              isLooping
+            />
+          ) : (
+            <Image
+              source={{
+                uri: reel.image.startsWith("http")
+                  ? reel.image
+                  : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                      reel.image
+                    }`,
+              }}
+              style={styles.video}
+            />
+          )}
 
           {/* Reel Actions */}
           <View style={styles.actions}>

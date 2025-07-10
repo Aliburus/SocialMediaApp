@@ -3,6 +3,7 @@ const router = express.Router();
 const postController = require("../controllers/postController");
 const { archivePost } = require("../controllers/postController");
 const nsfwCheck = require("../middleware/nsfwCheck");
+
 // const auth = require('../middleware/auth'); // Auth middleware eklenebilir
 
 // Yorumu beğen veya beğenmekten vazgeç (en üstte olmalı)
@@ -14,7 +15,14 @@ router.get("/:id", postController.getPostById);
 // Tüm postları listele
 router.get("/", postController.getAllPosts);
 // Post oluştur (auth middleware eklenebilir)
-router.post("/", /*auth,*/ nsfwCheck, postController.createPost);
+router.post(
+  "/",
+  /*auth,*/ (req, res, next) => {
+    req.upload.single("media")(req, res, next);
+  },
+  nsfwCheck,
+  postController.createPost
+);
 // Postu beğen veya beğenmekten vazgeç
 router.put("/:id/like", postController.toggleLike);
 // Posta yorum ekle

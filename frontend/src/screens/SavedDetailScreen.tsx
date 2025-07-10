@@ -20,6 +20,7 @@ import {
   savePost,
   getComments,
 } from "../services/api";
+import api from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ShareModal } from "../components/ShareModal";
 
@@ -208,7 +209,25 @@ const SavedDetailScreen: React.FC = () => {
         </View>
 
         {/* Post Image */}
-        <Image source={{ uri: item.image }} style={styles.postImage} />
+        {item.video ? (
+          <Image
+            source={{
+              uri: item.video.startsWith("http")
+                ? item.video
+                : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.video}`,
+            }}
+            style={styles.postImage}
+          />
+        ) : (
+          <Image
+            source={{
+              uri: item.image.startsWith("http")
+                ? item.image
+                : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`,
+            }}
+            style={styles.postImage}
+          />
+        )}
 
         {/* Post Actions */}
         <View style={styles.actions}>

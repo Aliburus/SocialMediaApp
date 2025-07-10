@@ -107,7 +107,13 @@ const UserSearchScreen: React.FC = () => {
       onPress={() => navigation.navigate("UserProfile", { user: item })}
     >
       <Image
-        source={{ uri: item.avatar || "https://ui-avatars.com/api/?name=User" }}
+        source={{
+          uri: item.avatar?.startsWith("http")
+            ? item.avatar
+            : item.avatar
+            ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.avatar}`
+            : "https://ui-avatars.com/api/?name=User",
+        }}
         style={styles.userAvatar}
       />
       <View style={styles.userInfo}>

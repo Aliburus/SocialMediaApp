@@ -1,11 +1,24 @@
 const Story = require("../models/Story");
 const User = require("../models/User");
+const fs = require("fs");
+const path = require("path");
 
 exports.createStory = async (req, res) => {
   try {
-    const { user, image } = req.body;
-    if (!user || !image) return res.status(400).json({ message: "Eksik veri" });
-    const story = await Story.create({ user, image });
+    const { user } = req.body;
+    let image = req.body.image;
+    let video = req.body.video;
+    if (req.file) {
+      const mime = req.file.mimetype;
+      if (mime.startsWith("image/")) {
+        image = `/uploads/${req.file.filename}`;
+      } else if (mime.startsWith("video/")) {
+        video = `/uploads/${req.file.filename}`;
+      }
+    }
+    if (!user || (!image && !video))
+      return res.status(400).json({ message: "Eksik veri" });
+    const story = await Story.create({ user, image, video });
     res.status(201).json(story);
   } catch (err) {
     res.status(500).json({ message: "Story eklenemedi", error: err.message });
@@ -82,6 +95,39 @@ exports.deleteStory = async (req, res) => {
     if (story.user.toString() !== userId) {
       return res.status(403).json({ message: "Bu işlem için yetkiniz yok" });
     }
+
+    // Dosya silme işlemleri
+    const deleteFile = (filePath) => {
+      return new Promise((resolve) => {
+        if (filePath && filePath.startsWith("/uploads/")) {
+          const fullPath = path.join(__dirname, "..", filePath);
+          fs.access(fullPath, fs.constants.F_OK, (err) => {
+            if (!err) {
+              fs.unlink(fullPath, (unlinkErr) => {
+                if (unlinkErr) {
+                  console.error(
+                    "Story dosyası silinemedi:",
+                    fullPath,
+                    unlinkErr
+                  );
+                } else {
+                  console.log("Story dosyası başarıyla silindi:", fullPath);
+                }
+                resolve();
+              });
+            } else {
+              console.log("Story dosyası bulunamadı:", fullPath);
+              resolve();
+            }
+          });
+        } else {
+          resolve();
+        }
+      });
+    };
+
+    // Image ve video dosyalarını sil
+    await Promise.all([deleteFile(story.image), deleteFile(story.video)]);
 
     await Story.findByIdAndDelete(storyId);
     res.json({ message: "Story başarıyla silindi" });

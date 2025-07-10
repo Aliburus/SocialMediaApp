@@ -12,12 +12,35 @@ export const getPostById = async (id: string) => {
 
 export const createPost = async (data: {
   image?: string;
+  video?: string;
   description?: string;
   user: string;
   type?: string;
-  video?: string;
+  mediaFile?: { uri: string; name: string; type: string };
 }) => {
-  const res = await api.post("/posts", data);
+  const formData = new FormData();
+  if (data.mediaFile) {
+    formData.append("media", {
+      uri: data.mediaFile.uri,
+      name: data.mediaFile.name,
+      type: data.mediaFile.type,
+    } as any);
+  }
+  if (data.description) formData.append("description", data.description);
+  if (data.user) formData.append("user", data.user);
+  // Eğer video varsa type otomatik olarak 'reel' olsun
+  if (data.video && !data.type) {
+    formData.append("type", "reel");
+  } else if (data.type) {
+    formData.append("type", data.type);
+  }
+  // image/video path fallback (eski sistem)
+  if (data.image && !data.mediaFile) formData.append("image", data.image);
+  if (data.video && !data.mediaFile) formData.append("video", data.video);
+
+  const res = await api.post("/posts", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
   return res.data;
 };
 

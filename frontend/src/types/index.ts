@@ -19,6 +19,7 @@ export interface Post {
   _id?: string;
   user: User;
   image: string;
+  video?: string;
   caption: string;
   description?: string;
   likes: number;
@@ -57,6 +58,7 @@ export interface Story {
   _id?: string;
   user: User;
   image: string;
+  video?: string;
   timestamp?: Date;
   createdAt?: string;
   viewers?: string[];

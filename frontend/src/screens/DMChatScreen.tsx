@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from "react-native";
 import {
   SafeAreaView,
@@ -28,6 +27,8 @@ import {
 import socketService from "../services/socketService";
 import { StackNavigationProp } from "@react-navigation/stack";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { Video, ResizeMode } from "expo-av";
+import api from "../services/api";
 
 // Story'nin süresinin bitip bitmediğini kontrol eden fonksiyon
 const isStoryExpired = (storyTimestamp: string | Date) => {
@@ -407,6 +408,308 @@ const DMChatScreen: React.FC = () => {
                 const isLastMyMessage =
                   item.fromMe && index === lastMyMessageIndex;
 
+                // Eğer post veya story varsa balon olmadan göster
+                if (item.post) {
+                  // Silinmiş post kontrolü
+                  if (!item.post || item.post.deleted || !item.post.image) {
+                    return (
+                      <View
+                        style={[
+                          styles.messageContainer,
+                          item.fromMe
+                            ? styles.myMessageContainer
+                            : styles.theirMessageContainer,
+                        ]}
+                      >
+                        <View
+                          style={{
+                            padding: 16,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              fontStyle: "italic",
+                            }}
+                          >
+                            Bu gönderi silinmiş
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  }
+                  return (
+                    <View
+                      style={[
+                        styles.messageContainer,
+                        item.fromMe
+                          ? styles.myMessageContainer
+                          : styles.theirMessageContainer,
+                      ]}
+                    >
+                      {!item.fromMe && (
+                        <TouchableOpacity
+                          onPress={() =>
+                            navigation.navigate("UserProfile", { user })
+                          }
+                          style={styles.messageAvatarContainer}
+                        >
+                          <Image
+                            source={{
+                              uri:
+                                user?.avatar ||
+                                "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
+                            }}
+                            style={styles.messageAvatar}
+                          />
+                        </TouchableOpacity>
+                      )}
+                      {/* Sadece post içeriği */}
+                      <TouchableOpacity
+                        style={[
+                          styles.postContainer,
+                          {
+                            backgroundColor: item.fromMe
+                              ? "rgba(255,255,255,0.05)"
+                              : colors.background,
+                            borderColor: item.fromMe
+                              ? "rgba(255,255,255,0.1)"
+                              : colors.border,
+                            padding: 0,
+                            alignItems: "stretch",
+                            margin: 12,
+                          },
+                        ]}
+                        onPress={() =>
+                          navigation.navigate("PostDetail", {
+                            post: item.post,
+                          })
+                        }
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            padding: 8,
+                            paddingBottom: 0,
+                            marginBottom: 8,
+                            marginTop: 4,
+                          }}
+                        >
+                          <Image
+                            source={{
+                              uri:
+                                item.post.user?.avatar ||
+                                "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
+                            }}
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 18,
+                              marginRight: 8,
+                              marginLeft: 0,
+                            }}
+                          />
+                          <Text
+                            style={{
+                              color: colors.text,
+                              fontWeight: "bold",
+                              fontSize: 15,
+                            }}
+                          >
+                            {item.post.user?.username || "test user"}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: "center", width: "100%" }}>
+                          {item.post.video ? (
+                            <Video
+                              source={{
+                                uri: item.post.video.startsWith("http")
+                                  ? item.post.video
+                                  : `${api.defaults.baseURL?.replace(
+                                      /\/api$/,
+                                      ""
+                                    )}${item.post.video}`,
+                              }}
+                              style={{
+                                width: "100%",
+                                maxWidth: 280,
+                                aspectRatio: 1,
+                                borderRadius: 12,
+                              }}
+                              useNativeControls
+                              resizeMode={ResizeMode.COVER}
+                              shouldPlay={false}
+                              isLooping
+                            />
+                          ) : (
+                            <Image
+                              source={{
+                                uri: item.post.image.startsWith("http")
+                                  ? item.post.image
+                                  : `${api.defaults.baseURL?.replace(
+                                      /\/api$/,
+                                      ""
+                                    )}${item.post.image}`,
+                              }}
+                              style={{
+                                width: "100%",
+                                maxWidth: 280,
+                                aspectRatio: 1,
+                                borderRadius: 12,
+                                resizeMode: "cover",
+                              }}
+                            />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }
+                if (item.story) {
+                  // Silinmiş story kontrolü
+                  if (!item.story || item.story.deleted || !item.story.image) {
+                    return (
+                      <View
+                        style={[
+                          styles.messageContainer,
+                          item.fromMe
+                            ? styles.myMessageContainer
+                            : styles.theirMessageContainer,
+                        ]}
+                      >
+                        <View
+                          style={{
+                            padding: 16,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: colors.textSecondary,
+                              fontStyle: "italic",
+                            }}
+                          >
+                            Bu gönderi silinmiş
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  }
+                  return (
+                    <View
+                      style={[
+                        styles.messageContainer,
+                        item.fromMe
+                          ? styles.myMessageContainer
+                          : styles.theirMessageContainer,
+                      ]}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.postContainer,
+                          {
+                            backgroundColor: item.fromMe
+                              ? "rgba(255,255,255,0.05)"
+                              : colors.background,
+                            borderColor: item.fromMe
+                              ? "rgba(255,255,255,0.1)"
+                              : colors.border,
+                            padding: 0,
+                            alignItems: "stretch",
+                            margin: 12,
+                          },
+                        ]}
+                        onPress={() =>
+                          navigation.navigate("StoryScreen", {
+                            story: item.story,
+                          })
+                        }
+                      >
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            padding: 8,
+                            paddingBottom: 0,
+                            marginBottom: 8,
+                            marginTop: 4,
+                          }}
+                        >
+                          <Image
+                            source={{
+                              uri:
+                                item.story.user?.avatar ||
+                                "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
+                            }}
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 18,
+                              marginRight: 8,
+                              marginLeft: 0,
+                            }}
+                          />
+                          <Text
+                            style={{
+                              color: colors.text,
+                              fontWeight: "bold",
+                              fontSize: 15,
+                            }}
+                          >
+                            {item.story.user?.username || "test user"}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: "center", width: "100%" }}>
+                          {item.story.video ? (
+                            <Video
+                              source={{
+                                uri: item.story.video.startsWith("http")
+                                  ? item.story.video
+                                  : `${api.defaults.baseURL?.replace(
+                                      /\/api$/,
+                                      ""
+                                    )}${item.story.video}`,
+                              }}
+                              style={{
+                                width: 120,
+                                height: 180,
+                                borderRadius: 12,
+                                marginRight: 8,
+                              }}
+                              useNativeControls
+                              resizeMode={ResizeMode.COVER}
+                              shouldPlay={false}
+                              isLooping
+                            />
+                          ) : (
+                            <Image
+                              source={{
+                                uri: item.story.image.startsWith("http")
+                                  ? item.story.image
+                                  : `${api.defaults.baseURL?.replace(
+                                      /\/api$/,
+                                      ""
+                                    )}${item.story.image}`,
+                              }}
+                              style={{
+                                width: 120,
+                                height: 180,
+                                borderRadius: 12,
+                                marginRight: 8,
+                              }}
+                              resizeMode="cover"
+                            />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }
+                // Sadece metin mesajlarında baloncuk
                 return (
                   <View
                     style={[
@@ -433,7 +736,6 @@ const DMChatScreen: React.FC = () => {
                         />
                       </TouchableOpacity>
                     )}
-
                     <View
                       style={[
                         styles.messageBubble,
@@ -448,274 +750,6 @@ const DMChatScreen: React.FC = () => {
                             ],
                       ]}
                     >
-                      {/* Enhanced Post sharing */}
-                      {item.post && (
-                        <TouchableOpacity
-                          style={[
-                            styles.postContainer,
-                            {
-                              backgroundColor: item.fromMe
-                                ? "rgba(255,255,255,0.05)"
-                                : colors.background,
-                              borderColor: item.fromMe
-                                ? "rgba(255,255,255,0.1)"
-                                : colors.border,
-                            },
-                          ]}
-                          onPress={() =>
-                            navigation.navigate("PostDetail", {
-                              post: item.post,
-                            })
-                          }
-                        >
-                          <View style={styles.postHeader}>
-                            <Image
-                              source={{
-                                uri:
-                                  item.post.user?.avatar ||
-                                  "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-                              }}
-                              style={styles.postAvatar}
-                            />
-                            <View style={styles.postHeaderText}>
-                              <Text
-                                style={[
-                                  styles.postUsername,
-                                  {
-                                    color: item.fromMe
-                                      ? "#ffffff"
-                                      : colors.text,
-                                  },
-                                ]}
-                              >
-                                {item.post.user?.username || "kullanici"}
-                              </Text>
-                              <Text
-                                style={[
-                                  styles.postTime,
-                                  {
-                                    color: item.fromMe
-                                      ? "rgba(255,255,255,0.7)"
-                                      : colors.textSecondary,
-                                  },
-                                ]}
-                              >
-                                2s
-                              </Text>
-                            </View>
-                            <TouchableOpacity style={styles.postMoreButton}>
-                              <Ionicons
-                                name="ellipsis-horizontal"
-                                size={16}
-                                color={
-                                  item.fromMe
-                                    ? "rgba(255,255,255,0.8)"
-                                    : colors.textSecondary
-                                }
-                              />
-                            </TouchableOpacity>
-                          </View>
-
-                          <Image
-                            source={{
-                              uri:
-                                item.post.image ||
-                                "https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop",
-                            }}
-                            style={styles.postImage}
-                          />
-
-                          <View style={styles.postActions}>
-                            <View style={styles.postActionsLeft}>
-                              <TouchableOpacity style={styles.postActionButton}>
-                                <Ionicons
-                                  name="heart-outline"
-                                  size={20}
-                                  color={item.fromMe ? "#ffffff" : colors.text}
-                                />
-                              </TouchableOpacity>
-                              <TouchableOpacity style={styles.postActionButton}>
-                                <Ionicons
-                                  name="chatbubble-outline"
-                                  size={20}
-                                  color={item.fromMe ? "#ffffff" : colors.text}
-                                />
-                              </TouchableOpacity>
-                              <TouchableOpacity style={styles.postActionButton}>
-                                <Ionicons
-                                  name="paper-plane-outline"
-                                  size={20}
-                                  color={item.fromMe ? "#ffffff" : colors.text}
-                                />
-                              </TouchableOpacity>
-                            </View>
-                            <TouchableOpacity>
-                              <Ionicons
-                                name="bookmark-outline"
-                                size={20}
-                                color={item.fromMe ? "#ffffff" : colors.text}
-                              />
-                            </TouchableOpacity>
-                          </View>
-
-                          <View style={styles.postFooter}>
-                            <Text
-                              style={[
-                                styles.postLikes,
-                                {
-                                  color: item.fromMe ? "#ffffff" : colors.text,
-                                },
-                              ]}
-                            >
-                              142 beğenme
-                            </Text>
-                            {item.post.caption && (
-                              <Text
-                                style={[
-                                  styles.postCaption,
-                                  {
-                                    color: item.fromMe
-                                      ? "rgba(255,255,255,0.9)"
-                                      : colors.text,
-                                  },
-                                ]}
-                                numberOfLines={2}
-                              >
-                                <Text style={styles.postCaptionUsername}>
-                                  {item.post.user?.username || "kullanici"}{" "}
-                                </Text>
-                                {item.post.caption || "Güzel bir gönderi"}
-                              </Text>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Enhanced Story sharing */}
-                      {item.story &&
-                        (item.story.archived ||
-                        isStoryExpired(item.story.createdAt) ? (
-                          <View
-                            style={[
-                              styles.storyContainer,
-                              {
-                                backgroundColor: colors.border,
-                                borderColor: colors.border,
-                                opacity: 0.7,
-                                padding: 16,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                minHeight: 80,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={{
-                                color: colors.textSecondary,
-                                fontSize: 14,
-                                textAlign: "center",
-                              }}
-                            >
-                              Gönderi yüklenemiyor veya silindi
-                            </Text>
-                          </View>
-                        ) : (
-                          <TouchableOpacity
-                            style={[
-                              styles.storyContainer,
-                              {
-                                backgroundColor: item.fromMe
-                                  ? "rgba(255,255,255,0.05)"
-                                  : colors.background,
-                                borderColor: item.fromMe
-                                  ? "rgba(255,255,255,0.1)"
-                                  : colors.border,
-                              },
-                            ]}
-                            onPress={() =>
-                              navigation.navigate("StoryScreen", {
-                                story: item.story,
-                              })
-                            }
-                          >
-                            <View style={styles.storyHeader}>
-                              <View
-                                style={[
-                                  styles.storyAvatarRing,
-                                  {
-                                    borderColor: colors.primary,
-                                    borderWidth: 2,
-                                  },
-                                ]}
-                              >
-                                <Image
-                                  source={{
-                                    uri:
-                                      item.story.user?.avatar ||
-                                      "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-                                  }}
-                                  style={styles.storyAvatar}
-                                />
-                              </View>
-                              <View style={styles.storyHeaderText}>
-                                <Text
-                                  style={[
-                                    styles.storyUsername,
-                                    {
-                                      color: item.fromMe
-                                        ? "#ffffff"
-                                        : colors.text,
-                                    },
-                                  ]}
-                                >
-                                  {item.story.user?.username || "kullanici"}
-                                </Text>
-                                <Text
-                                  style={[
-                                    styles.storyTime,
-                                    {
-                                      color: item.fromMe
-                                        ? "rgba(255,255,255,0.7)"
-                                        : colors.textSecondary,
-                                    },
-                                  ]}
-                                >
-                                  5dk
-                                </Text>
-                              </View>
-                            </View>
-
-                            <View style={styles.storyImageWrapper}>
-                              <View style={styles.storyProgressBar}>
-                                <View
-                                  style={[
-                                    styles.storyProgress,
-                                    { backgroundColor: colors.primary },
-                                  ]}
-                                />
-                              </View>
-                              <Image
-                                source={{
-                                  uri:
-                                    item.story.image ||
-                                    "https://images.pexels.com/photos/1366919/pexels-photo-1366919.jpeg?auto=compress&cs=tinysrgb&w=300&h=400&fit=crop",
-                                }}
-                                style={styles.storyImage}
-                              />
-                              <View style={styles.storyOverlay}>
-                                <View style={styles.storyPlayIcon}>
-                                  <Ionicons
-                                    name="play"
-                                    size={12}
-                                    color="#fff"
-                                  />
-                                </View>
-                              </View>
-                            </View>
-                          </TouchableOpacity>
-                        ))}
-
-                      {/* Enhanced Message text */}
                       {item.text && (
                         <Text
                           style={[
@@ -730,8 +764,6 @@ const DMChatScreen: React.FC = () => {
                           {item.text}
                         </Text>
                       )}
-
-                      {/* Enhanced Message time */}
                       <Text
                         style={[
                           styles.messageTime,
@@ -752,8 +784,6 @@ const DMChatScreen: React.FC = () => {
                             )
                           : ""}
                       </Text>
-
-                      {/* Enhanced Seen indicator */}
                       {isLastMyMessage && item.seenAt && (
                         <View style={styles.seenContainer}>
                           <Ionicons

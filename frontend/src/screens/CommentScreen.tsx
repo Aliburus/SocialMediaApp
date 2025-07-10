@@ -17,6 +17,7 @@ import { getComments, addComment, toggleCommentLike } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
+import api from "../services/api";
 
 const timeAgo = (dateString: string) => {
   const now = new Date();
@@ -151,7 +152,18 @@ const CommentScreen: React.FC = () => {
       <TouchableOpacity
         onPress={() => navigation.navigate("UserProfile", { user: item.user })}
       >
-        <Image source={{ uri: item.user.avatar }} style={styles.avatar} />
+        <Image
+          source={{
+            uri: item.user.avatar?.startsWith("http")
+              ? item.user.avatar
+              : item.user.avatar
+              ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                  item.user.avatar
+                }`
+              : "https://ui-avatars.com/api/?name=User",
+          }}
+          style={styles.avatar}
+        />
       </TouchableOpacity>
       <View style={styles.commentContent}>
         <View style={{ flexDirection: "row", alignItems: "center" }}>

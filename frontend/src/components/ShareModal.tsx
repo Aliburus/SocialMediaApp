@@ -18,6 +18,7 @@ import { getUserFriends } from "../services/api";
 import { useTheme } from "../context/ThemeContext";
 import { sendMessage } from "../services/api";
 import { getProfile } from "../services/api";
+import api from "../services/api";
 
 interface ShareModalProps {
   visible: boolean;
@@ -160,7 +161,16 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         disabled={sending}
       >
         <View style={styles.friendAvatarContainer}>
-          <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
+          <Image
+            source={{
+              uri: item.avatar?.startsWith("http")
+                ? item.avatar
+                : item.avatar
+                ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.avatar}`
+                : "https://ui-avatars.com/api/?name=User",
+            }}
+            style={styles.friendAvatar}
+          />
           {item.isOnline && (
             <View
               style={[styles.onlineIndicator, { borderColor: colors.surface }]}

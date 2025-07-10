@@ -2,15 +2,29 @@ const Post = require("../models/Post");
 const Comment = require("../models/Comment");
 const { createOrUpdateNotification } = require("./notificationController");
 const { updateContentEmbedding } = require("./exploreController");
+const fs = require("fs");
+const path = require("path");
+const mongoose = require("mongoose");
 
 // Post oluşturma
 exports.createPost = async (req, res) => {
   try {
-    const { image, description, user } = req.body;
-    if (!image) return res.status(400).json({ message: "Görsel zorunlu" });
+    const { description, user, type } = req.body;
+    let image = req.body.image;
+    let video = req.body.video;
+    if (req.file) {
+      const mime = req.file.mimetype;
+      if (mime.startsWith("image/")) {
+        image = `/uploads/${req.file.filename}`;
+      } else if (mime.startsWith("video/")) {
+        video = `/uploads/${req.file.filename}`;
+      }
+    }
+    if (!image && !video)
+      return res.status(400).json({ message: "Görsel veya video zorunlu" });
     if (!user)
       return res.status(400).json({ message: "Kullanıcı bilgisi zorunlu" });
-    const post = await Post.create({ user, image, description });
+    const post = await Post.create({ user, image, video, description, type });
 
     // İçerik embedding'ini oluştur
     try {
@@ -37,13 +51,21 @@ exports.getAllPosts = async (req, res) => {
       if (!user)
         return res.status(404).json({ message: "Kullanıcı bulunamadı" });
 
-      // Takip edilen kullanıcıların postlarını getir
-      const followingPosts = await Post.find({ user: { $in: user.following } })
+      // Takip edilen kullanıcıların postlarını getir (ObjectId tipine çevir, güvenli)
+      const followingIds = user.following
+        .filter((id) => !!id)
+        .map((id) =>
+          typeof id === "string" ? mongoose.Types.ObjectId(id) : id
+        );
+      const followingPosts = await Post.find({
+        user: { $in: followingIds },
+        archived: false,
+      })
         .populate("user", "_id username avatar")
         .sort({ createdAt: -1 });
 
       // Kendi postlarını da ekle
-      const myPosts = await Post.find({ user: userId })
+      const myPosts = await Post.find({ user: userId, archived: false })
         .populate("user", "_id username avatar")
         .sort({ createdAt: -1 });
 
@@ -81,7 +103,7 @@ exports.getAllPosts = async (req, res) => {
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
     } else {
-      posts = await Post.find()
+      posts = await Post.find({ archived: false })
         .populate("user", "_id username avatar")
         .sort({ createdAt: -1 });
     }
@@ -242,11 +264,42 @@ exports.getUserPosts = async (req, res) => {
 exports.deletePost = async (req, res) => {
   try {
     const postId = req.params.id;
-    // Postu sil
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ message: "Post bulunamadı" });
+
+    // Dosya silme işlemleri
+    const deleteFile = (filePath) => {
+      return new Promise((resolve) => {
+        if (filePath && filePath.startsWith("/uploads/")) {
+          const fullPath = path.join(__dirname, "..", filePath);
+          fs.access(fullPath, fs.constants.F_OK, (err) => {
+            if (!err) {
+              fs.unlink(fullPath, (unlinkErr) => {
+                if (unlinkErr) {
+                  console.error("Dosya silinemedi:", fullPath, unlinkErr);
+                } else {
+                  console.log("Dosya başarıyla silindi:", fullPath);
+                }
+                resolve();
+              });
+            } else {
+              console.log("Dosya bulunamadı:", fullPath);
+              resolve();
+            }
+          });
+        } else {
+          resolve();
+        }
+      });
+    };
+
+    // Image ve video dosyalarını sil
+    await Promise.all([deleteFile(post.image), deleteFile(post.video)]);
+
+    // Post ve ilişkili yorumları sil
     await Post.findByIdAndDelete(postId);
-    // Yorumları sil
     await Comment.deleteMany({ post: postId });
-    // Like bilgileri post içinde tutuluyorsa zaten silinmiş olur
+
     res.json({ message: "Post ve ilişkili veriler silindi" });
   } catch (err) {
     res.status(500).json({ message: "Post silinemedi", error: err.message });

@@ -15,6 +15,7 @@ import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getProfile } from "../services/api";
 import FollowButton from "../components/FollowButton";
+import api from "../services/api";
 
 const FollowingScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -76,7 +77,16 @@ const FollowingScreen: React.FC = () => {
       style={[styles.followingItem, { borderBottomColor: colors.border }]}
       onPress={() => navigation.navigate("UserProfile", { user: item })}
     >
-      <Image source={{ uri: item.avatar }} style={styles.avatar} />
+      <Image
+        source={{
+          uri: item.avatar?.startsWith("http")
+            ? item.avatar
+            : item.avatar
+            ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.avatar}`
+            : "https://ui-avatars.com/api/?name=User",
+        }}
+        style={styles.avatar}
+      />
       <View style={styles.userInfo}>
         <View style={styles.usernameContainer}>
           <Text style={[styles.username, { color: colors.text }]}>

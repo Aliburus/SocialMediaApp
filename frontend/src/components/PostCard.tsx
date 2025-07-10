@@ -36,11 +36,13 @@ import {
 import api from "../services/api";
 import { useNavigation } from "@react-navigation/native";
 import { ShareModal } from "./ShareModal";
+import { Video, ResizeMode } from "expo-av";
 
 const { width } = Dimensions.get("window");
 
 interface PostCardProps {
   post: Post;
+  isMuted?: boolean;
   onPress?: () => void;
   onLike?: () => void;
   onComment?: () => void;
@@ -129,6 +131,7 @@ const timeAgo = (date: string | Date) => {
 
 const PostCard: React.FC<PostCardProps> = ({
   post,
+  isMuted: globalMute,
   onPress,
   onLike,
   onComment,
@@ -155,8 +158,10 @@ const PostCard: React.FC<PostCardProps> = ({
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const navigation = useNavigation<any>();
-  const [imageLoading, setImageLoading] = useState(true);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [videoMuted, setVideoMuted] = useState(globalMute ?? true);
 
   // Pinch-to-zoom için state'ler
   const scale = useRef(new Animated.Value(1)).current;
@@ -210,6 +215,13 @@ const PostCard: React.FC<PostCardProps> = ({
     };
     fetchComments();
   }, [post]);
+
+  useEffect(() => {
+    return () => {
+      setVideoLoading(true);
+      setVideoMuted(globalMute ?? true);
+    };
+  }, []);
 
   const handleLike = async () => {
     if (likeLocked) return;
@@ -323,6 +335,10 @@ const PostCard: React.FC<PostCardProps> = ({
     Alert.alert("Başarılı", "Bağlantı kopyalandı!");
   };
 
+  const handleToggleVideoMute = () => {
+    setVideoMuted((prev) => !prev);
+  };
+
   // Pinch gesture handler - daha hassas
   const onPinchGestureEvent = Animated.event(
     [{ nativeEvent: { scale: scale } }],
@@ -404,7 +420,18 @@ const PostCard: React.FC<PostCardProps> = ({
             }
             style={styles.userInfo}
           >
-            <Image source={{ uri: post.user.avatar }} style={styles.avatar} />
+            <Image
+              source={{
+                uri: post.user.avatar?.startsWith("http")
+                  ? post.user.avatar
+                  : post.user.avatar
+                  ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                      post.user.avatar
+                    }`
+                  : "https://ui-avatars.com/api/?name=User",
+              }}
+              style={styles.avatar}
+            />
             <View>
               <View style={styles.usernameContainer}>
                 <Text style={[styles.username, { color: colors.text }]}>
@@ -432,7 +459,7 @@ const PostCard: React.FC<PostCardProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Image */}
+      {/* Image veya Video */}
       <PinchGestureHandler
         onGestureEvent={onPinchGestureEvent}
         onHandlerStateChange={onPinchHandlerStateChange}
@@ -448,19 +475,88 @@ const PostCard: React.FC<PostCardProps> = ({
             ],
           }}
         >
-          <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
-            <Image
-              source={{ uri: post.image }}
-              style={[styles.postImage, { backgroundColor: colors.background }]}
-              onLoad={() => setImageLoading(false)}
-              onError={() => setImageLoading(true)}
-            />
-            {imageLoading && (
-              <ActivityIndicator
-                style={styles.loadingIndicator}
-                size="small"
-                color={colors.text}
+          <TouchableOpacity
+            onPress={() => {
+              if (post.video) {
+                navigation.navigate("VideoDetail", { post });
+              } else {
+                onPress?.();
+              }
+            }}
+            activeOpacity={0.9}
+          >
+            {post.video ? (
+              <View
+                style={[
+                  styles.postImage,
+                  { backgroundColor: colors.background },
+                ]}
+              >
+                <Video
+                  source={{
+                    uri: post.video.startsWith("http")
+                      ? post.video
+                      : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                          post.video
+                        }`,
+                  }}
+                  style={styles.postImage}
+                  useNativeControls={false}
+                  resizeMode={ResizeMode.COVER}
+                  isLooping={false}
+                  shouldPlay
+                  isMuted={videoMuted}
+                  onLoadStart={() => setVideoLoading(true)}
+                  onLoad={() => setVideoLoading(false)}
+                  onError={() => setVideoLoading(false)}
+                  onPlaybackStatusUpdate={(status) => {
+                    if (status.isLoaded && status.didJustFinish) {
+                      // Video 1 kere oynadıktan sonra durur
+                    }
+                  }}
+                />
+                {videoLoading && (
+                  <ActivityIndicator
+                    style={styles.loadingIndicator}
+                    size="large"
+                    color={colors.primary}
+                  />
+                )}
+                {/* Video sağ alt ses butonu */}
+                <TouchableOpacity
+                  style={styles.videoMuteButton}
+                  onPress={handleToggleVideoMute}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={videoMuted ? "volume-mute" : "volume-high"}
+                    size={20}
+                    color="#fff"
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Image
+                source={{
+                  uri: post.image.startsWith("http")
+                    ? post.image
+                    : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                        post.image
+                      }`,
+                }}
+                style={[
+                  styles.postImage,
+                  { backgroundColor: colors.background },
+                ]}
+                onLoadStart={() => setImageLoading(true)}
+                onLoad={() => setImageLoading(false)}
+                onError={() => setImageLoading(false)}
               />
+            )}
+            {imageLoading && !post.video && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+              </View>
             )}
           </TouchableOpacity>
         </Animated.View>
@@ -505,7 +601,12 @@ const PostCard: React.FC<PostCardProps> = ({
             />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={handleSave} style={styles.actionButton}>
+        <TouchableOpacity
+          onPress={() => {
+            handleSave();
+          }}
+          style={styles.actionButton}
+        >
           <Ionicons
             name={isSaved ? "bookmark" : "bookmark-outline"}
             size={24}
@@ -841,6 +942,33 @@ const styles = StyleSheet.create({
     top: "50%",
     left: "50%",
     transform: [{ translateX: -12 }, { translateY: -12 }],
+  },
+  loadingContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.1)",
+  },
+  videoMuteButton: {
+    position: "absolute",
+    right: 12,
+    bottom: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    zIndex: 20,
   },
 });
 

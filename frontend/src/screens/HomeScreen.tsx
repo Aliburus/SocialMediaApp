@@ -48,8 +48,10 @@ const HomeScreen: React.FC<{
   const [myPosts, setMyPosts] = React.useState<any[]>([]);
   const [userId, setUserId] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  // const [isMuted, setIsMuted] = React.useState(false);
   const flatListRef = React.useRef<FlatList<any> | null>(null);
   const userInfoRef = React.useRef<any>(null);
+  const [flatListKey, setFlatListKey] = React.useState(0);
 
   // Pagination için state'ler
   const [displayedPosts, setDisplayedPosts] = React.useState<any[]>([]);
@@ -93,24 +95,20 @@ const HomeScreen: React.FC<{
   const loadAllData = async () => {
     if (!userId) return;
     try {
-      // Tüm API çağrılarını paralel olarak yap
-      const [postsData, storiesData, profileData, myPostsData] =
-        await Promise.all([
-          getAllPosts(userId),
-          getStories(userId),
-          getProfile(userId),
-          getUserPosts(userId, userId),
-        ]);
+      const [postsData, storiesData, profileData] = await Promise.all([
+        getAllPosts(userId),
+        getStories(userId),
+        getProfile(userId),
+      ]);
 
-      // Posts işleme
-      const sortedPosts = postsData.sort(
+      // Postları arşivlenmemiş olanlardan filtrele ve sırala
+      const filteredPosts = postsData.filter((post: any) => !post.archived);
+      const sortedPosts = filteredPosts.sort(
         (a: any, b: any) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
+
       setPosts(sortedPosts);
-      setDisplayedPosts(sortedPosts.slice(0, POSTS_PER_PAGE));
-      setCurrentPage(1);
-      setHasMorePosts(sortedPosts.length > POSTS_PER_PAGE);
 
       // Stories işleme
       const updatedStories = storiesData.map((story: any) => ({
@@ -121,9 +119,6 @@ const HomeScreen: React.FC<{
 
       // Profile işleme
       setMyAvatar(profileData.avatar || "");
-
-      // My posts işleme
-      setMyPosts(myPostsData);
     } catch (err) {
       console.error("Veri yükleme hatası:", err);
     } finally {
@@ -148,13 +143,23 @@ const HomeScreen: React.FC<{
           flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
         }, 500);
       }
+
+      // Story'ler yenilenecekse
+      if (route?.params?.refreshStories && userId) {
+        getStories(userId).then((newStories) => {
+          const updatedStories = newStories.map((story: any) => ({
+            ...story,
+            isViewed: story.isViewed || false,
+          }));
+          setStories(updatedStories);
+        });
+      }
     }, [])
   );
 
   // Tab'a basıldığında refresh
   React.useEffect(() => {
     const unsubscribe = navigation.addListener("tabPress", () => {
-      console.log("Home tab pressed - refreshing...");
       setRefreshing(true);
       if (userId) {
         Promise.all([
@@ -172,12 +177,22 @@ const HomeScreen: React.FC<{
 
   // navigation focus olduğunda postları tekrar fetch et
   React.useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", () => {
+    const unsubscribe = navigation.addListener("focus", (e: any) => {
       if (userId) {
         getAllPosts(userId);
-        getStories(userId);
         getProfile(userId);
         getUserPosts(userId, userId);
+
+        // Story'ler yenilenecekse
+        if (e.target?.includes("Story") || e.target?.includes("Home")) {
+          getStories(userId).then((newStories) => {
+            const updatedStories = newStories.map((story: any) => ({
+              ...story,
+              isViewed: story.isViewed || false,
+            }));
+            setStories(updatedStories);
+          });
+        }
       }
     });
     return unsubscribe;
@@ -260,11 +275,20 @@ const HomeScreen: React.FC<{
     };
   }, [navigation, userId]);
 
+  // HomeScreen'e geri dönince FlatList'i ve postları yeniden render et
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      // Postları ve FlatList'i yeniden tetikle
+      setDisplayedPosts([...posts]);
+    });
+    return unsubscribe;
+  }, [navigation, posts]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     InteractionManager.runAfterInteractions(async () => {
       if (userId) {
-        await getAllPosts(userId);
+        await loadAllData();
       }
       setActiveUserId(null);
       setRefreshing(false);
@@ -281,12 +305,13 @@ const HomeScreen: React.FC<{
     const startIndex = (nextPage - 1) * POSTS_PER_PAGE;
     const endIndex = startIndex + POSTS_PER_PAGE;
 
-    const newPosts = posts.slice(startIndex, endIndex);
+    const filteredPosts = posts.filter((post) => !post.archived);
+    const newPosts = filteredPosts.slice(startIndex, endIndex);
 
     if (newPosts.length > 0) {
       setDisplayedPosts((prev) => [...prev, ...newPosts]);
       setCurrentPage(nextPage);
-      setHasMorePosts(endIndex < posts.length);
+      setHasMorePosts(endIndex < filteredPosts.length);
     } else {
       setHasMorePosts(false);
     }
@@ -294,62 +319,34 @@ const HomeScreen: React.FC<{
     setLoadingMore(false);
   };
 
-  // Post ve story'leri sadece takip edilenlerden filtrele
-  const filteredPosts = React.useMemo(() => {
-    const safeMyPosts = myPosts || [];
-    const followingPosts = posts
-      .filter((post) => followingIds.includes(post.user._id || post.user.id))
-      .filter((post) => !post.archived);
-    // Kendi postlarını ekle, tekrar olmasın
-    const myUniquePosts = safeMyPosts.filter(
-      (post) =>
-        !followingPosts.some(
-          (fp) => (fp._id || fp.id) === (post._id || post.id)
-        ) && !post.archived
-    );
-    let allPosts = [];
-    if (followingPosts.length === 0 && safeMyPosts.length > 0) {
-      allPosts = safeMyPosts.filter((p) => !p.archived);
-    } else if (followingPosts.length > 0 && safeMyPosts.length > 0) {
-      allPosts = [...followingPosts, ...myUniquePosts];
-    } else {
-      allPosts = followingPosts;
-    }
-
-    // Postları tarihe göre sırala (en yeni en üstte)
+  // Postları filtrele ve sırala
+  React.useEffect(() => {
+    const allPosts = posts.filter((post) => !post.archived);
     const sortedPosts = allPosts.sort((a, b) => {
       const dateA = new Date(a.createdAt || a.timestamp || 0);
       const dateB = new Date(b.createdAt || b.timestamp || 0);
       return dateB.getTime() - dateA.getTime();
     });
 
-    // Filtrelenmiş postları güncelle ve ilk 15'ini göster
-    if (sortedPosts.length !== posts.length) {
-      setDisplayedPosts(sortedPosts.slice(0, POSTS_PER_PAGE));
-      setCurrentPage(1);
-      setHasMorePosts(sortedPosts.length > POSTS_PER_PAGE);
-    }
-
-    return sortedPosts;
-  }, [posts, followingIds, myPosts]);
+    setDisplayedPosts(sortedPosts.slice(0, POSTS_PER_PAGE));
+    setCurrentPage(1);
+    setHasMorePosts(sortedPosts.length > POSTS_PER_PAGE);
+  }, [posts]);
 
   const filteredStories = React.useMemo(() => {
     if (!userId) return [];
-    return stories.filter(
-      (story) =>
-        followingIds.includes(story.user._id || story.user.id) ||
-        (story.user._id || story.user.id) === userId
-    );
-  }, [stories, followingIds, userId]);
+    // Şimdilik tüm story'leri göster
+    return stories;
+  }, [stories, userId]);
 
   // Story'lerin izlenmişlik durumunu kontrol et
   const viewedUserIds = React.useMemo(() => {
     const ids = new Set();
-    filteredStories.forEach((story) => {
+    stories.forEach((story) => {
       if (story.isViewed) ids.add(story.user._id || story.user.id);
     });
     return ids;
-  }, [filteredStories]);
+  }, [stories]);
 
   // Kendi hikaye elemanı (her zaman + ikonlu ve tıklanabilir)
   const renderMyStory = () => (
@@ -367,9 +364,14 @@ const HomeScreen: React.FC<{
         >
           <Image
             source={{
-              uri:
-                myAvatar ||
-                "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
+              uri: myAvatar?.startsWith("http")
+                ? myAvatar
+                : myAvatar
+                ? `${require("../services/api").default.defaults.baseURL?.replace(
+                    /\/api$/,
+                    ""
+                  )}${myAvatar}`
+                : "https://ui-avatars.com/api/?name=User&background=007AFF&color=fff",
             }}
             style={styles.myStoryImage}
           />
@@ -390,7 +392,7 @@ const HomeScreen: React.FC<{
   // Story'leri kullanıcıya göre grupla (kendi story'nim her zaman ilk başta)
   const groupedStories = React.useMemo(() => {
     const map = new Map();
-    filteredStories.forEach((story) => {
+    stories.forEach((story) => {
       const userId = story.user._id || story.user.id;
       if (!map.has(userId)) map.set(userId, []);
       map.get(userId).push(story);
@@ -416,7 +418,7 @@ const HomeScreen: React.FC<{
     );
 
     return [...myStories, ...otherStories];
-  }, [filteredStories, userId]);
+  }, [stories, userId]);
 
   // StoryScreen açıksa story barı gösterme
   const isStoryOpen = navigation
@@ -424,27 +426,15 @@ const HomeScreen: React.FC<{
     .routes.some((r: any) => r.name === "Story");
 
   const handleStoryPress = async (item: any) => {
-    // Tüm görülmemiş story'leri topla
-    const allUnviewedStories = stories.filter((s) => !s.isViewed);
-
-    // Eğer görülmemiş story varsa, onları göster
-    if (allUnviewedStories.length > 0) {
-      setActiveUserId(item.user._id || item.user.id);
-      navigation.navigate("Story", {
-        stories: allUnviewedStories,
-        activeUserId: item.user._id || item.user.id,
-      });
-    } else {
-      // Görülmemiş story yoksa sadece o kullanıcının story'lerini göster
-      const userStories = stories.filter(
-        (s) => (s.user._id || s.user.id) === (item.user._id || item.user.id)
-      );
-      setActiveUserId(item.user._id || item.user.id);
-      navigation.navigate("Story", {
-        stories: userStories,
-        activeUserId: item.user._id || item.user.id,
-      });
-    }
+    // O kullanıcının story'lerini göster
+    const userStories = stories.filter(
+      (s) => (s.user._id || s.user.id) === (item.user._id || item.user.id)
+    );
+    setActiveUserId(item.user._id || item.user.id);
+    navigation.navigate("Story", {
+      stories: userStories,
+      activeUserId: item.user._id || item.user.id,
+    });
   };
 
   const handleStoryLongPress = (item: any) => {
@@ -463,78 +453,147 @@ const HomeScreen: React.FC<{
         },
       ]}
     >
-      {groupedStories.length === 0 ? (
-        <View
-          style={{
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-        >
-          {renderMyStory()}
-          <Text
-            style={{
-              color: colors.textSecondary,
-              textAlign: "center",
-              marginTop: 12,
-            }}
-          >
-            Henüz hiç hikaye yok.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={groupedStories}
-          renderItem={({ item }) =>
-            item.user ? (
-              <StoryItem
-                story={item}
-                isActive={activeUserId === (item.user._id || item.user.id)}
-                isViewed={item.isViewed}
-                totalStories={item.totalStories}
-                viewedStories={item.viewedStories}
-                onPress={() => handleStoryPress(item)}
-                onLongPress={() => handleStoryLongPress(item)}
-              />
-            ) : null
-          }
-          keyExtractor={(item) => item._id || item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          ListHeaderComponent={renderMyStory()}
-          contentContainerStyle={styles.storiesContent}
-          style={styles.storiesList}
-        />
-      )}
+      <FlatList
+        data={groupedStories}
+        renderItem={({ item }) =>
+          item.user ? (
+            <StoryItem
+              story={item}
+              isActive={activeUserId === (item.user._id || item.user.id)}
+              isViewed={item.isViewed}
+              totalStories={item.totalStories}
+              viewedStories={item.viewedStories}
+              onPress={() => handleStoryPress(item)}
+              onLongPress={() => handleStoryLongPress(item)}
+            />
+          ) : null
+        }
+        keyExtractor={(item) => item._id || item.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        ListHeaderComponent={renderMyStory()}
+        contentContainerStyle={styles.storiesContent}
+        style={styles.storiesList}
+      />
     </View>
   );
 
-  // FlatList'in ListHeaderComponent'ine header ve story barı birlikte ekle
+  // FlatList'in ListHeaderComponent'ine story barı ekle
   const renderListHeader = () => <>{renderStoriesBar()}</>;
 
   const handleDeletePost = (postId: string) => {
     setPosts((prev) => prev.filter((p) => (p._id || p.id) !== postId));
+    setDisplayedPosts((prev) => prev.filter((p) => (p._id || p.id) !== postId));
   };
 
   const handleArchivePost = (postId: string) => {
     setPosts((prev) => prev.filter((p) => (p._id || p.id) !== postId));
+    setDisplayedPosts((prev) => prev.filter((p) => (p._id || p.id) !== postId));
   };
 
-  const renderPost = ({ item }: { item: any }) => (
-    <PostCard
-      post={item}
-      onPress={() => navigation.navigate("PostDetail", { post: item })}
-      onComment={() =>
-        navigation.navigate("Comment", { postId: item._id || item.id })
-      }
-      onShare={() => setShowShareModal(true)}
-      onDelete={() => handleDeletePost(item._id || item.id)}
-      onArchive={() => handleArchivePost(item._id || item.id)}
-    />
-  );
+  const handleLikeUpdate = (
+    postId: string,
+    isLiked: boolean,
+    likesCount: number
+  ) => {
+    setPosts((prevPosts) =>
+      prevPosts.map((post) =>
+        (post._id || post.id) === postId
+          ? {
+              ...post,
+              likes: isLiked
+                ? [...(Array.isArray(post.likes) ? post.likes : []), userId]
+                : (Array.isArray(post.likes) ? post.likes : []).filter(
+                    (id: string) => id !== userId
+                  ),
+            }
+          : post
+      )
+    );
+    setDisplayedPosts((prevPosts) =>
+      prevPosts.map((post) =>
+        (post._id || post.id) === postId
+          ? {
+              ...post,
+              likes: isLiked
+                ? [...(Array.isArray(post.likes) ? post.likes : []), userId]
+                : (Array.isArray(post.likes) ? post.likes : []).filter(
+                    (id: string) => id !== userId
+                  ),
+            }
+          : post
+      )
+    );
+  };
 
-  // Posts'u useMemo ile optimize et
-  const memoizedPosts = useMemo(() => posts, [posts]);
+  const handleSaveUpdate = (postId: string, isSaved: boolean) => {
+    setPosts((prevPosts) =>
+      prevPosts.map((post) =>
+        (post._id || post.id) === postId
+          ? {
+              ...post,
+              savedBy: isSaved
+                ? [...(Array.isArray(post.savedBy) ? post.savedBy : []), userId]
+                : (Array.isArray(post.savedBy) ? post.savedBy : []).filter(
+                    (id: string) => id !== userId
+                  ),
+            }
+          : post
+      )
+    );
+    setDisplayedPosts((prevPosts) =>
+      prevPosts.map((post) =>
+        (post._id || post.id) === postId
+          ? {
+              ...post,
+              savedBy: isSaved
+                ? [...(Array.isArray(post.savedBy) ? post.savedBy : []), userId]
+                : (Array.isArray(post.savedBy) ? post.savedBy : []).filter(
+                    (id: string) => id !== userId
+                  ),
+            }
+          : post
+      )
+    );
+  };
+
+  const renderPost = ({ item }: { item: any }) => {
+    return (
+      <PostCard
+        post={item}
+        onPress={() => {
+          if (item.video) {
+            navigation.navigate("VideoDetail", {
+              post: item,
+              onLikeUpdate: handleLikeUpdate,
+              onSaveUpdate: handleSaveUpdate,
+            });
+          } else {
+            navigation.navigate("PostDetail", { post: item });
+          }
+        }}
+        onComment={() =>
+          navigation.navigate("Comment", { postId: item._id || item.id })
+        }
+        onShare={() => setShowShareModal(true)}
+        onDelete={() => handleDeletePost(item._id || item.id)}
+        onArchive={() => handleArchivePost(item._id || item.id)}
+      />
+    );
+  };
+
+  React.useEffect(() => {
+    const unsubscribeFocus = navigation.addListener("focus", () => {
+      setFlatListKey((k) => k + 1);
+    });
+    const unsubscribeBlur = navigation.addListener("blur", () => {
+      setFlatListKey((k) => k + 1);
+    });
+    return () => {
+      unsubscribeFocus();
+      unsubscribeBlur();
+    };
+  }, [navigation]);
 
   return (
     <SafeAreaView
@@ -578,10 +637,14 @@ const HomeScreen: React.FC<{
           </>
         ) : (
           <FlatList
+            key={flatListKey}
             ref={flatListRef}
             data={displayedPosts}
             renderItem={renderPost}
-            keyExtractor={(item) => item._id?.toString() || item.id?.toString()}
+            keyExtractor={(item) => {
+              const id = item._id?.toString() || item.id?.toString();
+              return id;
+            }}
             initialNumToRender={10}
             maxToRenderPerBatch={10}
             windowSize={7}
@@ -589,7 +652,7 @@ const HomeScreen: React.FC<{
             showsVerticalScrollIndicator={false}
             onEndReached={loadMorePosts}
             onEndReachedThreshold={0.5}
-            ListHeaderComponent={!isStoryOpen ? renderListHeader : undefined}
+            ListHeaderComponent={renderListHeader()}
             ListFooterComponent={
               loadingMore ? (
                 <View style={styles.loadingMore}>
@@ -604,6 +667,19 @@ const HomeScreen: React.FC<{
             {...panResponder.panHandlers}
           />
         )}
+
+        {/* Ses Kontrol İkonu */}
+        {/* <TouchableOpacity
+          style={styles.muteButton}
+          onPress={handleToggleMute}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={isMuted ? "volume-mute" : "volume-high"}
+            size={28}
+            color="#fff"
+          />
+        </TouchableOpacity> */}
 
         {/* Share Modal */}
         <ShareModal
@@ -733,6 +809,24 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
+  },
+  muteButton: {
+    position: "absolute",
+    right: 20,
+    bottom: 30,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    borderWidth: 0,
+    zIndex: 100,
   },
 });
 

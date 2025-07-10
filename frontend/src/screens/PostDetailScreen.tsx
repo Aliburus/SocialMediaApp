@@ -12,6 +12,8 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  // Video,
+  // ResizeMode,
 } from "react-native";
 import {
   PinchGestureHandler,
@@ -32,6 +34,8 @@ import {
 } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ShareModal } from "../components/ShareModal";
+import { Video, ResizeMode } from "expo-av";
+import api from "../services/api";
 
 const { width } = Dimensions.get("window");
 
@@ -89,6 +93,10 @@ const PostDetailScreen: React.FC = () => {
     const fetchData = async () => {
       try {
         const freshPost = await getPostById(initialPost._id || initialPost.id);
+        console.log("PostDetailScreen: Fresh post data:", freshPost);
+        console.log("PostDetailScreen: Image path:", freshPost.image);
+        console.log("PostDetailScreen: Video path:", freshPost.video);
+        console.log("PostDetailScreen: API base URL:", api.defaults.baseURL);
         setPost(freshPost);
         setLikesCount(
           Array.isArray(freshPost.likes) ? freshPost.likes.length : 0
@@ -107,7 +115,7 @@ const PostDetailScreen: React.FC = () => {
         );
         setComments(commentList);
       } catch (err) {
-        // log
+        console.error("PostDetailScreen: Error fetching data:", err);
       }
     };
     fetchData();
@@ -291,7 +299,18 @@ const PostDetailScreen: React.FC = () => {
           {/* Post Header */}
           <View style={styles.postHeader}>
             <View style={styles.userInfo}>
-              <Image source={{ uri: post.user.avatar }} style={styles.avatar} />
+              <Image
+                source={{
+                  uri: post.user.avatar?.startsWith("http")
+                    ? post.user.avatar
+                    : post.user.avatar
+                    ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                        post.user.avatar
+                      }`
+                    : "https://ui-avatars.com/api/?name=User",
+                }}
+                style={styles.avatar}
+              />
               <View>
                 <View style={styles.usernameContainer}>
                   <Text style={[styles.username, { color: colors.text }]}>
@@ -332,7 +351,38 @@ const PostDetailScreen: React.FC = () => {
                 ],
               }}
             >
-              <Image source={{ uri: post.image }} style={styles.postImage} />
+              {post.video ? (
+                <Video
+                  source={{
+                    uri: post.video.startsWith("http")
+                      ? post.video
+                      : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                          post.video
+                        }`,
+                  }}
+                  style={styles.postImage}
+                  resizeMode={ResizeMode.COVER}
+                  useNativeControls
+                  isLooping
+                />
+              ) : (
+                <Image
+                  source={{
+                    uri: post.image.startsWith("http")
+                      ? post.image
+                      : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                          post.image
+                        }`,
+                  }}
+                  style={styles.postImage}
+                  onLoad={() =>
+                    console.log("PostDetailScreen: Image loaded successfully")
+                  }
+                  onError={(error) =>
+                    console.log("PostDetailScreen: Image load error:", error)
+                  }
+                />
+              )}
             </Animated.View>
           </PinchGestureHandler>
 

@@ -21,10 +21,12 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getUserPosts, getProfile, getSavedPosts } from "../services/api";
+import api from "../services/api";
 import { getStories } from "../services/storyApi";
 import PostCard from "../components/PostCard";
 import StoryItem from "../components/StoryItem";
 import { LinearGradient } from "expo-linear-gradient";
+import { Video, ResizeMode } from "expo-av";
 
 const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
@@ -203,18 +205,44 @@ const ProfileScreen: React.FC = () => {
   const renderPostItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={styles.postItem}
-      onPress={() => navigation.navigate("PostDetail", { post: item })}
+      onPress={() => {
+        if (item.video) {
+          navigation.navigate("VideoDetail", { post: item });
+        } else {
+          navigation.navigate("PostDetail", { post: item });
+        }
+      }}
     >
-      <Image
-        source={{ uri: item.image }}
-        style={[styles.postImage, { backgroundColor: colors.background }]}
-      />
+      {item.type === "reel" && item.video ? (
+        <Video
+          source={{
+            uri: item.video.startsWith("http")
+              ? item.video
+              : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.video}`,
+          }}
+          style={[styles.postImage, { backgroundColor: colors.background }]}
+          resizeMode={ResizeMode.COVER}
+          shouldPlay={false}
+          isMuted={true}
+        />
+      ) : (
+        <Image
+          source={{
+            uri: item.image.startsWith("http")
+              ? item.image
+              : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`,
+          }}
+          style={[styles.postImage, { backgroundColor: colors.background }]}
+        />
+      )}
     </TouchableOpacity>
   );
 
   let tabData = userPosts.filter((p) => !p.archived);
+  if (activeTab === "grid")
+    tabData = userPosts.filter((p) => p.type === "post" && !p.archived);
   if (activeTab === "reels")
-    tabData = userPosts.filter((p) => p.type === "reel" || p.isReel);
+    tabData = userPosts.filter((p) => p.type === "reel" && !p.archived);
   if (activeTab === "saved") tabData = savedPosts.filter((p) => !p.archived);
   if (activeTab === "tagged")
     tabData = userPosts.filter((p) => p.type === "tagged");
@@ -313,7 +341,16 @@ const ProfileScreen: React.FC = () => {
                           }}
                         >
                           <Image
-                            source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                            source={{
+                              uri: profile?.avatar?.startsWith("http")
+                                ? profile.avatar
+                                : profile?.avatar
+                                ? `${api.defaults.baseURL?.replace(
+                                    /\/api$/,
+                                    ""
+                                  )}${profile.avatar}`
+                                : DEFAULT_AVATAR,
+                            }}
                             style={{
                               width: 84,
                               height: 84,
@@ -336,7 +373,16 @@ const ProfileScreen: React.FC = () => {
                           }}
                         >
                           <Image
-                            source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                            source={{
+                              uri: profile?.avatar?.startsWith("http")
+                                ? profile.avatar
+                                : profile?.avatar
+                                ? `${api.defaults.baseURL?.replace(
+                                    /\/api$/,
+                                    ""
+                                  )}${profile.avatar}`
+                                : DEFAULT_AVATAR,
+                            }}
                             style={{
                               width: 84,
                               height: 84,
@@ -349,7 +395,15 @@ const ProfileScreen: React.FC = () => {
                     </TouchableOpacity>
                   ) : (
                     <Image
-                      source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                      source={{
+                        uri: profile?.avatar?.startsWith("http")
+                          ? profile.avatar
+                          : profile?.avatar
+                          ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                              profile.avatar
+                            }`
+                          : DEFAULT_AVATAR,
+                      }}
                       style={styles.profileImage}
                     />
                   )}

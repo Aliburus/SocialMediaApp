@@ -12,6 +12,8 @@ const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 const Story = require("../models/Story");
 const Comment = require("../models/Comment");
+const fs = require("fs");
+const path = require("path");
 
 function validateEmail(email) {
   return /^\S+@\S+\.\S+$/.test(email);
@@ -85,16 +87,36 @@ exports.login = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const { userId, name, username, avatar, bio, privateAccount } = req.body;
+    console.log("Update profile request body:", req.body);
+    console.log("Update profile request file:", req.file);
+
+    const { userId, name, username, bio, privateAccount } = req.body;
     if (!userId)
       return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+
     const updateData = {};
     if (name) updateData.name = name;
     if (username) updateData.username = username;
-    if (avatar) updateData.avatar = avatar;
     if (bio !== undefined) updateData.bio = bio;
     if (privateAccount !== undefined)
       updateData.privateAccount = privateAccount;
+
+    // Avatar dosyası varsa işle
+    if (req.file) {
+      // Eski avatarı sil
+      if (user.avatar && user.avatar.startsWith("/uploads/")) {
+        const oldAvatarPath = path.join(__dirname, "../..", user.avatar);
+        fs.unlink(oldAvatarPath, (err) => {
+          if (err) console.error("Eski avatar silinemedi:", err);
+        });
+      }
+      updateData.avatar = `/uploads/${req.file.filename}`;
+      console.log("Avatar updated:", updateData.avatar);
+    }
+
     const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
       new: true,
     });
@@ -109,7 +131,9 @@ exports.updateProfile = async (req, res) => {
       email: updatedUser.email,
       privateAccount: updatedUser.privateAccount,
     });
+    console.log("Profile updated successfully:", updatedUser.avatar);
   } catch (err) {
+    console.error("Update profile error:", err);
     res
       .status(500)
       .json({ message: "Profil güncellenemedi", error: err.message });

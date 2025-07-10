@@ -30,6 +30,7 @@ import { Swipeable } from "react-native-gesture-handler";
 import { useUser } from "../context/UserContext";
 import FollowButton from "../components/FollowButton";
 import LoadingSpinner from "../components/LoadingSpinner";
+import api from "../services/api";
 
 type RootStackParamList = {
   UserProfile: { user: any };
@@ -234,7 +235,15 @@ function NotificationsScreen({
                 }}
               >
                 <Image
-                  source={{ uri: user.avatar }}
+                  source={{
+                    uri: user.avatar?.startsWith("http")
+                      ? user.avatar
+                      : user.avatar
+                      ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                          user.avatar
+                        }`
+                      : "https://ui-avatars.com/api/?name=User",
+                  }}
                   style={{
                     width: 28,
                     height: 28,
@@ -283,8 +292,24 @@ function NotificationsScreen({
         <TouchableOpacity onPress={goToProfile}>
           {renderUserAvatars() || (
             <Image
-              source={{ uri: item.user?.avatar || item.from?.avatar }}
+              source={{
+                uri: (item.user?.avatar || item.from?.avatar)?.startsWith(
+                  "http"
+                )
+                  ? item.user?.avatar || item.from?.avatar
+                  : item.user?.avatar || item.from?.avatar
+                  ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                      item.user?.avatar || item.from?.avatar
+                    }`
+                  : "https://ui-avatars.com/api/?name=User",
+              }}
               style={styles.avatar}
+              onLoad={() =>
+                console.log("NotificationsScreen: Avatar loaded successfully")
+              }
+              onError={(error) =>
+                console.log("NotificationsScreen: Avatar load error:", error)
+              }
             />
           )}
         </TouchableOpacity>
@@ -441,7 +466,15 @@ function NotificationsScreen({
                 }}
               >
                 <Image
-                  source={{ uri: user.avatar }}
+                  source={{
+                    uri: user.avatar?.startsWith("http")
+                      ? user.avatar
+                      : user.avatar
+                      ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                          user.avatar
+                        }`
+                      : "https://ui-avatars.com/api/?name=User",
+                  }}
                   style={{
                     width: 28,
                     height: 28,
@@ -472,7 +505,12 @@ function NotificationsScreen({
           }}
         >
           <Image
-            source={{ uri: item.user?.avatar || item.from?.avatar }}
+            source={{
+              uri:
+                item.user?.avatar || item.from?.avatar
+                  ? item.user?.avatar || item.from?.avatar
+                  : "https://ui-avatars.com/api/?name=User",
+            }}
             style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }}
           />
           <View style={{ flex: 1 }}>
@@ -519,7 +557,12 @@ function NotificationsScreen({
         >
           {renderUserAvatars() || (
             <Image
-              source={{ uri: item.user?.avatar || item.from?.avatar }}
+              source={{
+                uri:
+                  item.user?.avatar || item.from?.avatar
+                    ? item.user?.avatar || item.from?.avatar
+                    : "https://ui-avatars.com/api/?name=User",
+              }}
               style={{
                 width: 40,
                 height: 40,

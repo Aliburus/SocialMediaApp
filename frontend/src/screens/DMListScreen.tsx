@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "../services/api";
 import {
   getUserConversations,
   getUserFriends,
@@ -213,7 +214,18 @@ const DMListScreen: React.FC<{
           onPress={() => navigation.navigate("DMChat", { user: item.user })}
         >
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: item.user?.avatar }} style={styles.avatar} />
+            <Image
+              source={{
+                uri: item.user?.avatar?.startsWith("http")
+                  ? item.user.avatar
+                  : item.user?.avatar
+                  ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                      item.user.avatar
+                    }`
+                  : "https://ui-avatars.com/api/?name=User",
+              }}
+              style={styles.avatar}
+            />
             {/* Okunmamış mesaj sayısı için kırmızı nokta */}
             {item.unreadCount > 0 && (
               <View style={styles.unreadBadge}>

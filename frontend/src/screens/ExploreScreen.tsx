@@ -149,14 +149,25 @@ const ExploreScreen: React.FC = () => {
       >
         {item.video ? (
           <Video
-            source={{ uri: item.video }}
+            source={{
+              uri: item.video.startsWith("http")
+                ? item.video
+                : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.video}`,
+            }}
             style={styles.postImage}
             resizeMode={ResizeMode.COVER}
             shouldPlay={false}
             isLooping={false}
           />
         ) : (
-          <Image source={{ uri: item.image }} style={styles.postImage} />
+          <Image
+            source={{
+              uri: item.image.startsWith("http")
+                ? item.image
+                : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`,
+            }}
+            style={styles.postImage}
+          />
         )}
         <View style={styles.postOverlay}>
           <View style={styles.postStats}>

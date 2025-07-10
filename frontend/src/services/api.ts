@@ -8,6 +8,7 @@ const API_URL: string = BACKEND_URL;
 const api = axios.create({
   baseURL: API_URL + "/api",
   withCredentials: true,
+  timeout: 30000,
 });
 
 // Her isteğe otomatik token ekle

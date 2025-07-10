@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
-import { updateProfile, getProfile } from "../services/api";
+import api from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { useUser } from "../context/UserContext";
@@ -31,16 +31,24 @@ const EditProfileScreen: React.FC = () => {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const userStr = await AsyncStorage.getItem("user");
-      const userObj = userStr ? JSON.parse(userStr) : null;
-      if (userObj?.id || userObj?._id) {
-        const id = userObj.id || userObj._id;
-        setUserId(id);
-        const profile = await getProfile(id);
-        setName(profile.name || "");
-        setUsername(profile.username || "");
-        setBio(profile.bio || "");
-        setAvatar(profile.avatar || "");
+      try {
+        const userStr = await AsyncStorage.getItem("user");
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        if (userObj?.id || userObj?._id) {
+          const id = userObj.id || userObj._id;
+          setUserId(id);
+          const response = await api.get(`/users/profile/${id}`);
+          const profile = response.data;
+          console.log("EditProfileScreen: Profile data:", profile);
+          console.log("EditProfileScreen: Avatar path:", profile.avatar);
+          console.log("EditProfileScreen: API base URL:", api.defaults.baseURL);
+          setName(profile.name || "");
+          setUsername(profile.username || "");
+          setBio(profile.bio || "");
+          setAvatar(profile.avatar || "");
+        }
+      } catch (err) {
+        console.error("EditProfileScreen: Error fetching profile:", err);
       }
     };
     fetchUser();
@@ -48,13 +56,38 @@ const EditProfileScreen: React.FC = () => {
 
   const handleSave = async () => {
     try {
-      const updated = await updateProfile({
-        userId,
-        name,
-        username,
-        avatar,
-        bio,
+      // Avatar dosyası varsa FormData ile gönder
+      let avatarFile = null;
+      if (avatar && !avatar.startsWith("http") && avatar !== "") {
+        const fileName = avatar.split("/").pop() || `avatar_${Date.now()}.jpg`;
+        avatarFile = {
+          uri: avatar,
+          name: fileName,
+          type: "image/jpeg",
+        };
+        console.log("Avatar file prepared:", avatarFile);
+      }
+
+      const formData = new FormData();
+      formData.append("userId", userId.toString());
+      formData.append("name", name);
+      formData.append("username", username);
+      formData.append("bio", bio);
+
+      if (avatarFile) {
+        formData.append("avatar", avatarFile as any);
+        console.log("Avatar appended to FormData");
+      }
+
+      const response = await api.post("/users/update-profile", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
+
+      const updated = response.data;
+      console.log("Profile update response:", updated);
+
       setName(updated.name);
       setUsername(updated.username);
       setAvatar(updated.avatar);
@@ -68,9 +101,20 @@ const EditProfileScreen: React.FC = () => {
       });
       Alert.alert("Başarılı", "Profil güncellendi!");
       navigation.goBack();
-    } catch (err) {
+    } catch (err: any) {
       console.error("EditProfile: Error updating profile:", err);
-      Alert.alert("Hata", "Profil güncellenemedi");
+      let errorMessage = "Profil güncellenemedi";
+
+      if (err.response) {
+        // Server response var
+        errorMessage = err.response.data?.message || errorMessage;
+      } else if (err.request) {
+        // Network error
+        errorMessage =
+          "Bağlantı hatası. Lütfen internet bağlantınızı kontrol edin.";
+      }
+
+      Alert.alert("Hata", errorMessage);
     }
   };
 
@@ -116,7 +160,13 @@ const EditProfileScreen: React.FC = () => {
         >
           <View style={{ alignItems: "center", justifyContent: "center" }}>
             <Image
-              source={{ uri: avatar }}
+              source={{
+                uri: avatar.startsWith("http")
+                  ? avatar
+                  : avatar
+                  ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${avatar}`
+                  : "https://ui-avatars.com/api/?name=User&size=120",
+              }}
               style={{
                 width: 120,
                 height: 120,
@@ -125,6 +175,12 @@ const EditProfileScreen: React.FC = () => {
                 borderColor: colors.primary,
                 backgroundColor: colors.surface,
               }}
+              onLoad={() =>
+                console.log("EditProfileScreen: Avatar loaded successfully")
+              }
+              onError={(error) =>
+                console.log("EditProfileScreen: Avatar load error:", error)
+              }
             />
             <TouchableOpacity
               style={{

@@ -31,6 +31,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ShareModal } from "../components/ShareModal";
 import api from "../services/api";
+import { Video, ResizeMode } from "expo-av";
 
 const { width, height } = Dimensions.get("window");
 
@@ -254,9 +255,9 @@ const StoryScreen: React.FC = () => {
         setShowOptions(false);
         // Story silindikten sonra HomeScreen'e dön ve story'leri yenile
         if (navigation.canGoBack()) {
-          navigation.goBack();
+          navigation.goBack({ refreshStories: true });
         } else {
-          navigation.navigate("Home");
+          navigation.navigate("Home", { refreshStories: true });
         }
       }
     } catch (error) {
@@ -273,9 +274,9 @@ const StoryScreen: React.FC = () => {
         setShowOptions(false);
         // Story arşivlendikten sonra HomeScreen'e dön ve story'leri yenile
         if (navigation.canGoBack()) {
-          navigation.goBack();
+          navigation.goBack({ refreshStories: true });
         } else {
-          navigation.navigate("Home");
+          navigation.navigate("Home", { refreshStories: true });
         }
       }
     } catch (error) {
@@ -290,9 +291,9 @@ const StoryScreen: React.FC = () => {
         await unarchiveStory(stories[current]._id, userId);
         setShowOptions(false);
         if (navigation.canGoBack()) {
-          navigation.goBack();
+          navigation.goBack({ refreshStories: true });
         } else {
-          navigation.navigate("Home");
+          navigation.navigate("Home", { refreshStories: true });
         }
       }
     } catch (error) {
@@ -316,47 +317,80 @@ const StoryScreen: React.FC = () => {
           {...panResponder.panHandlers}
         >
           {/* Story görseli ve tıklama alanları */}
-          <View style={{ flex: 1, flexDirection: "row" }}>
-            {/* Sol alan: bir önceki story */}
-            <TouchableOpacity
-              style={{ flex: 1 }}
-              activeOpacity={1}
-              onPress={() => {
-                if (current > 0) setCurrent((c) => c - 1);
-              }}
-              onPressIn={() => setIsPaused(true)}
-              onPressOut={() => setIsPaused(false)}
-            >
+          <View style={{ flex: 1 }}>
+            {stories[current]?.video ? (
+              <Video
+                source={{
+                  uri: stories[current].video.startsWith("http")
+                    ? stories[current].video
+                    : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                        stories[current].video
+                      }`,
+                }}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: "100%",
+                  height: "100%",
+                }}
+                useNativeControls
+                resizeMode={ResizeMode.COVER}
+                shouldPlay
+                isLooping
+              />
+            ) : (
               <Image
                 source={{
-                  uri:
-                    stories[current]?.image ||
-                    stories[current]?.media ||
-                    "https://images.pexels.com/photos/3802510/pexels-photo-3802510.jpeg",
+                  uri: stories[current].image.startsWith("http")
+                    ? stories[current].image
+                    : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                        stories[current].image
+                      }`,
                 }}
-                style={[styles.storyImage, { position: "absolute", left: 0 }]}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: "100%",
+                  height: "100%",
+                }}
                 resizeMode="cover"
               />
-            </TouchableOpacity>
-            {/* Sağ alan: bir sonraki story */}
-            <TouchableOpacity
-              style={{ flex: 1 }}
-              activeOpacity={1}
-              onPressIn={() => {
-                setIsPaused(true);
-                pressStartRef.current = Date.now();
-              }}
-              onPressOut={() => {
-                setIsPaused(false);
-                const pressDuration = Date.now() - (pressStartRef.current || 0);
-                if (pressDuration < 300) {
-                  handleNext();
-                }
-                pressStartRef.current = null;
-              }}
-            >
-              {/* Boş, sadece tıklama alanı */}
-            </TouchableOpacity>
+            )}
+            {/* Sol ve sağ tıklama alanları */}
+            <View style={{ flex: 1, flexDirection: "row" }}>
+              <TouchableOpacity
+                style={{ flex: 1 }}
+                activeOpacity={1}
+                onPress={() => {
+                  if (current > 0) setCurrent((c) => c - 1);
+                }}
+                onPressIn={() => setIsPaused(true)}
+                onPressOut={() => setIsPaused(false)}
+              />
+              <TouchableOpacity
+                style={{ flex: 1 }}
+                activeOpacity={1}
+                onPressIn={() => {
+                  setIsPaused(true);
+                  pressStartRef.current = Date.now();
+                }}
+                onPressOut={() => {
+                  setIsPaused(false);
+                  const pressDuration =
+                    Date.now() - (pressStartRef.current || 0);
+                  if (pressDuration < 300) {
+                    handleNext();
+                  }
+                  pressStartRef.current = null;
+                }}
+              />
+            </View>
           </View>
 
           {/* Üst progress bar */}
@@ -425,9 +459,13 @@ const StoryScreen: React.FC = () => {
             >
               <Image
                 source={{
-                  uri:
-                    stories[current]?.user?.avatar ||
-                    "https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg",
+                  uri: stories[current]?.user?.avatar
+                    ? stories[current].user.avatar.startsWith("/uploads/")
+                      ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                          stories[current].user.avatar
+                        }`
+                      : stories[current].user.avatar
+                    : "https://ui-avatars.com/api/?name=User",
                 }}
                 style={styles.profileImage}
               />

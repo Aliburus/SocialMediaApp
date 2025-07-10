@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const path = require("path");
 const {
   register,
   login,
@@ -30,9 +31,21 @@ const storyController = require("../controllers/storyController");
 
 router.post("/register", register);
 router.post("/login", login);
-router.post("/update-profile", updateProfile);
+router.post(
+  "/update-profile",
+  (req, res, next) => {
+    req.upload.single("avatar")(req, res, next);
+  },
+  updateProfile
+);
 router.get("/profile/:userId", getProfile);
-router.post("/stories", storyController.createStory);
+router.post(
+  "/stories",
+  (req, res, next) => {
+    req.upload.single("media")(req, res, next);
+  },
+  storyController.createStory
+);
 router.get("/stories", storyController.getAllStories);
 router.post("/stories/:id/view", storyController.viewStory);
 router.delete("/stories/:id", storyController.deleteStory);
