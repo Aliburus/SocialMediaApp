@@ -278,9 +278,13 @@ const DMChatScreen: React.FC = () => {
           <View style={styles.avatarContainer}>
             <Image
               source={{
-                uri:
-                  user?.avatar ||
-                  "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
+                uri: user?.avatar?.startsWith("http")
+                  ? user.avatar
+                  : user?.avatar
+                  ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                      user.avatar
+                    }`
+                  : "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
               }}
               style={styles.avatar}
             />
@@ -410,8 +414,12 @@ const DMChatScreen: React.FC = () => {
 
                 // Eğer post veya story varsa balon olmadan göster
                 if (item.post) {
-                  // Silinmiş post kontrolü
-                  if (!item.post || item.post.deleted || !item.post.image) {
+                  // Silinmiş post kontrolü - video veya image kontrolü
+                  if (
+                    !item.post ||
+                    item.post.deleted ||
+                    (!item.post.image && !item.post.video)
+                  ) {
                     return (
                       <View
                         style={[
@@ -458,9 +466,14 @@ const DMChatScreen: React.FC = () => {
                         >
                           <Image
                             source={{
-                              uri:
-                                user?.avatar ||
-                                "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
+                              uri: user?.avatar?.startsWith("http")
+                                ? user.avatar
+                                : user?.avatar
+                                ? `${api.defaults.baseURL?.replace(
+                                    /\/api$/,
+                                    ""
+                                  )}${user.avatar}`
+                                : "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
                             }}
                             style={styles.messageAvatar}
                           />
@@ -500,9 +513,14 @@ const DMChatScreen: React.FC = () => {
                         >
                           <Image
                             source={{
-                              uri:
-                                item.post.user?.avatar ||
-                                "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
+                              uri: item.post.user?.avatar?.startsWith("http")
+                                ? item.post.user.avatar
+                                : item.post.user?.avatar
+                                ? `${api.defaults.baseURL?.replace(
+                                    /\/api$/,
+                                    ""
+                                  )}${item.post.user.avatar}`
+                                : "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
                             }}
                             style={{
                               width: 36,
@@ -569,8 +587,19 @@ const DMChatScreen: React.FC = () => {
                   );
                 }
                 if (item.story) {
-                  // Silinmiş story kontrolü
-                  if (!item.story || item.story.deleted || !item.story.image) {
+                  console.log(
+                    "Story object:",
+                    JSON.stringify(item.story, null, 2)
+                  );
+                  console.log("Story image:", item.story.image);
+                  console.log("Story video:", item.story.video);
+
+                  // Silinmiş story kontrolü - video veya image kontrolü
+                  if (
+                    !item.story ||
+                    item.story.deleted ||
+                    (!item.story.image && !item.story.video)
+                  ) {
                     return (
                       <View
                         style={[
@@ -621,13 +650,17 @@ const DMChatScreen: React.FC = () => {
                             padding: 0,
                             alignItems: "stretch",
                             margin: 12,
+                            borderRadius: 12,
+                            overflow: "hidden",
                           },
                         ]}
                         onPress={() =>
                           navigation.navigate("StoryScreen", {
-                            story: item.story,
+                            stories: [item.story],
+                            initialIndex: 0,
                           })
                         }
+                        activeOpacity={0.8}
                       >
                         <View
                           style={{
@@ -641,9 +674,14 @@ const DMChatScreen: React.FC = () => {
                         >
                           <Image
                             source={{
-                              uri:
-                                item.story.user?.avatar ||
-                                "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
+                              uri: item.story.user?.avatar?.startsWith("http")
+                                ? item.story.user.avatar
+                                : item.story.user?.avatar
+                                ? `${api.defaults.baseURL?.replace(
+                                    /\/api$/,
+                                    ""
+                                  )}${item.story.user.avatar}`
+                                : "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
                             }}
                             style={{
                               width: 36,
@@ -663,7 +701,13 @@ const DMChatScreen: React.FC = () => {
                             {item.story.user?.username || "test user"}
                           </Text>
                         </View>
-                        <View style={{ alignItems: "center", width: "100%" }}>
+                        <View
+                          style={{
+                            alignItems: "center",
+                            width: "100%",
+                            position: "relative",
+                          }}
+                        >
                           {item.story.video ? (
                             <Video
                               source={{
@@ -704,6 +748,22 @@ const DMChatScreen: React.FC = () => {
                               resizeMode="cover"
                             />
                           )}
+                          <View
+                            style={{
+                              position: "absolute",
+                              top: 8,
+                              right: 8,
+                              backgroundColor: "rgba(0,0,0,0.6)",
+                              borderRadius: 12,
+                              padding: 4,
+                            }}
+                          >
+                            <Ionicons
+                              name="play-circle"
+                              size={20}
+                              color="#fff"
+                            />
+                          </View>
                         </View>
                       </TouchableOpacity>
                     </View>

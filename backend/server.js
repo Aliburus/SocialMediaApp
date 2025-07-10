@@ -66,7 +66,7 @@ const io = new Server(httpServer, {
 });
 
 app.use(cors({ origin: "*", credentials: true }));
-app.use(express.json({ limit: "3r00mb" }));
+app.use(express.json({ limit: "300mb" }));
 app.use(express.urlencoded({ extended: true, limit: "300mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 

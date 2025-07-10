@@ -313,12 +313,25 @@ const ProfileScreen: React.FC = () => {
                 <View style={styles.profileHeader}>
                   {Array.isArray(stories) && stories.length > 0 ? (
                     <TouchableOpacity
-                      onPress={() =>
+                      onPress={() => {
+                        const sortedStories = Array.isArray(stories)
+                          ? stories.sort((a, b) => {
+                              // Görülmemiş story'ler önce gelsin
+                              if (!a.isViewed && b.isViewed) return -1;
+                              if (a.isViewed && !b.isViewed) return 1;
+                              // Aynı görülme durumundaysa tarihe göre sırala
+                              return (
+                                new Date(a.createdAt).getTime() -
+                                new Date(b.createdAt).getTime()
+                              );
+                            })
+                          : [];
+
                         navigation.navigate("Story", {
                           userId: profile?._id || profile?.id,
-                          stories: Array.isArray(stories) ? stories : [],
-                        })
-                      }
+                          stories: sortedStories,
+                        });
+                      }}
                       activeOpacity={0.8}
                     >
                       {(stories || []).some((s: any) => !s.isViewed) ? (

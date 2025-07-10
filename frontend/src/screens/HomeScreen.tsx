@@ -430,9 +430,19 @@ const HomeScreen: React.FC<{
     const userStories = stories.filter(
       (s) => (s.user._id || s.user.id) === (item.user._id || item.user.id)
     );
+
+    // Görülmemiş story'lerden başlaması için sırala
+    const sortedStories = userStories.sort((a, b) => {
+      // Görülmemiş story'ler önce gelsin
+      if (!a.isViewed && b.isViewed) return -1;
+      if (a.isViewed && !b.isViewed) return 1;
+      // Aynı görülme durumundaysa tarihe göre sırala
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+
     setActiveUserId(item.user._id || item.user.id);
     navigation.navigate("Story", {
-      stories: userStories,
+      stories: sortedStories,
       activeUserId: item.user._id || item.user.id,
     });
   };

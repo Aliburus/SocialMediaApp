@@ -8,19 +8,63 @@ exports.createStory = async (req, res) => {
     const { user } = req.body;
     let image = req.body.image;
     let video = req.body.video;
+
+    console.log("Story create - req.body:", req.body);
+    console.log("Story create - req.file:", req.file);
+    console.log("Story create - req.files:", req.files);
+
     if (req.file) {
       const mime = req.file.mimetype;
+      console.log("Story create - mime type:", mime);
+      console.log("Story create - filename:", req.file.filename);
       if (mime.startsWith("image/")) {
         image = `/uploads/${req.file.filename}`;
+        console.log("Story create - image path:", image);
       } else if (mime.startsWith("video/")) {
         video = `/uploads/${req.file.filename}`;
+        console.log("Story create - video path:", video);
       }
     }
+
+    // Video dosyası varsa ama video alanı boşsa, dosya adından kontrol et
+    if (!video && req.file && req.file.filename) {
+      const filename = req.file.filename.toLowerCase();
+      if (
+        filename.includes(".mp4") ||
+        filename.includes(".mov") ||
+        filename.includes(".avi")
+      ) {
+        video = `/uploads/${req.file.filename}`;
+        console.log("Story create - video path from filename:", video);
+      }
+    }
+
+    console.log("Story create - final image:", image);
+    console.log("Story create - final video:", video);
+
     if (!user || (!image && !video))
       return res.status(400).json({ message: "Eksik veri" });
+
     const story = await Story.create({ user, image, video });
+    console.log("Story create - created story:", story);
+
+    // Eğer video alanı boşsa ama dosya varsa, güncelle
+    if (!story.video && req.file && req.file.filename) {
+      const filename = req.file.filename.toLowerCase();
+      if (
+        filename.includes(".mp4") ||
+        filename.includes(".mov") ||
+        filename.includes(".avi")
+      ) {
+        story.video = `/uploads/${req.file.filename}`;
+        await story.save();
+        console.log("Story create - updated story with video:", story);
+      }
+    }
+
     res.status(201).json(story);
   } catch (err) {
+    console.error("Story create error:", err);
     res.status(500).json({ message: "Story eklenemedi", error: err.message });
   }
 };

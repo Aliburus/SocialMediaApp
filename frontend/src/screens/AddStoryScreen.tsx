@@ -7,7 +7,6 @@ import {
   Image,
   Animated,
 } from "react-native";
-import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeContext";
@@ -17,7 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { Video, ResizeMode, Audio } from "expo-av";
+import { Video, ResizeMode } from "expo-av";
 import Svg, { Circle } from "react-native-svg";
 import { Animated as RNAnimated } from "react-native";
 const AnimatedCircle = RNAnimated.createAnimatedComponent(Circle);
@@ -28,99 +27,69 @@ const RADIUS = (CIRCLE_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 const AddStoryScreen: React.FC = () => {
-  const [facing, setFacing] = useState<CameraType>("back");
-  const [permission, requestPermission] = useCameraPermissions();
   const [preview, setPreview] = useState<string | null>(null);
-  const [recording, setRecording] = useState(false);
-  const [recordingStartTime, setRecordingStartTime] = useState<number>(0);
-  const [progressAnimation] = useState(new Animated.Value(0));
-  const isActuallyRecording = useRef(false);
-  const cameraRef = useRef<any>(null);
-  const { colors } = useTheme();
-  const navigation = useNavigation<any>();
-  const [lastTap, setLastTap] = useState<number>(0);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [videoRef, setVideoRef] = useState<any>(null);
+  const [videoReady, setVideoReady] = useState(false);
+  const [mode, setMode] = useState<"photo" | "video">("photo");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const { colors } = useTheme();
+  const navigation = useNavigation<any>();
 
-  const STORY_DURATION = 8000; // 8 saniye
-
-  // Audio permissions için
-  useEffect(() => {
-    (async () => {
-      const { status } = await Audio.requestPermissionsAsync();
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        console.log("Audio permission not granted");
+        alert("Kamera izni gerekiyor");
+        return;
       }
-    })();
-  }, []);
 
-  // Progress bar animasyonu
-  useEffect(() => {
-    if (recording) {
-      progressAnimation.setValue(0);
-      Animated.timing(progressAnimation, {
-        toValue: 1,
-        duration: STORY_DURATION,
-        useNativeDriver: false,
-      }).start();
-    } else {
-      progressAnimation.setValue(0);
-    }
-  }, [recording]);
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
 
-  if (!permission) {
-    return <View style={{ flex: 1, backgroundColor: "#000" }} />;
-  }
-
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "black" }}>
-        <View style={styles.container}>
-          <Text style={styles.message}>
-            Kamerayı göstermek için izninize ihtiyacımız var
-          </Text>
-          <TouchableOpacity
-            style={styles.permissionButton}
-            onPress={requestPermission}
-          >
-            <Text style={styles.permissionButtonText}>İzin Ver</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  async function takePhoto() {
-    if (cameraRef.current && !recording) {
-      const photo = await cameraRef.current.takePictureAsync();
-      setPreview(photo.uri);
-    }
-  }
-
-  async function startRecording() {
-    if (cameraRef.current && !recording) {
-      setRecording(true);
-      setRecordingStartTime(Date.now());
-      isActuallyRecording.current = true;
-      try {
-        const video = await cameraRef.current.recordAsync({
-          mute: false,
-          maxDuration: 8, // 8 saniye
-        });
-        setPreview(video.uri);
-      } catch (error: any) {
-        console.error("Video kaydetme hatası:", error);
-      } finally {
-        setRecording(false);
-        setRecordingStartTime(0);
-        isActuallyRecording.current = false;
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setPreview(result.assets[0].uri);
+        setVideoReady(true);
       }
+    } catch (error) {
+      console.error("Fotoğraf çekme hatası:", error);
+      alert("Fotoğraf çekilirken hata oluştu");
     }
-  }
+  };
 
-  function toggleCameraFacing() {
-    setFacing((current) => (current === "back" ? "front" : "back"));
-  }
+  const takeVideo = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        alert("Kamera izni gerekiyor");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        videoMaxDuration: 8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setPreview(result.assets[0].uri);
+        setVideoReady(true);
+      }
+    } catch (error) {
+      console.error("Video çekme hatası:", error);
+      alert("Video çekilirken hata oluştu");
+    }
+  };
 
   const getFileName = (uri: string) => {
     return uri.split("/").pop() || `story_${Date.now()}`;
@@ -128,8 +97,10 @@ const AddStoryScreen: React.FC = () => {
   const getMimeType = (uri: string) => {
     if (uri.endsWith(".mp4")) return "video/mp4";
     if (uri.endsWith(".mov")) return "video/quicktime";
+    if (uri.endsWith(".avi")) return "video/x-msvideo";
     if (uri.endsWith(".jpg") || uri.endsWith(".jpeg")) return "image/jpeg";
     if (uri.endsWith(".png")) return "image/png";
+    if (uri.endsWith(".gif")) return "image/gif";
     return "application/octet-stream";
   };
 
@@ -154,12 +125,21 @@ const AddStoryScreen: React.FC = () => {
         return;
       }
       if (!preview) return;
-      const isVideo = preview.endsWith(".mp4") || preview.endsWith(".mov");
+
+      // Video kontrolü - hem dosya uzantısı hem de mode'a göre
+      const isVideo =
+        preview.endsWith(".mp4") ||
+        preview.endsWith(".mov") ||
+        mode === "video";
       const mediaFile = {
         uri: preview,
         name: getFileName(preview),
         type: getMimeType(preview),
       };
+      console.log("ShareStory - mode:", mode);
+      console.log("ShareStory - isVideo:", isVideo);
+      console.log("ShareStory - mediaFile:", mediaFile);
+
       await createStory({
         user: userId,
         ...(isVideo ? { videoFile: mediaFile } : { imageFile: mediaFile }),
@@ -201,22 +181,12 @@ const AddStoryScreen: React.FC = () => {
       console.log("Galeri sonucu:", result);
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setPreview(result.assets[0].uri);
+        setVideoReady(true);
       }
     } catch (err) {
       console.error("Galeri hatası:", err);
       alert("Galeri açılırken bir hata oluştu.");
     }
-  };
-
-  const handleDoubleTap = () => {
-    const now = Date.now();
-    const DOUBLE_TAP_DELAY = 300;
-
-    if (lastTap && now - lastTap < DOUBLE_TAP_DELAY) {
-      // Çift tık algılandı
-      toggleCameraFacing();
-    }
-    setLastTap(now);
   };
 
   if (preview) {
@@ -226,30 +196,76 @@ const AddStoryScreen: React.FC = () => {
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
-          <Text
+          <View
             style={{
-              color: "#fff",
-              fontSize: 20,
-              fontWeight: "bold",
+              backgroundColor: "#222a",
+              borderRadius: 16,
+              paddingVertical: 12,
+              paddingHorizontal: 24,
               marginBottom: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
             }}
           >
-            Hikaye Önizlemesi
-          </Text>
-          {isVideo ? (
-            <Video
-              source={{ uri: preview }}
+            <Ionicons name="eye" size={24} color="#fff" />
+            <Text
               style={{
-                width: "90%",
-                height: 400,
-                borderRadius: 24,
-                marginBottom: 32,
+                color: "#fff",
+                fontSize: 20,
+                fontWeight: "bold",
               }}
-              useNativeControls
-              resizeMode={ResizeMode.COVER}
-              shouldPlay
-              isLooping
-            />
+            >
+              Hikaye Önizlemesi
+            </Text>
+          </View>
+          {isVideo ? (
+            <View style={styles.videoContainer}>
+              <Video
+                ref={(ref) => setVideoRef(ref)}
+                source={{ uri: preview }}
+                style={styles.videoPlayer}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay={!isPaused}
+                isLooping={false}
+                onLoad={(data: any) => {
+                  setVideoDuration(data.durationMillis || 0);
+                }}
+                onPlaybackStatusUpdate={(status: any) => {
+                  if (status.isLoaded && !isPaused) {
+                    setVideoProgress(
+                      status.positionMillis / (status.durationMillis || 1)
+                    );
+                    setIsPlaying(status.isPlaying);
+                  }
+                }}
+              />
+              <TouchableOpacity
+                style={styles.videoOverlay}
+                onPressIn={() => {
+                  setIsPaused(true);
+                  videoRef?.pauseAsync();
+                }}
+                onPressOut={() => {
+                  setIsPaused(false);
+                  videoRef?.playAsync();
+                }}
+              >
+                {isPaused && (
+                  <View style={styles.playButton}>
+                    <Ionicons name="pause" size={40} color="#fff" />
+                  </View>
+                )}
+              </TouchableOpacity>
+              <View style={styles.videoProgressBar}>
+                <View
+                  style={[
+                    styles.videoProgressFill,
+                    { width: `${videoProgress * 100}%` },
+                  ]}
+                />
+              </View>
+            </View>
           ) : (
             <Image
               source={{ uri: preview }}
@@ -299,24 +315,35 @@ const AddStoryScreen: React.FC = () => {
                 paddingVertical: 10,
                 paddingHorizontal: 24,
                 marginRight: 8,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
               }}
               onPress={() => setPreview(null)}
             >
+              <Ionicons name="close" size={20} color="#222" />
               <Text style={{ color: "#222", fontWeight: "bold", fontSize: 16 }}>
-                Vazgeç
+                İptal
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={{
-                backgroundColor: "#E91E63",
+                backgroundColor: videoReady ? "#E91E63" : "#666",
                 borderRadius: 20,
                 paddingVertical: 12,
                 paddingHorizontal: 32,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                minWidth: 120,
+                justifyContent: "center",
               }}
-              onPress={shareStory}
+              onPress={videoReady ? shareStory : undefined}
+              disabled={!videoReady}
             >
+              <Ionicons name="share-social" size={20} color="#fff" />
               <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 18 }}>
-                Paylaş
+                {videoReady ? "Paylaş" : "Hazırlanıyor..."}
               </Text>
             </TouchableOpacity>
           </View>
@@ -327,102 +354,81 @@ const AddStoryScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "black" }}>
-      <CameraView style={{ flex: 1 }} facing={facing} ref={cameraRef}>
-        <TouchableOpacity
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "transparent",
-          }}
-          onPress={handleDoubleTap}
-        />
-        <TouchableOpacity
-          style={styles.flipButton}
-          onPress={toggleCameraFacing}
-        >
-          <Ionicons name="camera-reverse" size={28} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={{
-            position: "absolute",
-            left: 24,
-            bottom: 48,
-            backgroundColor: "#222a",
-            borderRadius: 16,
-            padding: 16,
-            width: 56,
-            height: 56,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-          onPress={() => {
-            console.log("Galeri ikonuna tıklandı");
-            pickFromGallery();
-          }}
-        >
-          <Ionicons name="images" size={28} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.bottomBar}>
-          <View style={styles.captureButtonContainer}>
-            {recording && (
-              <Svg
-                width={CIRCLE_SIZE}
-                height={CIRCLE_SIZE}
-                style={styles.progressSvg}
-              >
-                <AnimatedCircle
-                  stroke="#fff"
-                  fill="none"
-                  cx={CIRCLE_SIZE / 2}
-                  cy={CIRCLE_SIZE / 2}
-                  r={RADIUS}
-                  strokeWidth={STROKE_WIDTH}
-                  strokeDasharray={`${CIRCUMFERENCE}, ${CIRCUMFERENCE}`}
-                  strokeDashoffset={progressAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, CIRCUMFERENCE],
-                  })}
-                />
-              </Svg>
-            )}
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <View style={styles.header}>
+          <Text style={styles.headerText}>Story Ekle</Text>
+        </View>
+
+        <View style={styles.content}>
+          <TouchableOpacity
+            style={styles.galleryButton}
+            onPress={pickFromGallery}
+          >
+            <Ionicons name="images" size={32} color="#fff" />
+            <Text style={styles.galleryText}>Galeriden Seç</Text>
+          </TouchableOpacity>
+
+          <View style={styles.modeSelector}>
             <TouchableOpacity
               style={[
-                styles.captureButton,
-                recording && styles.recordingButton,
+                styles.modeButton,
+                mode === "photo" && styles.activeModeButton,
               ]}
-              onPress={takePhoto}
-              onLongPress={startRecording}
-              delayLongPress={300}
-              onPressOut={async () => {
-                if (
-                  isActuallyRecording.current &&
-                  cameraRef.current &&
-                  recording
-                ) {
-                  const elapsed = Date.now() - recordingStartTime;
-                  if (elapsed > 500) {
-                    cameraRef.current.stopRecording();
-                  }
-                }
-                setRecording(false);
-                setRecordingStartTime(0);
-                isActuallyRecording.current = false;
-              }}
+              onPress={() => setMode("photo")}
             >
-              {recording ? (
-                <View style={styles.recordingIndicator}>
-                  <Ionicons name="stop" size={24} color="#fff" />
-                </View>
-              ) : (
-                <View style={styles.innerCircle} />
-              )}
+              <Ionicons
+                name="camera"
+                size={24}
+                color={mode === "photo" ? "#E91E63" : "#fff"}
+              />
+              <Text
+                style={[
+                  styles.modeText,
+                  mode === "photo" && styles.activeModeText,
+                ]}
+              >
+                Fotoğraf
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.modeButton,
+                mode === "video" && styles.activeModeButton,
+              ]}
+              onPress={() => setMode("video")}
+            >
+              <Ionicons
+                name="videocam"
+                size={24}
+                color={mode === "video" ? "#E91E63" : "#fff"}
+              />
+              <Text
+                style={[
+                  styles.modeText,
+                  mode === "video" && styles.activeModeText,
+                ]}
+              >
+                Video
+              </Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={styles.captureButton}
+            onPress={mode === "photo" ? takePhoto : takeVideo}
+          >
+            <Ionicons
+              name={mode === "photo" ? "camera" : "videocam"}
+              size={32}
+              color="#fff"
+            />
+            <Text style={styles.captureText}>
+              {mode === "photo" ? "Fotoğraf Çek" : "Video Çek"}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </CameraView>
+      </View>
     </SafeAreaView>
   );
 };
@@ -434,88 +440,74 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-  message: {
-    textAlign: "center",
-    color: "white",
-    fontSize: 16,
-    marginBottom: 20,
+  header: {
+    marginBottom: 40,
   },
-  permissionButton: {
-    backgroundColor: "#007AFF",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  permissionButtonText: {
-    color: "white",
-    fontSize: 16,
+  headerText: {
+    color: "#fff",
+    fontSize: 28,
     fontWeight: "bold",
+    textAlign: "center",
   },
-  flipButton: {
-    position: "absolute",
-    top: 40,
-    left: 20,
-    backgroundColor: "#0008",
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    zIndex: 10,
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 40,
   },
-  bottomBar: {
-    position: "absolute",
-    bottom: 40,
-    left: 0,
-    right: 0,
+  galleryButton: {
+    backgroundColor: "#222a",
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  galleryText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  modeSelector: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10,
-    gap: 24,
+    gap: 32,
+  },
+  modeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#222a",
+    borderRadius: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  activeModeButton: {
+    backgroundColor: "#E91E63",
+  },
+  modeText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  activeModeText: {
+    color: "#fff",
   },
   captureButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "#fff",
-    borderWidth: 4,
-    borderColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  innerCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#f04",
-  },
-  recordingButton: {
     backgroundColor: "#E91E63",
-    borderColor: "#E91E63",
-  },
-  recordingInnerCircle: {
-    backgroundColor: "#fff",
-  },
-  recordingIndicator: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#E91E63",
-    justifyContent: "center",
+    borderRadius: 25,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    flexDirection: "row",
     alignItems: "center",
+    gap: 12,
   },
-  captureButtonContainer: {
-    position: "relative",
-    width: CIRCLE_SIZE,
-    height: CIRCLE_SIZE,
-    borderRadius: CIRCLE_SIZE / 2,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  progressSvg: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    zIndex: 1,
+  captureText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
   },
   progressContainer: {
     paddingHorizontal: 20,
@@ -538,6 +530,48 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#fff",
     textAlign: "center",
+  },
+  videoContainer: {
+    width: "90%",
+    height: 400,
+    borderRadius: 24,
+    marginBottom: 32,
+    position: "relative",
+    overflow: "hidden",
+  },
+  videoPlayer: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 24,
+  },
+  videoOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  playButton: {
+    backgroundColor: "#0008",
+    borderRadius: 50,
+    width: 80,
+    height: 80,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  videoProgressBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    backgroundColor: "#0008",
+  },
+  videoProgressFill: {
+    height: "100%",
+    backgroundColor: "#E91E63",
   },
 });
 

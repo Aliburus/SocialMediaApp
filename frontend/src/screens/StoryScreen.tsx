@@ -55,7 +55,11 @@ const StoryScreen: React.FC = () => {
     stories: any[];
     fromArchive?: boolean;
   };
-  const [current, setCurrent] = React.useState(0);
+  const [current, setCurrent] = React.useState(() => {
+    // Görülmemiş story'lerden başla
+    const firstUnviewedIndex = stories.findIndex((story) => !story.isViewed);
+    return firstUnviewedIndex >= 0 ? firstUnviewedIndex : 0;
+  });
   const { colors } = useTheme();
   const [userId, setUserId] = React.useState<string | null>(null);
   const [isPaused, setIsPaused] = React.useState(false);

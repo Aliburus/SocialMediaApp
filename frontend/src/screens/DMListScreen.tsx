@@ -242,6 +242,12 @@ const DMListScreen: React.FC<{
             <Text style={[styles.lastMessage, { color: colors.textSecondary }]}>
               {item.lastMessage}
             </Text>
+            {item.lastMessageType === "story" && item.lastMessageStory && (
+              <View style={styles.storyIndicator}>
+                <Ionicons name="camera" size={12} color="#E91E63" />
+                <Text style={styles.storyText}>Story</Text>
+              </View>
+            )}
           </View>
           <Text style={[styles.time, { color: colors.textSecondary }]}>
             {item.time ? new Date(item.time).toLocaleDateString() : ""}
@@ -484,6 +490,17 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 10,
     fontWeight: "bold",
+  },
+  storyIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+    gap: 4,
+  },
+  storyText: {
+    fontSize: 12,
+    color: "#E91E63",
+    fontWeight: "600",
   },
 });
 

@@ -587,7 +587,14 @@ exports.getUserConversations = async (req, res) => {
           { path: "sender", select: "_id username avatar" },
           { path: "receiver", select: "_id username avatar" },
           { path: "post", select: "_id" },
-          { path: "story", select: "_id" },
+          {
+            path: "story",
+            select: "_id image video user createdAt archived",
+            populate: {
+              path: "user",
+              select: "_id username avatar",
+            },
+          },
         ],
       })
       .sort({ updatedAt: -1 });
@@ -634,6 +641,7 @@ exports.getUserConversations = async (req, res) => {
             : conv.lastMessage?.story
             ? "story"
             : "text",
+          lastMessageStory: conv.lastMessage?.story || null,
           unreadCount: unreadCount,
         };
 
@@ -668,7 +676,7 @@ exports.getConversationMessages = async (req, res) => {
       .populate("sender receiver", "_id username avatar")
       .populate({
         path: "post",
-        select: "_id image description user",
+        select: "_id image video description user",
         populate: {
           path: "user",
           select: "_id username avatar",
@@ -676,7 +684,7 @@ exports.getConversationMessages = async (req, res) => {
       })
       .populate({
         path: "story",
-        select: "_id image user createdAt archived",
+        select: "_id image video user createdAt archived",
         populate: {
           path: "user",
           select: "_id username avatar",
@@ -746,7 +754,7 @@ exports.sendMessage = async (req, res) => {
       .populate("sender receiver", "_id username avatar")
       .populate({
         path: "post",
-        select: "_id image description user",
+        select: "_id image video description user",
         populate: {
           path: "user",
           select: "_id username avatar",
@@ -754,7 +762,7 @@ exports.sendMessage = async (req, res) => {
       })
       .populate({
         path: "story",
-        select: "_id image user createdAt archived",
+        select: "_id image video user createdAt archived",
         populate: {
           path: "user",
           select: "_id username avatar",
