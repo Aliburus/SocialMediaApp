@@ -166,16 +166,14 @@ const DMListScreen: React.FC<{
         const userObj = userStr ? JSON.parse(userStr) : null;
         if (userObj?._id || userObj?.id) {
           const list = await getUserFriends(userObj._id || userObj.id);
-          console.log("[DMListScreen] getUserFriends list:", list);
+
           setFriends(list);
         }
       })();
     }
   }, [showFriendsModal]);
 
-  React.useEffect(() => {
-    console.log("[DMListScreen] friends state:", friends);
-  }, [friends]);
+  React.useEffect(() => {}, [friends]);
 
   const handleDeleteConversation = async (conversationId: string) => {
     if (!currentUserId) return;

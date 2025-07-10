@@ -12,11 +12,13 @@ import { useTheme } from "../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { changePassword } from "../services/api";
+import { useToast } from "../context/ToastContext";
 
 const ChangePasswordScreen: React.FC<{ navigation: any }> = ({
   navigation,
 }) => {
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordAgain, setNewPasswordAgain] = useState("");
@@ -24,11 +26,11 @@ const ChangePasswordScreen: React.FC<{ navigation: any }> = ({
 
   const handleChangePassword = async () => {
     if (!oldPassword || !newPassword || !newPasswordAgain) {
-      Alert.alert("Hata", "Tüm alanları doldurun");
+      showToast("Tüm alanları doldurun", "warning");
       return;
     }
     if (newPassword !== newPasswordAgain) {
-      Alert.alert("Hata", "Yeni şifreler eşleşmiyor");
+      showToast("Yeni şifreler eşleşmiyor", "error");
       return;
     }
     setLoading(true);
@@ -39,14 +41,13 @@ const ChangePasswordScreen: React.FC<{ navigation: any }> = ({
       if (!userId) throw new Error("Kullanıcı bulunamadı");
       await changePassword(userId, oldPassword, newPassword);
       setLoading(false);
-      Alert.alert("Başarılı", "Şifreniz değiştirildi");
+      showToast("🔐 Şifreniz başarıyla değiştirildi!", "success");
       navigation.goBack();
     } catch (err: any) {
       setLoading(false);
-      Alert.alert(
-        "Hata",
-        err?.response?.data?.message || err.message || "Bir hata oluştu"
-      );
+      const errorMessage =
+        err?.response?.data?.message || err.message || "Bir hata oluştu";
+      showToast(errorMessage, "error");
     }
   };
 

@@ -59,13 +59,10 @@ function NotificationsScreen({
 
   // Bildirimleri getir fonksiyonu
   const fetchNotifications = async (uid: string) => {
-    console.log("fetchNotifications çağrıldı, uid:", uid);
     setLoading(true);
     setError(null);
     try {
-      console.log("getNotifications API çağrısı yapılıyor...");
       const notifs = await getNotifications(uid);
-      console.log("getNotifications sonucu:", notifs);
       setNotifications(notifs);
       const followed = (notifs as any[])
         .filter(
@@ -81,7 +78,6 @@ function NotificationsScreen({
         .filter(Boolean);
       setFollowedIds(followed);
       await refreshUser();
-      console.log("fetchNotifications başarıyla tamamlandı");
 
       // Bildirimleri okundu yap ve count'u sıfırla
       await markAllNotificationsAsRead(uid);
@@ -304,9 +300,7 @@ function NotificationsScreen({
                   : "https://ui-avatars.com/api/?name=User",
               }}
               style={styles.avatar}
-              onLoad={() =>
-                console.log("NotificationsScreen: Avatar loaded successfully")
-              }
+              onLoad={() => {}}
               onError={(error) =>
                 console.log("NotificationsScreen: Avatar load error:", error)
               }

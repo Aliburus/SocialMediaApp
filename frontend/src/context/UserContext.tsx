@@ -37,8 +37,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   const updateUser = (updates: Partial<User>) => {
     if (user) {
       const updatedUser = { ...user, ...updates };
-      console.log("UserContext: Updating user with:", updates);
-      console.log("UserContext: New avatar URL:", updatedUser.avatar);
+
       setUser(updatedUser);
       AsyncStorage.setItem("user", JSON.stringify(updatedUser));
     }
@@ -50,7 +49,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
       if (userStr) {
         const userObj = JSON.parse(userStr);
         const freshUser = await getProfile(userObj._id || userObj.id);
-        console.log("UserContext: Refreshing user from API:", freshUser);
+
         setUser(freshUser);
         AsyncStorage.setItem("user", JSON.stringify(freshUser));
       }

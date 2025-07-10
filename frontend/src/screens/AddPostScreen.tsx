@@ -21,12 +21,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Dimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Video, ResizeMode } from "expo-av";
+import { useToast } from "../context/ToastContext";
+import LoadingOverlay from "../components/LoadingOverlay";
 
 const { height: screenHeight } = Dimensions.get("window");
 
 const AddPostScreen: React.FC = () => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
   const [media, setMedia] = useState<{
     uri: string;
     type: "image" | "video";
@@ -95,7 +98,7 @@ const AddPostScreen: React.FC = () => {
 
   const handleShare = async () => {
     if (!media) {
-      Alert.alert("Hata", "Lütfen bir fotoğraf veya video seçin.");
+      showToast("Lütfen bir fotoğraf veya video seçin", "warning");
       return;
     }
     setLoading(true);
@@ -114,7 +117,7 @@ const AddPostScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
       if (!userId) {
-        Alert.alert("Oturum Hatası", "Lütfen tekrar giriş yapın.");
+        showToast("Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.", "error");
         await AsyncStorage.removeItem("user");
         navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
         return;
@@ -135,7 +138,7 @@ const AddPostScreen: React.FC = () => {
       setUploadProgress(100);
 
       setTimeout(() => {
-        Alert.alert("Başarılı", "Post paylaşıldı!");
+        showToast("🎉 Post başarıyla paylaşıldı!", "success");
         setMedia(null);
         setDescription("");
         setUploadProgress(0);
@@ -161,7 +164,7 @@ const AddPostScreen: React.FC = () => {
       } else if (err?.message) {
         msg = err.message;
       }
-      Alert.alert("Hata", msg);
+      showToast(msg, "error");
     } finally {
       clearInterval(progressInterval);
       setLoading(false);
@@ -170,125 +173,137 @@ const AddPostScreen: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-    >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+    <>
+      <KeyboardAvoidingView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={28} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Yeni Gönderi
-          </Text>
-          <TouchableOpacity
-            onPress={handleShare}
-            disabled={loading || !media}
-            style={[
-              styles.shareButton,
-              {
-                backgroundColor: colors.primary,
-                opacity: loading || !media ? 0.5 : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.shareButtonText, { color: "#fff" }]}>
-              {loading ? "..." : "Paylaş"}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+              <Ionicons name="close" size={28} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>
+              Yeni Gönderi
             </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Progress Bar */}
-        {loading && (
-          <View style={styles.progressContainer}>
-            <View
-              style={[styles.progressBar, { backgroundColor: colors.surface }]}
+            <TouchableOpacity
+              onPress={handleShare}
+              disabled={loading || !media}
+              style={[
+                styles.shareButton,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: loading || !media ? 0.5 : 1,
+                },
+              ]}
             >
+              <Text style={[styles.shareButtonText, { color: "#fff" }]}>
+                {loading ? "..." : "Paylaş"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Progress Bar */}
+          {loading && (
+            <View style={styles.progressContainer}>
               <View
                 style={[
-                  styles.progressFill,
-                  {
-                    backgroundColor: colors.primary,
-                    width: `${uploadProgress}%`,
-                  },
-                ]}
-              />
-            </View>
-            <Text
-              style={[styles.progressText, { color: colors.textSecondary }]}
-            >
-              {Math.round(uploadProgress)}% yükleniyor...
-            </Text>
-          </View>
-        )}
-
-        {/* Image Section */}
-        <TouchableOpacity style={styles.imagePicker} onPress={pickMedia}>
-          {media ? (
-            media.type === "video" ? (
-              <Video
-                source={{ uri: media.uri }}
-                style={styles.image}
-                useNativeControls
-                resizeMode={ResizeMode.COVER}
-                isLooping
-              />
-            ) : (
-              <Image source={{ uri: media.uri }} style={styles.image} />
-            )
-          ) : (
-            <View style={styles.placeholderContainer}>
-              <Ionicons
-                name="images-outline"
-                size={60}
-                color={colors.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.placeholderText,
-                  { color: colors.textSecondary },
+                  styles.progressBar,
+                  { backgroundColor: colors.surface },
                 ]}
               >
-                Fotoğraf veya video seçmek için tıkla
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      backgroundColor: colors.primary,
+                      width: `${uploadProgress}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <Text
+                style={[styles.progressText, { color: colors.textSecondary }]}
+              >
+                {Math.round(uploadProgress)}% yükleniyor...
               </Text>
             </View>
           )}
-        </TouchableOpacity>
 
-        {/* Camera Button */}
-        <TouchableOpacity
-          style={[styles.cameraButton, { backgroundColor: colors.surface }]}
-          onPress={takePhotoOrVideo}
-        >
-          <Ionicons name="camera" size={24} color={colors.primary} />
-          <Text style={[styles.cameraButtonText, { color: colors.primary }]}>
-            Kamera ile Çek
-          </Text>
-        </TouchableOpacity>
+          {/* Image Section */}
+          <TouchableOpacity style={styles.imagePicker} onPress={pickMedia}>
+            {media ? (
+              media.type === "video" ? (
+                <Video
+                  source={{ uri: media.uri }}
+                  style={styles.image}
+                  useNativeControls
+                  resizeMode={ResizeMode.COVER}
+                  isLooping
+                />
+              ) : (
+                <Image source={{ uri: media.uri }} style={styles.image} />
+              )
+            ) : (
+              <View style={styles.placeholderContainer}>
+                <Ionicons
+                  name="images-outline"
+                  size={60}
+                  color={colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.placeholderText,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Fotoğraf veya video seçmek için tıkla
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-        {/* Description Input */}
-        <View
-          style={[styles.inputContainer, { backgroundColor: colors.surface }]}
-        >
-          <TextInput
-            style={[styles.input, { color: colors.text }]}
-            placeholder="Açıklama ekle..."
-            placeholderTextColor={colors.textSecondary}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            textAlignVertical="top"
-          />
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {/* Camera Button */}
+          <TouchableOpacity
+            style={[styles.cameraButton, { backgroundColor: colors.surface }]}
+            onPress={takePhotoOrVideo}
+          >
+            <Ionicons name="camera" size={24} color={colors.primary} />
+            <Text style={[styles.cameraButtonText, { color: colors.primary }]}>
+              Kamera ile Çek
+            </Text>
+          </TouchableOpacity>
+
+          {/* Description Input */}
+          <View
+            style={[styles.inputContainer, { backgroundColor: colors.surface }]}
+          >
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              placeholder="Açıklama ekle..."
+              placeholderTextColor={colors.textSecondary}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              textAlignVertical="top"
+            />
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <LoadingOverlay
+        visible={loading}
+        type="upload"
+        progress={uploadProgress}
+        message="Post yükleniyor..."
+      />
+    </>
   );
 };
 

@@ -41,7 +41,6 @@ if (!fs.existsSync(uploadsDir)) {
 const upload = multer({
   storage: storage,
   fileFilter: function (req, file, cb) {
-    console.log("File upload attempt:", file.originalname, file.mimetype);
     if (
       file.mimetype.startsWith("image/") ||
       file.mimetype.startsWith("video/")
@@ -82,13 +81,10 @@ connectDB();
 const connectedUsers = new Map();
 
 io.on("connection", (socket) => {
-  console.log("Kullanıcı bağlandı:", socket.id);
-
   // Kullanıcı giriş yaptığında
   socket.on("user_login", (userId) => {
     connectedUsers.set(userId, socket.id);
     socket.userId = userId;
-    console.log(`Kullanıcı ${userId} giriş yaptı`);
   });
 
   // Mesaj gönderme
@@ -214,9 +210,7 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     if (socket.userId) {
       connectedUsers.delete(socket.userId);
-      console.log(`Kullanıcı ${socket.userId} çıktı`);
     }
-    console.log("Kullanıcı bağlantısı koptu:", socket.id);
   });
 });
 

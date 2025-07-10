@@ -93,10 +93,7 @@ const PostDetailScreen: React.FC = () => {
     const fetchData = async () => {
       try {
         const freshPost = await getPostById(initialPost._id || initialPost.id);
-        console.log("PostDetailScreen: Fresh post data:", freshPost);
-        console.log("PostDetailScreen: Image path:", freshPost.image);
-        console.log("PostDetailScreen: Video path:", freshPost.video);
-        console.log("PostDetailScreen: API base URL:", api.defaults.baseURL);
+
         setPost(freshPost);
         setLikesCount(
           Array.isArray(freshPost.likes) ? freshPost.likes.length : 0
@@ -375,9 +372,7 @@ const PostDetailScreen: React.FC = () => {
                         }`,
                   }}
                   style={styles.postImage}
-                  onLoad={() =>
-                    console.log("PostDetailScreen: Image loaded successfully")
-                  }
+                  onLoad={() => {}}
                   onError={(error) =>
                     console.log("PostDetailScreen: Image load error:", error)
                   }

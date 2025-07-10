@@ -76,9 +76,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     }
   }, [visible, post, story]);
 
-  React.useEffect(() => {
-    console.log("[ShareModal] friends state:", following);
-  }, [following]);
+  React.useEffect(() => {}, [following]);
 
   const filteredFollowing = following.filter((u) => {
     const q = search.toLowerCase();

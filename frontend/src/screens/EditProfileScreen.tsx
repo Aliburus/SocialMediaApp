@@ -17,11 +17,13 @@ import api from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { useUser } from "../context/UserContext";
+import { useToast } from "../context/ToastContext";
 
 const EditProfileScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors } = useTheme();
   const { updateUser } = useUser();
+  const { showToast } = useToast();
 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -39,9 +41,7 @@ const EditProfileScreen: React.FC = () => {
           setUserId(id);
           const response = await api.get(`/users/profile/${id}`);
           const profile = response.data;
-          console.log("EditProfileScreen: Profile data:", profile);
-          console.log("EditProfileScreen: Avatar path:", profile.avatar);
-          console.log("EditProfileScreen: API base URL:", api.defaults.baseURL);
+
           setName(profile.name || "");
           setUsername(profile.username || "");
           setBio(profile.bio || "");
@@ -65,7 +65,6 @@ const EditProfileScreen: React.FC = () => {
           name: fileName,
           type: "image/jpeg",
         };
-        console.log("Avatar file prepared:", avatarFile);
       }
 
       const formData = new FormData();
@@ -76,7 +75,6 @@ const EditProfileScreen: React.FC = () => {
 
       if (avatarFile) {
         formData.append("avatar", avatarFile as any);
-        console.log("Avatar appended to FormData");
       }
 
       const response = await api.post("/users/update-profile", formData, {
@@ -86,7 +84,6 @@ const EditProfileScreen: React.FC = () => {
       });
 
       const updated = response.data;
-      console.log("Profile update response:", updated);
 
       setName(updated.name);
       setUsername(updated.username);
@@ -99,7 +96,7 @@ const EditProfileScreen: React.FC = () => {
         avatar: updated.avatar,
         bio: updated.bio,
       });
-      Alert.alert("Başarılı", "Profil güncellendi!");
+      showToast("✅ Profil başarıyla güncellendi!", "success");
       navigation.goBack();
     } catch (err: any) {
       console.error("EditProfile: Error updating profile:", err);
@@ -114,7 +111,7 @@ const EditProfileScreen: React.FC = () => {
           "Bağlantı hatası. Lütfen internet bağlantınızı kontrol edin.";
       }
 
-      Alert.alert("Hata", errorMessage);
+      showToast(errorMessage, "error");
     }
   };
 
@@ -122,7 +119,7 @@ const EditProfileScreen: React.FC = () => {
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
-      Alert.alert("İzin Gerekli", "Fotoğraf seçmek için izin vermelisiniz.");
+      showToast("Fotoğraf seçmek için izin vermelisiniz", "warning");
       return;
     }
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -175,9 +172,7 @@ const EditProfileScreen: React.FC = () => {
                 borderColor: colors.primary,
                 backgroundColor: colors.surface,
               }}
-              onLoad={() =>
-                console.log("EditProfileScreen: Avatar loaded successfully")
-              }
+              onLoad={() => {}}
               onError={(error) =>
                 console.log("EditProfileScreen: Avatar load error:", error)
               }

@@ -19,6 +19,8 @@ import * as ImagePicker from "expo-image-picker";
 import { Video, ResizeMode } from "expo-av";
 import Svg, { Circle } from "react-native-svg";
 import { Animated as RNAnimated } from "react-native";
+import { useToast } from "../context/ToastContext";
+import LoadingOverlay from "../components/LoadingOverlay";
 const AnimatedCircle = RNAnimated.createAnimatedComponent(Circle);
 
 const CIRCLE_SIZE = 74;
@@ -39,6 +41,7 @@ const AddStoryScreen: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
+  const { showToast } = useToast();
 
   const takePhoto = async () => {
     try {
@@ -61,7 +64,7 @@ const AddStoryScreen: React.FC = () => {
       }
     } catch (error) {
       console.error("Fotoğraf çekme hatası:", error);
-      alert("Fotoğraf çekilirken hata oluştu");
+      showToast("Fotoğraf çekilirken hata oluştu", "error");
     }
   };
 
@@ -87,7 +90,7 @@ const AddStoryScreen: React.FC = () => {
       }
     } catch (error) {
       console.error("Video çekme hatası:", error);
-      alert("Video çekilirken hata oluştu");
+      showToast("Video çekilirken hata oluştu", "error");
     }
   };
 
@@ -121,7 +124,7 @@ const AddStoryScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
       if (!userId) {
-        alert("Kullanıcı bulunamadı");
+        showToast("Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.", "error");
         return;
       }
       if (!preview) return;
@@ -136,9 +139,6 @@ const AddStoryScreen: React.FC = () => {
         name: getFileName(preview),
         type: getMimeType(preview),
       };
-      console.log("ShareStory - mode:", mode);
-      console.log("ShareStory - isVideo:", isVideo);
-      console.log("ShareStory - mediaFile:", mediaFile);
 
       await createStory({
         user: userId,
@@ -149,7 +149,7 @@ const AddStoryScreen: React.FC = () => {
       setUploadProgress(100);
 
       setTimeout(() => {
-        alert("Story paylaşıldı!");
+        showToast("🎉 Story başarıyla paylaşıldı!", "success");
         setUploading(false);
         setUploadProgress(0);
         navigation.goBack();
@@ -158,18 +158,17 @@ const AddStoryScreen: React.FC = () => {
       clearInterval(progressInterval);
       setUploading(false);
       setUploadProgress(0);
-      alert("Story paylaşılırken hata oluştu");
+      showToast("Story paylaşılırken hata oluştu", "error");
     }
   }
 
   const pickFromGallery = async () => {
-    console.log("pickFromGallery çağrıldı");
     try {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
-      console.log("Galeri izni durumu:", status);
+
       if (status !== "granted") {
-        alert("Galeriye erişim izni vermeniz gerekiyor.");
+        showToast("Galeriye erişim izni vermeniz gerekiyor", "warning");
         return;
       }
       let result = await ImagePicker.launchImageLibraryAsync({
@@ -178,14 +177,14 @@ const AddStoryScreen: React.FC = () => {
         aspect: [1, 1],
         quality: 0.8,
       });
-      console.log("Galeri sonucu:", result);
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         setPreview(result.assets[0].uri);
         setVideoReady(true);
       }
     } catch (err) {
       console.error("Galeri hatası:", err);
-      alert("Galeri açılırken bir hata oluştu.");
+      showToast("Galeri açılırken bir hata oluştu", "error");
     }
   };
 
@@ -429,6 +428,13 @@ const AddStoryScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      <LoadingOverlay
+        visible={uploading}
+        type="upload"
+        progress={uploadProgress}
+        message="Story yükleniyor..."
+      />
     </SafeAreaView>
   );
 };

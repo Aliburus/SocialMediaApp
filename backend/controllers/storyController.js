@@ -9,20 +9,13 @@ exports.createStory = async (req, res) => {
     let image = req.body.image;
     let video = req.body.video;
 
-    console.log("Story create - req.body:", req.body);
-    console.log("Story create - req.file:", req.file);
-    console.log("Story create - req.files:", req.files);
-
     if (req.file) {
       const mime = req.file.mimetype;
-      console.log("Story create - mime type:", mime);
-      console.log("Story create - filename:", req.file.filename);
+
       if (mime.startsWith("image/")) {
         image = `/uploads/${req.file.filename}`;
-        console.log("Story create - image path:", image);
       } else if (mime.startsWith("video/")) {
         video = `/uploads/${req.file.filename}`;
-        console.log("Story create - video path:", video);
       }
     }
 
@@ -35,18 +28,13 @@ exports.createStory = async (req, res) => {
         filename.includes(".avi")
       ) {
         video = `/uploads/${req.file.filename}`;
-        console.log("Story create - video path from filename:", video);
       }
     }
-
-    console.log("Story create - final image:", image);
-    console.log("Story create - final video:", video);
 
     if (!user || (!image && !video))
       return res.status(400).json({ message: "Eksik veri" });
 
     const story = await Story.create({ user, image, video });
-    console.log("Story create - created story:", story);
 
     // Eğer video alanı boşsa ama dosya varsa, güncelle
     if (!story.video && req.file && req.file.filename) {
@@ -58,7 +46,6 @@ exports.createStory = async (req, res) => {
       ) {
         story.video = `/uploads/${req.file.filename}`;
         await story.save();
-        console.log("Story create - updated story with video:", story);
       }
     }
 
@@ -155,12 +142,10 @@ exports.deleteStory = async (req, res) => {
                     unlinkErr
                   );
                 } else {
-                  console.log("Story dosyası başarıyla silindi:", fullPath);
                 }
                 resolve();
               });
             } else {
-              console.log("Story dosyası bulunamadı:", fullPath);
               resolve();
             }
           });

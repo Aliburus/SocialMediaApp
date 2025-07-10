@@ -7,6 +7,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
 import { UserProvider, useUser } from "./src/context/UserContext";
+import { ToastProvider } from "./src/context/ToastContext";
 import {
   Text,
   View,
@@ -575,11 +576,15 @@ function AppContent() {
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <UserProvider>
-          <AppContent />
-        </UserProvider>
-      </ThemeProvider>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <UserProvider>
+            <ToastProvider>
+              <AppContent />
+            </ToastProvider>
+          </UserProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

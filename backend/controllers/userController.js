@@ -87,9 +87,6 @@ exports.login = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    console.log("Update profile request body:", req.body);
-    console.log("Update profile request file:", req.file);
-
     const { userId, name, username, bio, privateAccount } = req.body;
     if (!userId)
       return res.status(400).json({ message: "Kullanıcı bulunamadı" });
@@ -114,7 +111,6 @@ exports.updateProfile = async (req, res) => {
         });
       }
       updateData.avatar = `/uploads/${req.file.filename}`;
-      console.log("Avatar updated:", updateData.avatar);
     }
 
     const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
@@ -131,7 +127,6 @@ exports.updateProfile = async (req, res) => {
       email: updatedUser.email,
       privateAccount: updatedUser.privateAccount,
     });
-    console.log("Profile updated successfully:", updatedUser.avatar);
   } catch (err) {
     console.error("Update profile error:", err);
     res

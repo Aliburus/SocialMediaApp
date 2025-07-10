@@ -278,12 +278,10 @@ exports.deletePost = async (req, res) => {
                 if (unlinkErr) {
                   console.error("Dosya silinemedi:", fullPath, unlinkErr);
                 } else {
-                  console.log("Dosya başarıyla silindi:", fullPath);
                 }
                 resolve();
               });
             } else {
-              console.log("Dosya bulunamadı:", fullPath);
               resolve();
             }
           });

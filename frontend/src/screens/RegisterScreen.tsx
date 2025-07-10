@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import { register as registerService } from "../services/authService";
-import { messages } from "../utils/messages";
+import { useToast } from "../context/ToastContext";
 
 const { width } = Dimensions.get("window");
 
@@ -36,6 +36,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [gender, setGender] = useState<string>("");
+  const { showToast } = useToast();
 
   const handleRegister = async () => {
     setError(null);
@@ -50,13 +51,16 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
         gender,
       });
       setLoading(false);
-      setSuccess(messages.registerSuccess);
+      setSuccess("Kayıt başarılı! Giriş yapabilirsiniz.");
+      showToast("🎉 Kayıt başarılı! Giriş yapabilirsiniz.", "success");
       setTimeout(() => {
         if (onGoToLogin) onGoToLogin();
       }, 1200);
     } catch (err: any) {
       setLoading(false);
-      setError(err?.response?.data?.message || messages.registerFail);
+      const errorMessage = err?.response?.data?.message || "Kayıt başarısız";
+      setError(errorMessage);
+      showToast(errorMessage, "error");
       console.log("Register error:", {
         message: err?.message,
         code: err?.code,

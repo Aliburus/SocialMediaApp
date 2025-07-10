@@ -19,8 +19,6 @@ const BEHAVIOR_WEIGHTS = {
 // Kullanıcı davranışını kaydet
 const trackUserBehavior = async (req, res) => {
   try {
-    console.log("trackUserBehavior req.body:", req.body);
-    console.log("trackUserBehavior req.user:", req.user);
     const { contentId, behaviorType, duration = 0, metadata = {} } = req.body;
     const userId = req.user.userId || req.user._id || req.user.id;
 
@@ -44,19 +42,9 @@ const trackUserBehavior = async (req, res) => {
     });
 
     if (behaviorType === "save") {
-      console.log("[SAVE] Kullanıcı:", userId, "içeriği kaydetti:", contentId);
     }
     if (behaviorType === "profile_visit") {
-      console.log(
-        "[PROFILE VISIT] Kullanıcı:",
-        userId,
-        "profili ziyaret etti:",
-        contentId
-      );
     }
-    console.log(
-      `[BEHAVIOR] userId: ${userId}, type: ${behaviorType}, contentId: ${contentId}, weight: ${weight}, duration: ${duration}`
-    );
 
     await behavior.save();
 

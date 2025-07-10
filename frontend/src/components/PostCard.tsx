@@ -26,6 +26,7 @@ import {
 } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useToast } from "../context/ToastContext";
 import {
   toggleLike,
   savePost,
@@ -162,6 +163,7 @@ const PostCard: React.FC<PostCardProps> = ({
   const [videoLoading, setVideoLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [videoMuted, setVideoMuted] = useState(globalMute ?? true);
+  const { showToast } = useToast();
 
   // Pinch-to-zoom için state'ler
   const scale = useRef(new Animated.Value(1)).current;
@@ -290,13 +292,6 @@ const PostCard: React.FC<PostCardProps> = ({
       } catch (trackError) {
         console.error("Davranış takibi hatası:", trackError);
       }
-
-      console.log(
-        "[PostCard/handleSave] response.savedBy:",
-        res.savedBy,
-        "isSaved:",
-        (res.savedBy || []).includes(userId)
-      );
     } catch (err) {
       console.log("[PostCard/handleSave] HATA:", err);
     }
@@ -313,7 +308,7 @@ const PostCard: React.FC<PostCardProps> = ({
       await deletePost(post._id || post.id);
       if (onDelete) onDelete();
     } catch (err) {
-      alert("Silme işlemi başarısız!");
+      showToast("Silme işlemi başarısız!", "error");
     }
   };
 
@@ -324,7 +319,7 @@ const PostCard: React.FC<PostCardProps> = ({
       if (onArchive) onArchive();
       if (onDelete) onDelete();
     } catch (err) {
-      alert("Arşivleme işlemi başarısız!");
+      showToast("Arşivleme işlemi başarısız!", "error");
     }
   };
 
@@ -332,7 +327,7 @@ const PostCard: React.FC<PostCardProps> = ({
     setShowOptionsModal(false);
     // Post linkini kopyala
     const postLink = `https://instagram.com/p/${post._id || post.id}`;
-    Alert.alert("Başarılı", "Bağlantı kopyalandı!");
+    showToast("🔗 Bağlantı kopyalandı!", "success");
   };
 
   const handleToggleVideoMute = () => {

@@ -35,11 +35,7 @@ const isStoryExpired = (storyTimestamp: string | Date) => {
   const storyDate = new Date(storyTimestamp);
   const now = new Date();
   const hoursDiff = (now.getTime() - storyDate.getTime()) / (1000 * 60 * 60);
-  console.log("Story timestamp:", storyTimestamp);
-  console.log("Story date:", storyDate);
-  console.log("Now:", now);
-  console.log("Hours diff:", hoursDiff);
-  console.log("Is expired:", hoursDiff >= 24);
+
   return hoursDiff >= 24; // 24 saat sonra story süresi biter
 };
 
@@ -107,7 +103,6 @@ const DMChatScreen: React.FC = () => {
               const unreadData = await getUnreadMessageCount(currentUserId);
               setUnreadMessageCount(unreadData.unreadCount || 0);
             }
-            console.log("Mesajlar görüldü olarak işaretlendi");
           } catch (error) {
             console.error("Mesajları görüldü olarak işaretleme hatası:", error);
           }
@@ -396,12 +391,7 @@ const DMChatScreen: React.FC = () => {
                   );
                   const expired = isStoryExpired(msg.story.createdAt);
                   const archived = msg.story.archived === true;
-                  console.log(
-                    "Message has story, expired:",
-                    expired,
-                    "archived:",
-                    archived
-                  );
+
                   return !expired && !archived;
                 }
                 return true;
@@ -587,13 +577,6 @@ const DMChatScreen: React.FC = () => {
                   );
                 }
                 if (item.story) {
-                  console.log(
-                    "Story object:",
-                    JSON.stringify(item.story, null, 2)
-                  );
-                  console.log("Story image:", item.story.image);
-                  console.log("Story video:", item.story.video);
-
                   // Silinmiş story kontrolü - video veya image kontrolü
                   if (
                     !item.story ||

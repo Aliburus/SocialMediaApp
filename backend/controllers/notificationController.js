@@ -10,17 +10,8 @@ const createOrUpdateNotification = async (
   commentId = null
 ) => {
   try {
-    console.log(`[createOrUpdateNotification] Başlatılıyor:`, {
-      recipientId,
-      senderId,
-      type,
-      postId,
-      commentId,
-    });
-
     // Parametreleri kontrol et
     if (!recipientId || !senderId || !type) {
-      console.log(`[createOrUpdateNotification] Eksik parametreler`);
       return null;
     }
 
@@ -32,9 +23,6 @@ const createOrUpdateNotification = async (
 
     // Kendi kendine bildirim oluşturmasın
     if (recipientIdObj === senderIdObj) {
-      console.log(
-        `[createOrUpdateNotification] Kendi kendine bildirim oluşturulmaya çalışılıyor`
-      );
       return null;
     }
 
@@ -90,10 +78,7 @@ const createOrUpdateNotification = async (
           totalCount: 1,
         });
         await newNotification.save();
-        console.log(
-          `[createOrUpdateNotification] Yeni bildirim oluşturuldu:`,
-          newNotification._id
-        );
+
         return newNotification;
       }
     } else {
@@ -106,10 +91,7 @@ const createOrUpdateNotification = async (
         comment: commentId,
       });
       await newNotification.save();
-      console.log(
-        `[createOrUpdateNotification] Yeni bildirim oluşturuldu:`,
-        newNotification._id
-      );
+
       return newNotification;
     }
   } catch (error) {

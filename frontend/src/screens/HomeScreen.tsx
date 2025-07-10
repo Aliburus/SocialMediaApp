@@ -120,7 +120,6 @@ const HomeScreen: React.FC<{
       // Profile işleme
       setMyAvatar(profileData.avatar || "");
     } catch (err) {
-      console.error("Veri yükleme hatası:", err);
     } finally {
       setLoading(false);
     }

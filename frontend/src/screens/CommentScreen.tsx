@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import { getComments, addComment, toggleCommentLike } from "../services/api";
+import { useToast } from "../context/ToastContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -45,6 +46,7 @@ const CommentScreen: React.FC = () => {
     [commentId: string]: boolean;
   }>({});
   const navigation = useNavigation<any>();
+  const { showToast } = useToast();
 
   const fetchComments = useCallback(async () => {
     setLoading(true);
@@ -75,7 +77,7 @@ const CommentScreen: React.FC = () => {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
       if (!userObj?._id) {
-        alert("Yorum için giriş yapmalısın.");
+        showToast("Yorum yapmak için giriş yapmalısınız", "warning");
         setSending(false);
         return;
       }
@@ -86,7 +88,7 @@ const CommentScreen: React.FC = () => {
       let msg = "Yorum eklenemedi";
       if (err?.response?.data?.message) msg = err.response.data.message;
       else if (err?.message) msg = err.message;
-      alert(msg);
+      showToast(msg, "error");
     }
     setSending(false);
   };

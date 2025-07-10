@@ -17,7 +17,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import { login as loginService } from "../services/authService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { messages } from "../utils/messages";
+import { useToast } from "../context/ToastContext";
 
 const { width } = Dimensions.get("window");
 
@@ -37,6 +37,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const { colors, isDark } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const handleLogin = async () => {
     setError(null);
@@ -52,7 +53,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       }
     } catch (err: any) {
       setLoading(false);
-      setError(err?.response?.data?.message || messages.loginFail);
+      const errorMessage = err?.response?.data?.message || "Giriş başarısız";
+      setError(errorMessage);
+      showToast(errorMessage, "error");
       console.log("Login error:", {
         message: err?.message,
         code: err?.code,
