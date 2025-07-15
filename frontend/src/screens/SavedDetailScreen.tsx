@@ -23,34 +23,9 @@ import {
 import api from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ShareModal } from "../components/ShareModal";
+import { timeAgo } from "../utils/validate";
 
 const { width, height } = Dimensions.get("window");
-
-// Tarihi güzel formatta gösteren fonksiyon
-const timeAgo = (date: string | Date) => {
-  const now = new Date();
-  const past = new Date(date);
-  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
-
-  if (diffInSeconds < 60) {
-    return "Az önce";
-  } else if (diffInSeconds < 3600) {
-    const minutes = Math.floor(diffInSeconds / 60);
-    return `${minutes} dakika önce`;
-  } else if (diffInSeconds < 86400) {
-    const hours = Math.floor(diffInSeconds / 3600);
-    return `${hours} saat önce`;
-  } else if (diffInSeconds < 2592000) {
-    const days = Math.floor(diffInSeconds / 86400);
-    return `${days} gün önce`;
-  } else if (diffInSeconds < 31536000) {
-    const months = Math.floor(diffInSeconds / 2592000);
-    return `${months} ay önce`;
-  } else {
-    const years = Math.floor(diffInSeconds / 31536000);
-    return `${years} yıl önce`;
-  }
-};
 
 const SavedDetailScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -271,7 +246,7 @@ const SavedDetailScreen: React.FC = () => {
         {/* Post Info */}
         <View style={styles.postInfo}>
           <Text style={[styles.likes, { color: colors.text }]}>
-            {likesCount} beğeni
+            {likesCount} likes
           </Text>
 
           {/* Açıklama metni varsa göster */}
@@ -314,7 +289,7 @@ const SavedDetailScreen: React.FC = () => {
                       { color: colors.textSecondary },
                     ]}
                   >
-                    Tüm yorumları görüntüle ({comments.length})
+                    View all comments ({comments.length})
                   </Text>
                 </TouchableOpacity>
               )}
@@ -350,7 +325,7 @@ const SavedDetailScreen: React.FC = () => {
         <Ionicons name="arrow-back" size={24} color={colors.text} />
       </TouchableOpacity>
       <Text style={[styles.headerTitle, { color: colors.text }]}>
-        Kaydedilenler ({posts.length})
+        Saved ({posts.length})
       </Text>
       <TouchableOpacity>
         <Ionicons name="paper-plane-outline" size={24} color={colors.text} />

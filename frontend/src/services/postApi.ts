@@ -17,6 +17,7 @@ export const createPost = async (data: {
   user: string;
   type?: string;
   mediaFile?: { uri: string; name: string; type: string };
+  thumbnail?: { uri: string; name: string; type: string };
 }) => {
   const formData = new FormData();
   if (data.mediaFile) {
@@ -26,10 +27,17 @@ export const createPost = async (data: {
       type: data.mediaFile.type,
     } as any);
   }
+  if (data.thumbnail) {
+    formData.append("thumbnail", {
+      uri: data.thumbnail.uri,
+      name: data.thumbnail.name,
+      type: data.thumbnail.type,
+    } as any);
+  }
   if (data.description) formData.append("description", data.description);
   if (data.user) formData.append("user", data.user);
-  // Eğer video varsa type otomatik olarak 'reel' olsun
-  if (data.video && !data.type) {
+  // Video varsa type kesinlikle 'reel' olarak ayarlanacak
+  if (data.video) {
     formData.append("type", "reel");
   } else if (data.type) {
     formData.append("type", data.type);

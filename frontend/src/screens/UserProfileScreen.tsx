@@ -36,6 +36,24 @@ const { width } = Dimensions.get("window");
 const imageSize = (width - 6) / 3;
 const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User";
 
+// Avatar url'sini her zaman tam url olarak ayarla
+const getAvatarUrl = (avatar: string | undefined) => {
+  if (!avatar) return DEFAULT_AVATAR;
+  if (avatar.startsWith("http")) return avatar;
+  return `${api.defaults.baseURL?.replace(/\/api$/, "")}${avatar}`;
+};
+
+const timeAgo = (dateString: string) => {
+  const now = new Date();
+  const date = new Date(dateString);
+  const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (diff < 60) return `just now`;
+  if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+  return date.toLocaleDateString("en-US");
+};
+
 const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
   const { user } = route.params;
   const { colors } = useTheme();
@@ -54,6 +72,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
   const [displayedData, setDisplayedData] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const fetchUserData = async () => {
     setLoading(true);
@@ -213,25 +232,33 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
       }}
     >
       {item.type === "reel" && item.video ? (
-        <Video
+        <Image
           source={{
-            uri: item.video.startsWith("http")
-              ? item.video
-              : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.video}`,
+            uri: item.thumbnail
+              ? item.thumbnail.startsWith("http")
+                ? item.thumbnail
+                : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                    item.thumbnail
+                  }`
+              : item.image && item.image.startsWith("http")
+              ? item.image
+              : item.image
+              ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`
+              : `https://picsum.photos/seed/${item._id || item.id}/300/300`,
           }}
-          style={styles.postImage}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay={false}
-          isMuted={true}
+          style={[styles.postImage, { backgroundColor: colors.background }]}
         />
       ) : (
         <Image
           source={{
-            uri: item.image.startsWith("http")
-              ? item.image
-              : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`,
+            uri:
+              item.image && item.image.startsWith("http")
+                ? item.image
+                : item.image
+                ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`
+                : `https://picsum.photos/seed/${item._id || item.id}/300/300`,
           }}
-          style={styles.postImage}
+          style={[styles.postImage, { backgroundColor: colors.background }]}
         />
       )}
     </TouchableOpacity>
@@ -242,12 +269,12 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
     <View style={styles.privateAccountContainer}>
       <Ionicons name="lock-closed" size={48} color={colors.textSecondary} />
       <Text style={[styles.privateAccountTitle, { color: colors.text }]}>
-        Gizli Hesap
+        Private Account
       </Text>
       <Text
         style={[styles.privateAccountText, { color: colors.textSecondary }]}
       >
-        Bu hesabın gönderilerini görmek için takip etmeniz gerekiyor.
+        You need to follow this account to see their posts.
       </Text>
     </View>
   );
@@ -273,7 +300,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
           style={{ marginRight: 6 }}
         />
         <Text style={[styles.followButtonText, { color: "#fff" }]}>
-          Mesaj Gönder
+          Send Message
         </Text>
       </TouchableOpacity>
     );
@@ -330,7 +357,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                       fontWeight: "600",
                     }}
                   >
-                    Gizli Hesap
+                    Private Account
                   </Text>
                   <Switch
                     value={!!profile?.privateAccount}
@@ -398,7 +425,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                         }}
                       >
                         <Image
-                          source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                          source={{ uri: getAvatarUrl(profile?.avatar) }}
                           style={{
                             width: 84,
                             height: 84,
@@ -421,7 +448,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                         }}
                       >
                         <Image
-                          source={{ uri: profile?.avatar || DEFAULT_AVATAR }}
+                          source={{ uri: getAvatarUrl(profile?.avatar) }}
                           style={{
                             width: 84,
                             height: 84,
@@ -435,13 +462,7 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                 ) : (
                   <Image
                     source={{
-                      uri: profile?.avatar?.startsWith("http")
-                        ? profile.avatar
-                        : profile?.avatar
-                        ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
-                            profile.avatar
-                          }`
-                        : DEFAULT_AVATAR,
+                      uri: getAvatarUrl(profile?.avatar),
                     }}
                     style={[
                       styles.profileImage,
@@ -530,7 +551,8 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
                           fontWeight: "600",
                         }}
                       >
-                        Hesap: {profile?.privateAccount ? "Gizli" : "Açık"}
+                        Account:{" "}
+                        {profile?.privateAccount ? "Private" : "Public"}
                       </Text>
                     </TouchableOpacity>
 
@@ -628,13 +650,13 @@ const UserProfileScreen: React.FC = ({ route, navigation }: any) => {
               <Text
                 style={[styles.emptyStateText, { color: colors.textSecondary }]}
               >
-                Henüz gönderi yok
+                No posts yet
               </Text>
             ) : (
               <Text
                 style={[styles.emptyStateText, { color: colors.textSecondary }]}
               >
-                Henüz reels yok
+                No reels yet
               </Text>
             )}
           </View>

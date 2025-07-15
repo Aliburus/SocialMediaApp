@@ -23,13 +23,13 @@ import api from "../services/api";
 const timeAgo = (dateString: string) => {
   const now = new Date();
   const date = new Date(dateString);
-  const diff = Math.floor((now.getTime() - date.getTime()) / 60000); // dakika
-  if (diff < 1) return "şimdi";
+  const diff = Math.floor((now.getTime() - date.getTime()) / 60000); // minutes
+  if (diff < 1) return "now";
   if (diff < 60) return `${diff}m`;
   const hours = Math.floor(diff / 60);
   if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
-  return `${days}g`;
+  return `${days}d`;
 };
 
 const CommentScreen: React.FC = () => {
@@ -77,7 +77,7 @@ const CommentScreen: React.FC = () => {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
       if (!userObj?._id) {
-        showToast("Yorum yapmak için giriş yapmalısınız", "warning");
+        showToast("You must be logged in to comment", "warning");
         setSending(false);
         return;
       }
@@ -85,7 +85,7 @@ const CommentScreen: React.FC = () => {
       setInput("");
       fetchComments();
     } catch (err: any) {
-      let msg = "Yorum eklenemedi";
+      let msg = "Comment could not be added";
       if (err?.response?.data?.message) msg = err.response.data.message;
       else if (err?.message) msg = err.message;
       showToast(msg, "error");
@@ -95,7 +95,7 @@ const CommentScreen: React.FC = () => {
 
   const handleLikeComment = async (commentId: string) => {
     if (!currentUser?._id) {
-      alert("Beğeni için giriş yapmalısın.");
+      alert("You must be logged in to like a comment.");
       return;
     }
 
@@ -143,7 +143,7 @@ const CommentScreen: React.FC = () => {
           return { ...comment, likes: newLikes };
         })
       );
-      alert("Beğeni işlemi başarısız!");
+      alert("Like operation failed!");
     } finally {
       setLikeLoading((prev) => ({ ...prev, [commentId]: false }));
     }
@@ -188,7 +188,7 @@ const CommentScreen: React.FC = () => {
           {item.text}
         </Text>
         {/* <View style={{ flexDirection: "row", marginTop: 2 }}>
-          <TouchableOpacity><Text style={[styles.reply, { color: colors.textSecondary }]}>Yanıtla</Text></TouchableOpacity>
+          <TouchableOpacity><Text style={[styles.reply, { color: colors.textSecondary }]}>Reply</Text></TouchableOpacity>
         </View> */}
       </View>
       <TouchableOpacity
@@ -224,7 +224,7 @@ const CommentScreen: React.FC = () => {
       <View style={styles.headerBar}>
         <View style={styles.headerBarLine} />
       </View>
-      <Text style={[styles.title, { color: colors.text }]}>Yorumlar</Text>
+      <Text style={[styles.title, { color: colors.text }]}>Comments</Text>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -254,7 +254,7 @@ const CommentScreen: React.FC = () => {
         >
           <TextInput
             style={[styles.input, { color: colors.text }]}
-            placeholder="Yorum ekle..."
+            placeholder="Add a comment..."
             placeholderTextColor={colors.textSecondary}
             value={input}
             onChangeText={setInput}

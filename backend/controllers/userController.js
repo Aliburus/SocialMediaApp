@@ -33,10 +33,10 @@ exports.register = async (req, res) => {
     }
     const emailExists = await User.findOne({ email });
     if (emailExists)
-      return res.status(400).json({ message: "Email zaten kayıtlı" });
+      return res.status(400).json({ message: "Email already registered" });
     const usernameExists = await User.findOne({ username });
     if (usernameExists)
-      return res.status(400).json({ message: "Kullanıcı adı zaten kayıtlı" });
+      return res.status(400).json({ message: "Username already registered" });
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await User.create({
       name,
@@ -53,7 +53,9 @@ exports.register = async (req, res) => {
       avatar: user.avatar,
     });
   } catch (err) {
-    res.status(500).json({ message: "Kayıt başarısız", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Registration failed", error: err.message });
   }
 };
 
@@ -67,9 +69,10 @@ exports.login = async (req, res) => {
     const user = await User.findOne({
       $or: [{ email: emailOrUsername }, { username: emailOrUsername }],
     });
-    if (!user) return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+    if (!user) return res.status(400).json({ message: "User not found" });
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Şifre hatalı" });
+    if (!isMatch)
+      return res.status(400).json({ message: "Incorrect password" });
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: "365d",
     });
@@ -81,18 +84,17 @@ exports.login = async (req, res) => {
       token,
     });
   } catch (err) {
-    res.status(500).json({ message: "Giriş başarısız", error: err.message });
+    res.status(500).json({ message: "Login failed", error: err.message });
   }
 };
 
 exports.updateProfile = async (req, res) => {
   try {
     const { userId, name, username, bio, privateAccount } = req.body;
-    if (!userId)
-      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+    if (!userId) return res.status(400).json({ message: "User not found" });
 
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     const updateData = {};
     if (name) updateData.name = name;
@@ -106,6 +108,7 @@ exports.updateProfile = async (req, res) => {
       // Eski avatarı sil
       if (user.avatar && user.avatar.startsWith("/uploads/")) {
         const oldAvatarPath = path.join(__dirname, "../..", user.avatar);
+        const fs = require("fs");
         fs.unlink(oldAvatarPath, (err) => {
           if (err) console.error("Eski avatar silinemedi:", err);
         });
@@ -117,7 +120,7 @@ exports.updateProfile = async (req, res) => {
       new: true,
     });
     if (!updatedUser)
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      return res.status(404).json({ message: "User not found" });
     res.json({
       _id: updatedUser._id,
       name: updatedUser.name,
@@ -131,7 +134,7 @@ exports.updateProfile = async (req, res) => {
     console.error("Update profile error:", err);
     res
       .status(500)
-      .json({ message: "Profil güncellenemedi", error: err.message });
+      .json({ message: "Profile update failed", error: err.message });
   }
 };
 
@@ -139,10 +142,9 @@ exports.getProfile = async (req, res) => {
   try {
     const { userId } = req.params;
     const { currentUserId } = req.query;
-    if (!userId)
-      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+    if (!userId) return res.status(400).json({ message: "User not found" });
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
     let isFollowing = false;
     let isFollowedBy = false;
@@ -190,7 +192,7 @@ exports.getProfile = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Profil getirilemedi", error: err.message });
+      .json({ message: "Profile fetch failed", error: err.message });
   }
 };
 
@@ -199,13 +201,11 @@ exports.savePost = async (req, res) => {
     const { userId, postId } = req.body;
 
     if (!userId || !postId)
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     const user = await User.findById(userId);
     const post = await Post.findById(postId);
     if (!user || !post)
-      return res
-        .status(404)
-        .json({ message: "Kullanıcı veya post bulunamadı" });
+      return res.status(404).json({ message: "User or post not found" });
 
     // User'ın saved dizisi
     const userIndex = user.saved.indexOf(postId);
@@ -229,7 +229,7 @@ exports.savePost = async (req, res) => {
     console.error("[savePost] Hata:", err);
     res
       .status(500)
-      .json({ message: "Kaydetme işlemi başarısız", error: err.message });
+      .json({ message: "Save operation failed", error: err.message });
   }
 };
 
@@ -240,12 +240,12 @@ exports.getSavedPosts = async (req, res) => {
       path: "saved",
       populate: { path: "user", select: "_id username avatar" },
     });
-    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (!user) return res.status(404).json({ message: "User not found" });
     res.json(user.saved);
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Kaydedilenler getirilemedi", error: err.message });
+      .json({ message: "Saved posts fetch failed", error: err.message });
   }
 };
 
@@ -255,15 +255,15 @@ exports.followUser = async (req, res) => {
     const { userId, targetUserId } = req.body;
 
     if (!userId || !targetUserId) {
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     }
     if (userId === targetUserId) {
-      return res.status(400).json({ message: "Kendini takip edemezsin" });
+      return res.status(400).json({ message: "You cannot follow yourself" });
     }
     const user = await User.findById(userId);
     const targetUser = await User.findById(targetUserId);
     if (!user || !targetUser) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      return res.status(404).json({ message: "User not found" });
     }
 
     if (!user.following.includes(targetUserId)) {
@@ -283,7 +283,7 @@ exports.followUser = async (req, res) => {
     console.error(`[followUser] Hata:`, err);
     res
       .status(500)
-      .json({ message: "Takip işlemi başarısız", error: err.message });
+      .json({ message: "Follow operation failed", error: err.message });
   }
 };
 
@@ -292,15 +292,15 @@ exports.unfollowUser = async (req, res) => {
   try {
     const { userId, targetUserId } = req.body;
     if (!userId || !targetUserId) {
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     }
     if (userId === targetUserId) {
-      return res.status(400).json({ message: "Kendini takipten çıkaramazsın" });
+      return res.status(400).json({ message: "You cannot unfollow yourself" });
     }
     const user = await User.findById(userId);
     const targetUser = await User.findById(targetUserId);
     if (!user || !targetUser) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      return res.status(404).json({ message: "User not found" });
     }
     user.following = user.following.filter(
       (id) => id.toString() !== targetUserId
@@ -323,7 +323,7 @@ exports.unfollowUser = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Takipten çıkarma başarısız", error: err.message });
+      .json({ message: "Unfollow operation failed", error: err.message });
   }
 };
 
@@ -340,9 +340,7 @@ exports.searchUsers = async (req, res) => {
     );
     res.json(users);
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Kullanıcılar aranamadı", error: err.message });
+    res.status(500).json({ message: "Users not found", error: err.message });
   }
 };
 
@@ -351,12 +349,12 @@ exports.sendFollowRequest = async (req, res) => {
   try {
     const { userId, targetUserId } = req.body;
     if (!userId || !targetUserId) {
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     }
     const user = await User.findById(userId);
     const targetUser = await User.findById(targetUserId);
     if (!user || !targetUser) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      return res.status(404).json({ message: "User not found" });
     }
     // Zaten istek varsa tekrar ekleme
     if (!targetUser.pendingFollowRequests.includes(userId)) {
@@ -386,7 +384,7 @@ exports.sendFollowRequest = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Takip isteği gönderilemedi", error: err.message });
+      .json({ message: "Follow request failed to send", error: err.message });
   }
 };
 
@@ -395,12 +393,12 @@ exports.cancelFollowRequest = async (req, res) => {
   try {
     const { userId, targetUserId } = req.body;
     if (!userId || !targetUserId) {
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     }
     const targetUser = await User.findById(targetUserId);
     const user = await User.findById(userId);
     if (!targetUser || !user) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      return res.status(404).json({ message: "User not found" });
     }
     targetUser.pendingFollowRequests = targetUser.pendingFollowRequests.filter(
       (id) => id.toString() !== userId
@@ -423,7 +421,7 @@ exports.cancelFollowRequest = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Takip isteği iptal edilemedi", error: err.message });
+      .json({ message: "Follow request failed to cancel", error: err.message });
   }
 };
 
@@ -434,7 +432,7 @@ exports.togglePrivateAccount = async (req, res) => {
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      return res.status(404).json({ message: "User not found" });
     }
 
     user.privateAccount = !user.privateAccount;
@@ -465,13 +463,15 @@ exports.togglePrivateAccount = async (req, res) => {
     };
 
     res.json({
-      message: `Hesap ${user.privateAccount ? "gizli" : "açık"} yapıldı`,
+      message: `Account ${
+        user.privateAccount ? "made private" : "made public"
+      }`,
       privateAccount: user.privateAccount,
       dbCheck: updatedUser.privateAccount,
       profileData: profileData,
     });
   } catch (err) {
-    res.status(500).json({ message: "İşlem başarısız", error: err.message });
+    res.status(500).json({ message: "Operation failed", error: err.message });
   }
 };
 
@@ -480,12 +480,12 @@ exports.acceptFollowRequest = async (req, res) => {
   try {
     const { userId, requesterId } = req.body;
     if (!userId || !requesterId) {
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     }
     const user = await User.findById(userId);
     const requester = await User.findById(requesterId);
     if (!user || !requester) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      return res.status(404).json({ message: "User not found" });
     }
     // pendingFollowRequests listesinden çıkar
     user.pendingFollowRequests = user.pendingFollowRequests.filter(
@@ -533,7 +533,7 @@ exports.acceptFollowRequest = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Takip isteği kabul edilemedi", error: err.message });
+      .json({ message: "Follow request failed to accept", error: err.message });
   }
 };
 
@@ -542,11 +542,11 @@ exports.rejectFollowRequest = async (req, res) => {
   try {
     const { userId, requesterId } = req.body;
     if (!userId || !requesterId) {
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     }
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      return res.status(404).json({ message: "User not found" });
     }
     user.pendingFollowRequests = user.pendingFollowRequests.filter(
       (id) => id.toString() !== requesterId
@@ -562,7 +562,7 @@ exports.rejectFollowRequest = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Takip isteği reddedilemedi", error: err.message });
+      .json({ message: "Follow request failed to reject", error: err.message });
   }
 };
 
@@ -616,18 +616,19 @@ exports.getUserConversations = async (req, res) => {
             typeof conv.lastMessage.sender === "string"
               ? conv.lastMessage.sender
               : "") ||
-            "Bilinmeyen";
+            "Unknown";
           if (conv.lastMessage.text) {
             lastMessageText = conv.lastMessage.text;
           } else if (conv.lastMessage.post) {
-            lastMessageText = `${senderUsername}'dan gönderi gönderildi`;
+            lastMessageText = `Post sent from ${senderUsername}`;
           } else if (conv.lastMessage.story) {
-            lastMessageText = `${senderUsername}'dan hikaye gönderildi`;
+            lastMessageText = `Story sent from ${senderUsername}`;
           }
         }
 
         const mapped = {
-          id: conv._id,
+          id: conv._id, // <-- id alanı eklendi
+          conversationId: conv._id, // <-- conversationId alanı da eklendi
           user: otherUser,
           lastMessage: lastMessageText,
           time: conv.lastMessage?.createdAt || conv.updatedAt,
@@ -644,11 +645,12 @@ exports.getUserConversations = async (req, res) => {
       })
     );
 
+    console.log("getUserConversations result:", result);
     res.json(result);
   } catch (err) {
     res
       .status(500)
-      .json({ message: "DM listesi getirilemedi", error: err.message });
+      .json({ message: "Could not fetch DM list", error: err.message });
   }
 };
 
@@ -690,7 +692,7 @@ exports.getConversationMessages = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Mesajlar getirilemedi", error: err.message });
+      .json({ message: "Messages not fetched", error: err.message });
   }
 };
 
@@ -700,20 +702,20 @@ exports.sendMessage = async (req, res) => {
     const { senderId, receiverId, text, postId, storyId } = req.body;
 
     if (!senderId || !receiverId || (!text && !postId && !storyId)) {
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     }
 
     // Alıcının mesaj gizliliği kontrolü
     const receiver = await User.findById(receiverId);
     if (!receiver) {
-      return res.status(404).json({ message: "Alıcı bulunamadı" });
+      return res.status(404).json({ message: "Receiver not found" });
     }
 
     if (receiver.onlyFollowersCanMessage) {
       const sender = await User.findById(senderId);
       if (!receiver.followers.includes(senderId)) {
         return res.status(403).json({
-          message: "Bu kullanıcı sadece takipçilerinden mesaj kabul ediyor",
+          message: "This user only accepts messages from followers",
         });
       }
     }
@@ -768,7 +770,7 @@ exports.sendMessage = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Mesaj gönderilemedi", error: err.message });
+      .json({ message: "Message failed to send", error: err.message });
   }
 };
 
@@ -779,7 +781,7 @@ exports.getUserFriends = async (req, res) => {
     const user = await User.findById(userId)
       .populate("following", "_id username avatar")
       .populate("followers", "_id username avatar");
-    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (!user) return res.status(404).json({ message: "User not found" });
     // Arkadaşlar: takip ettiklerin ve edenlerin birleşimi (tekrar edenler tek)
     const all = [...user.following, ...user.followers];
     const unique = [];
@@ -794,7 +796,7 @@ exports.getUserFriends = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Arkadaşlar getirilemedi", error: err.message });
+      .json({ message: "Friends fetch failed", error: err.message });
   }
 };
 
@@ -802,28 +804,28 @@ exports.changePassword = async (req, res) => {
   try {
     const { userId, oldPassword, newPassword } = req.body;
     if (!userId || !oldPassword || !newPassword) {
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     }
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      return res.status(404).json({ message: "User not found" });
     }
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Eski şifre yanlış" });
+      return res.status(400).json({ message: "Incorrect old password" });
     }
     if (newPassword.length < 6) {
       return res
         .status(400)
-        .json({ message: "Yeni şifre en az 6 karakter olmalı" });
+        .json({ message: "New password must be at least 6 characters" });
     }
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
-    res.json({ message: "Şifre başarıyla değiştirildi" });
+    res.json({ message: "Password changed successfully" });
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Şifre değiştirilemedi", error: err.message });
+      .json({ message: "Password change failed", error: err.message });
   }
 };
 
@@ -831,7 +833,7 @@ exports.getNotificationSettings = async (req, res) => {
   try {
     const userId = req.params.userId;
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (!user) return res.status(404).json({ message: "User not found" });
     res.json(
       user.notificationSettings || {
         push: true,
@@ -842,7 +844,10 @@ exports.getNotificationSettings = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Bildirim ayarları getirilemedi", error: err.message });
+      .json({
+        message: "Notification settings fetch failed",
+        error: err.message,
+      });
   }
 };
 
@@ -851,13 +856,13 @@ exports.updateNotificationSettings = async (req, res) => {
     const userId = req.params.userId;
     const { push, comment, follow } = req.body;
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (!user) return res.status(404).json({ message: "User not found" });
     user.notificationSettings = { push, comment, follow };
     await user.save();
-    res.json({ message: "Bildirim ayarları güncellendi" });
+    res.json({ message: "Notification settings updated" });
   } catch (err) {
     res.status(500).json({
-      message: "Bildirim ayarları güncellenemedi",
+      message: "Notification settings update failed",
       error: err.message,
     });
   }
@@ -867,16 +872,16 @@ exports.updateNotificationSettings = async (req, res) => {
 exports.updateMessagePrivacy = async (req, res) => {
   try {
     const { userId, onlyFollowersCanMessage } = req.body;
-    if (!userId) return res.status(400).json({ message: "Eksik veri" });
+    if (!userId) return res.status(400).json({ message: "Missing data" });
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+    if (!user) return res.status(404).json({ message: "User not found" });
     user.onlyFollowersCanMessage = !!onlyFollowersCanMessage;
     await user.save();
     res.json({ onlyFollowersCanMessage: user.onlyFollowersCanMessage });
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Mesaj gizliliği güncellenemedi", error: err.message });
+      .json({ message: "Message privacy update failed", error: err.message });
   }
 };
 
@@ -887,20 +892,22 @@ exports.markMessagesAsSeen = async (req, res) => {
     const { conversationId } = req.body;
 
     if (!userId || !conversationId) {
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     }
 
     // Conversation'ın geçerli olup olmadığını kontrol et
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      return res.status(404).json({ message: "Conversation bulunamadı" });
+      return res.status(404).json({ message: "Conversation not found" });
     }
 
     // Kullanıcının bu conversation'da olup olmadığını kontrol et
     if (!conversation.users.includes(userId)) {
       return res
         .status(403)
-        .json({ message: "Bu conversation'a erişim izniniz yok" });
+        .json({
+          message: "You do not have permission to access this conversation",
+        });
     }
 
     // Bu kullanıcıya gönderilen ve henüz görülmemiş mesajları bul ve güncelle
@@ -923,14 +930,14 @@ exports.markMessagesAsSeen = async (req, res) => {
     }).populate("sender receiver", "_id username avatar");
 
     res.json({
-      message: "Mesajlar görüldü olarak işaretlendi",
+      message: "Messages marked as seen",
       updatedCount: result.modifiedCount,
       messages: updatedMessages,
     });
   } catch (err) {
     console.error("Mark messages as seen error:", err);
     res.status(500).json({
-      message: "Mesajlar görüldü olarak işaretlenemedi",
+      message: "Messages failed to mark as seen",
       error: err.message,
     });
   }
@@ -942,7 +949,7 @@ exports.getUnreadMessageCount = async (req, res) => {
     const { userId } = req.params;
 
     if (!userId) {
-      return res.status(400).json({ message: "Kullanıcı ID gerekli" });
+      return res.status(400).json({ message: "User ID required" });
     }
 
     // Farklı conversationId'leri distinct olarak bul
@@ -958,7 +965,7 @@ exports.getUnreadMessageCount = async (req, res) => {
   } catch (err) {
     console.error("Get unread message count error:", err);
     res.status(500).json({
-      message: "Okunmamış mesaj sayısı getirilemedi",
+      message: "Unread message count not fetched",
       error: err.message,
     });
   }
@@ -969,24 +976,26 @@ exports.deleteConversation = async (req, res) => {
   try {
     const { conversationId, userId } = req.body;
     if (!conversationId || !userId) {
-      return res.status(400).json({ message: "Eksik veri" });
+      return res.status(400).json({ message: "Missing data" });
     }
     // Conversation kontrolü
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      return res.status(404).json({ message: "Conversation bulunamadı" });
+      return res.status(404).json({ message: "Conversation not found" });
     }
     if (!conversation.users.includes(userId)) {
       return res
         .status(403)
-        .json({ message: "Bu conversation'a erişim izniniz yok" });
+        .json({
+          message: "You do not have permission to access this conversation",
+        });
     }
     // Mesajları sil
     await Message.deleteMany({ conversation: conversationId });
     // Conversation'ı sil
     await Conversation.findByIdAndDelete(conversationId);
-    res.json({ message: "DM ve tüm mesajlar silindi" });
+    res.json({ message: "DM and all messages deleted" });
   } catch (err) {
-    res.status(500).json({ message: "DM silinemedi", error: err.message });
+    res.status(500).json({ message: "DM deletion failed", error: err.message });
   }
 };

@@ -9,6 +9,7 @@ import {
   Alert,
   Animated,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import {
   SafeAreaView,
@@ -17,11 +18,15 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
-import { Video, ResizeMode } from "expo-av";
-import { toggleLike, savePost, deletePost, archivePost } from "../services/api";
+import { toggleLike, savePost, archivePost } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ShareModal } from "../components/ShareModal";
 import api from "../services/api";
+import { deletePost } from "../services/postApi";
+import LoadingOverlay from "../components/LoadingOverlay";
+import { useToast } from "../context/ToastContext";
+import { useVideoPlayer, VideoView } from "expo-video";
+import * as ExpoVideo from "expo-video";
 
 const { width, height } = Dimensions.get("window");
 
@@ -39,6 +44,9 @@ const VideoDetailScreen: React.FC = () => {
   };
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(true);
 
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(0);
@@ -49,17 +57,37 @@ const VideoDetailScreen: React.FC = () => {
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [isPlaying, setIsPlaying] = useState(true);
   const [showPlayPauseButton, setShowPlayPauseButton] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [isPausedByTouch, setIsPausedByTouch] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const videoRef = useRef<Video>(null);
+  const player = useVideoPlayer(
+    post.video.startsWith("http")
+      ? post.video
+      : `${api.defaults.baseURL?.replace(/\/api$/, "")}${post.video}`,
+    (player) => {
+      player.play();
+    }
+  );
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const playPauseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    return () => {
+      if (ExpoVideo && ExpoVideo.clearVideoCacheAsync) {
+        ExpoVideo.clearVideoCacheAsync();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const checkUserData = async () => {
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
       setCurrentUser(userObj);
+      setCurrentUserId(userObj?._id || userObj?.id || null);
 
       if (userObj?._id && Array.isArray(post.likes)) {
         setIsLiked(post.likes.includes(userObj._id));
@@ -82,6 +110,17 @@ const VideoDetailScreen: React.FC = () => {
     }).start();
   }, [post]);
 
+  // Video yüklenince veya hata olursa loading spinner'ı gizle
+  useEffect(() => {
+    if (player?.status && typeof player.status === "object") {
+      if ((player.status as any).isLoaded || (player.status as any).error) {
+        setVideoLoading(false);
+      } else {
+        setVideoLoading(true);
+      }
+    }
+  }, [player?.status]);
+
   const handleLike = async () => {
     if (likeLocked) return;
     setLikeLocked(true);
@@ -91,7 +130,7 @@ const VideoDetailScreen: React.FC = () => {
 
     try {
       if (!currentUser?._id) {
-        Alert.alert("Hata", "Lütfen giriş yapın.");
+        Alert.alert("Error", "Please log in.");
         return;
       }
 
@@ -131,7 +170,7 @@ const VideoDetailScreen: React.FC = () => {
     } catch (err) {
       setIsLiked(prevLiked);
       setLikesCount(prevLikes);
-      Alert.alert("Hata", "Beğeni işlemi başarısız oldu.");
+      Alert.alert("Error", "Like operation failed.");
     } finally {
       setLikeLocked(false);
     }
@@ -140,7 +179,7 @@ const VideoDetailScreen: React.FC = () => {
   const handleSave = async () => {
     try {
       if (!currentUser?._id) {
-        Alert.alert("Hata", "Lütfen giriş yapın.");
+        Alert.alert("Error", "Please log in.");
         return;
       }
 
@@ -157,7 +196,7 @@ const VideoDetailScreen: React.FC = () => {
       await savePost(currentUser._id, post._id || post.id);
     } catch (err) {
       setIsSaved(!isSaved);
-      Alert.alert("Hata", "Kaydetme işlemi başarısız oldu.");
+      Alert.alert("Error", "Save operation failed.");
     }
   };
 
@@ -170,39 +209,50 @@ const VideoDetailScreen: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    Alert.alert(
-      "Gönderiyi Sil",
-      "Bu gönderiyi silmek istediğinizden emin misiniz?",
-      [
-        { text: "İptal", style: "cancel" },
-        {
-          text: "Sil",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deletePost(post._id || post.id);
-              navigation.goBack();
-            } catch (err) {
-              Alert.alert("Hata", "Silme işlemi başarısız oldu.");
+    Alert.alert("Delete Post", "Are you sure you want to delete this post?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setIsDeleting(true);
+          try {
+            await deletePost(post._id || post.id);
+            setIsDeleting(false);
+            navigation.navigate("Home", { refreshPosts: true });
+          } catch (err: any) {
+            setIsDeleting(false);
+            let errorMsg =
+              err?.response?.data?.message || err?.message || "Delete failed.";
+            if (errorMsg.includes("Sadece kendi reelsini silebilirsin")) {
+              errorMsg = "You can only delete videos you uploaded.";
+            } else if (errorMsg.includes("Sadece reel silinebilir")) {
+              errorMsg = "Only posts uploaded as video (reel) can be deleted.";
+            } else if (
+              errorMsg.includes("Token gerekli") ||
+              errorMsg.includes("Geçersiz token")
+            ) {
+              errorMsg = "Your session may have expired. Please log in again.";
             }
-          },
+            Alert.alert("Error", errorMsg);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleArchive = async () => {
     try {
       await archivePost(post._id || post.id);
-      navigation.goBack();
+      navigation.navigate("Home", { refreshPosts: true });
     } catch (err) {
-      Alert.alert("Hata", "Arşivleme işlemi başarısız oldu.");
+      Alert.alert("Error", "Archiving failed.");
     }
   };
 
   const handleCopyLink = () => {
     // Link kopyalama işlemi
-    Alert.alert("Bilgi", "Link kopyalandı!");
+    Alert.alert("Info", "Link copied!");
   };
 
   const handleVideoPress = () => {
@@ -229,7 +279,7 @@ const VideoDetailScreen: React.FC = () => {
   const handleVideoPressIn = async () => {
     // Basılı tutunca video durur
     if (isPlaying && !isPausedByTouch) {
-      await videoRef.current?.pauseAsync();
+      await player.pause();
       setIsPausedByTouch(true);
     }
   };
@@ -237,19 +287,47 @@ const VideoDetailScreen: React.FC = () => {
   const handleVideoPressOut = async () => {
     // Bırakınca video devam eder
     if (isPausedByTouch) {
-      await videoRef.current?.playAsync();
+      await player.play();
       setIsPausedByTouch(false);
     }
   };
 
-  const handlePlayPause = async () => {
-    if (isPlaying) {
-      await videoRef.current?.pauseAsync();
-      setIsPlaying(false);
-    } else {
-      await videoRef.current?.playAsync();
-      setIsPlaying(true);
+  // WARN: Expo AV deprecated, expo-video kullanılıyor.
+  const handlePlaybackStatusUpdate = (status: any) => {
+    if (status.isLoaded) {
+      if (status.didJustFinish) {
+        setIsPaused(true);
+        setShowPlayPauseButton(true);
+      } else {
+        setIsPaused(!status.isPlaying);
+      }
     }
+  };
+  const handlePlayPause = () => {
+    if (isPaused) {
+      player.play();
+      setIsPaused(false);
+      setShowPlayPauseButton(false);
+    } else {
+      player.pause();
+      setIsPaused(true);
+      setShowPlayPauseButton(true);
+    }
+  };
+
+  const handleOptionsOpen = async () => {
+    setShowOptionsModal(true);
+    try {
+      await player.pause();
+      setIsPlaying(false);
+    } catch {}
+  };
+  const handleOptionsClose = async () => {
+    setShowOptionsModal(false);
+    try {
+      await player.play();
+      setIsPlaying(true);
+    } catch {}
   };
 
   return (
@@ -258,85 +336,46 @@ const VideoDetailScreen: React.FC = () => {
 
       {/* Video */}
       <TouchableOpacity
-        style={styles.videoContainer}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          zIndex: 1,
+        }}
         onPress={handleVideoPress}
         onPressIn={handleVideoPressIn}
         onPressOut={handleVideoPressOut}
         activeOpacity={1}
       >
-        <Video
-          ref={videoRef}
-          source={{
-            uri: post.video.startsWith("http")
-              ? post.video
-              : `${api.defaults.baseURL?.replace(/\/api$/, "")}${post.video}`,
-          }}
-          style={styles.video}
-          useNativeControls={false}
-          resizeMode={ResizeMode.COVER}
-          isLooping
-          shouldPlay={true}
-          isMuted={false}
-          volume={1.0}
-          shouldCorrectPitch={true}
-          posterStyle={styles.video}
-          posterSource={
-            post.image
-              ? {
-                  uri: post.image.startsWith("http")
-                    ? post.image
-                    : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
-                        post.image
-                      }`,
-                }
-              : undefined
-          }
-          onReadyForDisplay={() => {
-            // Video hazır olduğunda hemen başlat
-            setTimeout(() => {
-              videoRef.current?.playAsync();
-            }, 100);
-          }}
-          onLoad={() => {
-            // Video yüklendiğinde de başlat
-            videoRef.current?.playAsync();
-          }}
-          onPlaybackStatusUpdate={(status) => {
-            if (status.isLoaded) {
-              // Sadece manuel durdurma/oynatma durumlarında state'i güncelle
-              if (!isPausedByTouch) {
-                setIsPlaying(status.isPlaying);
-              }
-            }
-          }}
-          onError={(error) => {
-            console.log("Video error:", error);
-          }}
+        <VideoView
+          player={player}
+          style={{ width: "100%", height: "100%" }}
+          nativeControls={false}
+          allowsFullscreen={false}
+          allowsPictureInPicture={false}
         />
-
-        {/* Oynat/Durdur butonu */}
-        {showPlayPauseButton && (
-          <Animated.View
-            style={[
-              styles.playPauseButton,
-              {
-                opacity: playPauseAnim,
-                transform: [{ scale: playPauseAnim }],
-              },
-            ]}
-          >
-            <TouchableOpacity
-              onPress={handlePlayPause}
-              style={styles.playPauseButtonInner}
-            >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={70}
-                color="rgba(255,255,255,0.8)"
-              />
-            </TouchableOpacity>
-          </Animated.View>
+        {videoLoading && (
+          <ActivityIndicator
+            style={{
+              position: "absolute",
+              top: 140,
+              left: width / 2 - 20,
+              zIndex: 10,
+            }}
+            size="large"
+            color={colors.primary}
+          />
         )}
+        {videoError && (
+          <Text
+            style={{ color: colors.error, textAlign: "center", marginTop: 8 }}
+          >
+            {videoError}
+          </Text>
+        )}
+        {/* Play/Pause butonu ve süre overlay'leri kaldırıldı */}
       </TouchableOpacity>
 
       {/* Sol üst kullanıcı bilgisi */}
@@ -381,7 +420,7 @@ const VideoDetailScreen: React.FC = () => {
             </View>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => setShowOptionsModal(true)}
+            onPress={handleOptionsOpen}
             style={styles.headerMenuButton}
           >
             <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
@@ -422,6 +461,8 @@ const VideoDetailScreen: React.FC = () => {
             color={isSaved ? "#fff" : "#fff"}
           />
         </TouchableOpacity>
+        {/* Silme butonu sadece kendi videosu ise göster */}
+        {/* Silme butonu kaldırıldı, sadece 3 nokta içindeki kullanılacak */}
       </View>
 
       {/* Alt bilgi alanı */}
@@ -443,36 +484,59 @@ const VideoDetailScreen: React.FC = () => {
 
       {/* Seçenekler modalı */}
       {showOptionsModal && (
-        <View style={styles.modalOverlay}>
+        <View
+          style={[
+            styles.modalOverlay,
+            { justifyContent: "flex-start", alignItems: "flex-end" },
+          ]}
+        >
           <TouchableOpacity
-            style={styles.modalOverlay}
-            onPress={() => setShowOptionsModal(false)}
+            style={[
+              styles.modalOverlay,
+              {
+                backgroundColor: "transparent",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1,
+              },
+            ]}
+            onPress={handleOptionsClose}
+            activeOpacity={1}
           />
           <View
             style={[
               styles.optionsModal,
-              { backgroundColor: colors.background },
+              {
+                backgroundColor: colors.background,
+                marginTop: 60,
+                marginRight: 10,
+                zIndex: 2,
+              },
             ]}
           >
             <TouchableOpacity
               style={styles.optionItem}
               onPress={() => {
-                setShowOptionsModal(false);
+                handleOptionsClose();
                 handleCopyLink();
               }}
             >
               <Ionicons name="link-outline" size={24} color={colors.text} />
               <Text style={[styles.optionText, { color: colors.text }]}>
-                Linki Kopyala
+                Copy Link
               </Text>
             </TouchableOpacity>
 
-            {currentUser?._id === post.user?._id && (
+            {/* Sadece kendi videosunda arşivle ve sil butonları aktif olsun */}
+            {currentUserId && post.user?._id === currentUserId && (
               <>
                 <TouchableOpacity
                   style={styles.optionItem}
                   onPress={() => {
-                    setShowOptionsModal(false);
+                    handleOptionsClose();
                     handleArchive();
                   }}
                 >
@@ -482,20 +546,20 @@ const VideoDetailScreen: React.FC = () => {
                     color={colors.text}
                   />
                   <Text style={[styles.optionText, { color: colors.text }]}>
-                    Arşivle
+                    Archive
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.optionItem, styles.deleteOption]}
                   onPress={() => {
-                    setShowOptionsModal(false);
+                    handleOptionsClose();
                     handleDelete();
                   }}
                 >
                   <Ionicons name="trash-outline" size={24} color="#FF3040" />
                   <Text style={[styles.optionText, { color: "#FF3040" }]}>
-                    Sil
+                    Delete
                   </Text>
                 </TouchableOpacity>
               </>
@@ -503,6 +567,7 @@ const VideoDetailScreen: React.FC = () => {
           </View>
         </View>
       )}
+      {isDeleting && <LoadingOverlay visible={true} message="Siliniyor..." />}
     </View>
   );
 };

@@ -96,11 +96,11 @@ const EditProfileScreen: React.FC = () => {
         avatar: updated.avatar,
         bio: updated.bio,
       });
-      showToast("✅ Profil başarıyla güncellendi!", "success");
+      showToast("✅ Profile updated successfully!", "success");
       navigation.goBack();
     } catch (err: any) {
       console.error("EditProfile: Error updating profile:", err);
-      let errorMessage = "Profil güncellenemedi";
+      let errorMessage = "Profile update failed";
 
       if (err.response) {
         // Server response var
@@ -108,7 +108,7 @@ const EditProfileScreen: React.FC = () => {
       } else if (err.request) {
         // Network error
         errorMessage =
-          "Bağlantı hatası. Lütfen internet bağlantınızı kontrol edin.";
+          "Connection error. Please check your internet connection.";
       }
 
       showToast(errorMessage, "error");
@@ -119,7 +119,7 @@ const EditProfileScreen: React.FC = () => {
     const permissionResult =
       await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
-      showToast("Fotoğraf seçmek için izin vermelisiniz", "warning");
+      showToast("You need to grant permission to select a photo", "warning");
       return;
     }
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -158,11 +158,12 @@ const EditProfileScreen: React.FC = () => {
           <View style={{ alignItems: "center", justifyContent: "center" }}>
             <Image
               source={{
-                uri: avatar.startsWith("http")
-                  ? avatar
-                  : avatar
-                  ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${avatar}`
-                  : "https://ui-avatars.com/api/?name=User&size=120",
+                uri:
+                  avatar && avatar.startsWith("http")
+                    ? avatar
+                    : avatar
+                    ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${avatar}`
+                    : "https://ui-avatars.com/api/?name=User&size=120",
               }}
               style={{
                 width: 120,
@@ -205,7 +206,7 @@ const EditProfileScreen: React.FC = () => {
             onPress={pickImage}
           >
             <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}>
-              Fotoğrafı Değiştir
+              Change Photo
             </Text>
           </TouchableOpacity>
         </View>
@@ -213,7 +214,9 @@ const EditProfileScreen: React.FC = () => {
         {/* Form Fields */}
         <View style={styles.formSection}>
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Ad Soyad</Text>
+            <Text style={[styles.label, { color: colors.text }]}>
+              Full Name
+            </Text>
             <TextInput
               style={[
                 styles.input,
@@ -225,7 +228,7 @@ const EditProfileScreen: React.FC = () => {
               ]}
               value={name}
               onChangeText={setName}
-              placeholder="Ad Soyad"
+              placeholder="Full Name"
               placeholderTextColor={colors.textSecondary}
             />
           </View>

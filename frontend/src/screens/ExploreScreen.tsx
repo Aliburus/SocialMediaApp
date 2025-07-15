@@ -48,6 +48,7 @@ interface Post {
   createdAt: string;
   type: string; // 'reel' veya 'image'
   video?: string; // Sadece 'reel' tipinde olabilir
+  thumbnail?: string; // Sadece 'reel' tipinde olabilir
 }
 
 const ExploreScreen: React.FC = () => {
@@ -63,6 +64,7 @@ const ExploreScreen: React.FC = () => {
   // Arama için
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const navigation = useNavigation<NavigationProp<any>>();
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const loadExploreFeed = useCallback(async (pageNum = 1, refresh = false) => {
     try {
@@ -141,34 +143,22 @@ const ExploreScreen: React.FC = () => {
 
   const renderPostItem = ({ item }: { item: Post }) => {
     if (item.type !== "reel") return null;
+    const thumb = item.thumbnail
+      ? item.thumbnail.startsWith("http")
+        ? item.thumbnail
+        : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.thumbnail}`
+      : item.image && item.image.startsWith("http")
+      ? item.image
+      : item.image
+      ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`
+      : `https://picsum.photos/seed/${item._id}/300/300`;
     return (
       <TouchableOpacity
         style={styles.postItem}
         onPress={() => handlePostPress(item)}
         activeOpacity={0.8}
       >
-        {item.video ? (
-          <Video
-            source={{
-              uri: item.video.startsWith("http")
-                ? item.video
-                : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.video}`,
-            }}
-            style={styles.postImage}
-            resizeMode={ResizeMode.COVER}
-            shouldPlay={false}
-            isLooping={false}
-          />
-        ) : (
-          <Image
-            source={{
-              uri: item.image.startsWith("http")
-                ? item.image
-                : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`,
-            }}
-            style={styles.postImage}
-          />
-        )}
+        <Image source={{ uri: thumb }} style={styles.postImage} />
         <View style={styles.postOverlay}>
           <View style={styles.postStats}>
             <Text style={[styles.statText, { color: colors.text }]}>
@@ -279,7 +269,7 @@ const ExploreScreen: React.FC = () => {
         >
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Kullanıcı ara..."
+            placeholder="Search user..."
             value={""}
             editable={false}
             placeholderTextColor={colors.textSecondary}
@@ -324,7 +314,7 @@ const ExploreScreen: React.FC = () => {
                 },
               ]}
             >
-              Şu anda keşfedecek yeni reels yok!
+              No new reels to explore right now!
             </Text>
             <Text
               style={[
@@ -332,7 +322,7 @@ const ExploreScreen: React.FC = () => {
                 { color: colors.textSecondary, fontSize: 14 },
               ]}
             >
-              Yakında yeni içerikler burada olacak.
+              New content will be here soon.
             </Text>
           </View>
         }

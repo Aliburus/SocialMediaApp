@@ -28,7 +28,7 @@ const ChatHistoryScreen: React.FC = () => {
       {/* İçerik */}
       <View style={styles.content}>
         <Text style={[styles.placeholder, { color: colors.textSecondary }]}>
-          Chat history özelliği yakında eklenecek...
+          Chat history feature coming soon...
         </Text>
       </View>
     </SafeAreaView>

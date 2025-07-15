@@ -47,7 +47,7 @@ const upload = multer({
     ) {
       cb(null, true);
     } else {
-      cb(new Error("Sadece resim ve video dosyaları yüklenebilir!"), false);
+      cb(new Error("Only image and video files can be uploaded!"), false);
     }
   },
   limits: {

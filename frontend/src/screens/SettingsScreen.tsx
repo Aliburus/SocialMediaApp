@@ -5,6 +5,8 @@ import { useTheme } from "../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
+import api from "../services/api";
+import ToastNotification from "../components/ToastNotification";
 
 const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
   navigation,
@@ -19,6 +21,12 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
   const [privateAccount, setPrivateAccount] = React.useState(false);
   const [onlyFollowersCanMessage, setOnlyFollowersCanMessage] =
     React.useState(false);
+  const [privateLoading, setPrivateLoading] = React.useState(false);
+  const [toast, setToast] = React.useState<{
+    type: "success" | "error";
+    message: string;
+    visible: boolean;
+  } | null>(null);
 
   React.useEffect(() => {
     (async () => {
@@ -64,26 +72,32 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
   };
 
   const handlePrivateSwitch = async (v: boolean) => {
-    setPrivateAccount(v);
-    const userStr = await AsyncStorage.getItem("user");
-    if (userStr) {
-      try {
-        const userObj = JSON.parse(userStr);
-        const response = await fetch(
-          `${process.env.BACKEND_URL}/api/users/${userObj._id}/toggle-private`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-        const result = await response.json();
-        userObj.privateAccount = result.privateAccount;
-        await AsyncStorage.setItem("user", JSON.stringify(userObj));
-        setPrivateAccount(result.privateAccount);
-      } catch (e) {
-        setPrivateAccount(!v);
-      }
+    setPrivateLoading(true);
+    try {
+      const userStr = await AsyncStorage.getItem("user");
+      if (!userStr) throw new Error("Kullanıcı bulunamadı");
+      const userObj = JSON.parse(userStr);
+      const res = await api.put(`/users/${userObj._id}/toggle-private`);
+      const newVal = res.data?.privateAccount;
+      userObj.privateAccount = newVal;
+      await AsyncStorage.setItem("user", JSON.stringify(userObj));
+      setPrivateAccount(newVal);
+      setToast({
+        type: "success",
+        message: newVal
+          ? "Your account is now private."
+          : "Your account is now public.",
+        visible: true,
+      });
+    } catch (e) {
+      setPrivateAccount((prev) => !prev);
+      setToast({
+        type: "error",
+        message: "Failed to update privacy setting. Please try again.",
+        visible: true,
+      });
     }
+    setPrivateLoading(false);
   };
 
   return (
@@ -91,6 +105,14 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
       style={[styles.container, { backgroundColor: colors.background }]}
       edges={["top", "bottom"]}
     >
+      {toast && (
+        <ToastNotification
+          type={toast.type}
+          message={toast.message}
+          visible={toast.visible}
+          onClose={() => setToast(null)}
+        />
+      )}
       <View style={styles.item}>
         <Ionicons
           name={isDark ? "moon" : "sunny"}
@@ -99,7 +121,7 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
           style={{ marginRight: 16 }}
         />
         <Text style={[styles.text, { color: colors.text, flex: 1 }]}>
-          Karanlık Mod
+          Dark Mode
         </Text>
         <Switch
           value={isDark}
@@ -122,7 +144,7 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
           />
         </View>
         <Text style={[styles.text, { color: colors.text, flex: 1 }]}>
-          Konum Bilgisi
+          Location
         </Text>
         <Switch value={locationEnabled} onValueChange={handleLocationSwitch} />
       </View>
@@ -134,9 +156,13 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
           style={{ marginRight: 16 }}
         />
         <Text style={[styles.text, { color: colors.text, flex: 1 }]}>
-          Hesap Gizliliği
+          Account Privacy
         </Text>
-        <Switch value={privateAccount} onValueChange={handlePrivateSwitch} />
+        <Switch
+          value={privateAccount}
+          onValueChange={handlePrivateSwitch}
+          disabled={privateLoading}
+        />
       </View>
       <TouchableOpacity
         style={styles.item}
@@ -148,7 +174,7 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
           color={colors.text}
           style={{ marginRight: 16 }}
         />
-        <Text style={[styles.text, { color: colors.text }]}>Arşiv</Text>
+        <Text style={[styles.text, { color: colors.text }]}>Archive</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -162,7 +188,7 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
           style={{ marginRight: 16 }}
         />
         <Text style={[styles.text, { color: colors.text }]}>
-          Bildirim Ayarları
+          Notification Settings
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -176,7 +202,7 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
           style={{ marginRight: 16 }}
         />
         <Text style={[styles.text, { color: colors.text }]}>
-          Şifre Değiştir
+          Change Password
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -197,7 +223,7 @@ const SettingsScreen: React.FC<{ navigation: any; onLogout?: () => void }> = ({
         <Text
           style={[styles.text, { color: colors.error, fontWeight: "bold" }]}
         >
-          Çıkış Yap
+          Logout
         </Text>
       </TouchableOpacity>
     </SafeAreaView>

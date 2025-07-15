@@ -27,7 +27,7 @@ const trackUserBehavior = async (req, res) => {
     if (!post) {
       return res
         .status(404)
-        .json({ success: false, message: "İçerik bulunamadı" });
+        .json({ success: false, message: "Content not found" });
     }
 
     const weight = BEHAVIOR_WEIGHTS[behaviorType] || 1.0;
@@ -51,10 +51,10 @@ const trackUserBehavior = async (req, res) => {
     // Kullanıcı embedding'ini güncelle
     await updateUserEmbedding(userId);
 
-    res.status(200).json({ success: true, message: "Davranış kaydedildi" });
+    res.status(200).json({ success: true, message: "Behavior saved" });
   } catch (error) {
     console.error("Davranış kaydetme hatası:", error.message, error.stack);
-    res.status(500).json({ success: false, message: "Sunucu hatası" });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -202,7 +202,7 @@ const getExploreFeed = async (req, res) => {
     });
   } catch (error) {
     console.error("Keşfet feed hatası:", error);
-    res.status(500).json({ success: false, message: "Sunucu hatası" });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -320,12 +320,10 @@ const submitFeedback = async (req, res) => {
       }
     }
 
-    res
-      .status(200)
-      .json({ success: true, message: "Geri bildirim kaydedildi" });
+    res.status(200).json({ success: true, message: "Feedback saved" });
   } catch (error) {
     console.error("Geri bildirim hatası:", error);
-    res.status(500).json({ success: false, message: "Sunucu hatası" });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 

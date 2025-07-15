@@ -3,6 +3,7 @@ const router = express.Router();
 const postController = require("../controllers/postController");
 const { archivePost } = require("../controllers/postController");
 const nsfwCheck = require("../middleware/nsfwCheck");
+const { authenticateToken } = require("../middleware/auth");
 
 // const auth = require('../middleware/auth'); // Auth middleware eklenebilir
 
@@ -30,7 +31,7 @@ router.post("/:id/comments", postController.addComment);
 // Postun yorumlarını getir
 router.get("/:id/comments", postController.getComments);
 // Postu sil
-router.delete("/:id", postController.deletePost);
+router.delete("/:id", authenticateToken, postController.deletePost);
 // Postu arşivleye
 router.post("/:id/archive", archivePost);
 

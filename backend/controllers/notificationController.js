@@ -119,116 +119,131 @@ exports.getNotifications = async (req, res) => {
     const notifications = await Notification.find({ recipient: userIdObj })
       .populate("sender", "username avatar")
       .populate("recentUsers", "username avatar")
-      .populate("post", "image description user")
+      .populate("post", "image description user thumbnail type")
       .populate("comment", "text")
       .sort({ createdAt: -1 })
       .limit(50);
 
-    // Bildirimleri formatla
-    const formattedNotifications = notifications.map((notification) => {
-      const baseNotification = {
-        id: notification._id,
-        type: notification.type,
-        isRead: notification.isRead,
-        createdAt: notification.createdAt,
-        timestamp: formatTimestamp(notification.createdAt),
-      };
-
-      if (notification.groupId && notification.recentUsers.length > 0) {
-        // Grup bildirimi
-        const userNames = notification.recentUsers.map((user) => user.username);
-        let message = "";
-
-        if (notification.type === "like" && notification.post) {
-          if (notification.totalCount === 1) {
-            message = `${userNames[0]} gönderini beğendi`;
-          } else if (notification.totalCount === 2) {
-            message = `${userNames[0]} ve ${userNames[1]} gönderini beğendi`;
-          } else if (notification.totalCount === 3) {
-            message = `${userNames[0]}, ${userNames[1]} ve ${userNames[2]} gönderini beğendi`;
-          } else {
-            message = `${userNames[0]}, ${userNames[1]} ve ${
-              notification.totalCount - 2
-            } kişi daha gönderini beğendi`;
-          }
-        } else if (notification.type === "like" && notification.comment) {
-          if (notification.totalCount === 1) {
-            message = `${userNames[0]} yorumunu beğendi`;
-          } else if (notification.totalCount === 2) {
-            message = `${userNames[0]} ve ${userNames[1]} yorumunu beğendi`;
-          } else if (notification.totalCount === 3) {
-            message = `${userNames[0]}, ${userNames[1]} ve ${userNames[2]} yorumunu beğendi`;
-          } else {
-            message = `${userNames[0]}, ${userNames[1]} ve ${
-              notification.totalCount - 2
-            } kişi daha yorumunu beğendi`;
-          }
-        }
-
-        return {
-          ...baseNotification,
-          text: message,
-          users: notification.recentUsers,
-          totalCount: notification.totalCount,
-          post: notification.post,
-          comment: notification.comment,
-        };
-      } else {
-        // Normal bildirim
-        let message = "";
-        switch (notification.type) {
-          case "like":
-            if (notification.post) {
-              message = `${notification.sender.username} gönderini beğendi`;
-            } else if (notification.comment) {
-              message = `${notification.sender.username} yorumunu beğendi`;
-            }
-            break;
-          case "comment":
-            message = `${notification.sender.username} gönderine yorum yaptı`;
-            break;
-          case "follow":
-            message = `${notification.sender.username} seni takip etmeye başladı`;
-            break;
-          case "follow_request":
-            message = `${notification.sender.username} seni takip etmek istiyor`;
-            break;
-          case "mention":
-            message = `${notification.sender.username} seni etiketledi`;
-            break;
-        }
-
-        // Takip istekleri için status belirle
-        let status;
-        if (
-          notification.type === "follow" ||
-          notification.type === "follow_request"
-        ) {
-          if (
-            user.pendingFollowRequests
-              .map((id) => id.toString())
-              .includes(notification.sender._id.toString())
-          ) {
-            status = "pending";
-          } else if (
-            user.followers
-              .map((id) => id.toString())
-              .includes(notification.sender._id.toString())
-          ) {
-            status = "accepted";
-          }
-        }
-
-        return {
-          ...baseNotification,
-          text: message,
-          user: notification.sender,
-          post: notification.post,
-          comment: notification.comment,
-          status,
-        };
+    // Her bildirim için postImage alanı ekle
+    const PLACEHOLDER = "https://picsum.photos/seed/notification/100/100";
+    const notificationsWithImage = notifications.map((notif) => {
+      let postImage = PLACEHOLDER;
+      if (notif.post) {
+        if (notif.post.thumbnail) postImage = notif.post.thumbnail;
+        else if (notif.post.image) postImage = notif.post.image;
       }
+      return { ...notif.toObject(), postImage };
     });
+
+    // Bildirimleri formatla
+    const formattedNotifications = notificationsWithImage.map(
+      (notification) => {
+        const baseNotification = {
+          id: notification._id,
+          type: notification.type,
+          isRead: notification.isRead,
+          createdAt: notification.createdAt,
+          timestamp: formatTimestamp(notification.createdAt),
+        };
+
+        if (notification.groupId && notification.recentUsers.length > 0) {
+          // Grup bildirimi
+          const userNames = notification.recentUsers.map(
+            (user) => user.username
+          );
+          let message = "";
+
+          if (notification.type === "like" && notification.post) {
+            if (notification.totalCount === 1) {
+              message = `${userNames[0]} liked your post`;
+            } else if (notification.totalCount === 2) {
+              message = `${userNames[0]} and ${userNames[1]} liked your post`;
+            } else if (notification.totalCount === 3) {
+              message = `${userNames[0]}, ${userNames[1]} and ${userNames[2]} liked your post`;
+            } else {
+              message = `${userNames[0]}, ${userNames[1]} and ${
+                notification.totalCount - 2
+              } more liked your post`;
+            }
+          } else if (notification.type === "like" && notification.comment) {
+            if (notification.totalCount === 1) {
+              message = `${userNames[0]} liked your comment`;
+            } else if (notification.totalCount === 2) {
+              message = `${userNames[0]} and ${userNames[1]} liked your comment`;
+            } else if (notification.totalCount === 3) {
+              message = `${userNames[0]}, ${userNames[1]} and ${userNames[2]} liked your comment`;
+            } else {
+              message = `${userNames[0]}, ${userNames[1]} and ${
+                notification.totalCount - 2
+              } more liked your comment`;
+            }
+          }
+
+          return {
+            ...baseNotification,
+            text: message,
+            users: notification.recentUsers,
+            totalCount: notification.totalCount,
+            post: notification.post,
+            comment: notification.comment,
+          };
+        } else {
+          // Normal bildirim
+          let message = "";
+          switch (notification.type) {
+            case "like":
+              if (notification.post) {
+                message = `${notification.sender.username} liked your post`;
+              } else if (notification.comment) {
+                message = `${notification.sender.username} liked your comment`;
+              }
+              break;
+            case "comment":
+              message = `${notification.sender.username} commented on your post`;
+              break;
+            case "follow":
+              message = `${notification.sender.username} started following you`;
+              break;
+            case "follow_request":
+              message = `${notification.sender.username} wants to follow you`;
+              break;
+            case "mention":
+              message = `${notification.sender.username} mentioned you`;
+              break;
+          }
+
+          // Takip istekleri için status belirle
+          let status;
+          if (
+            notification.type === "follow" ||
+            notification.type === "follow_request"
+          ) {
+            if (
+              user.pendingFollowRequests
+                .map((id) => id.toString())
+                .includes(notification.sender._id.toString())
+            ) {
+              status = "pending";
+            } else if (
+              user.followers
+                .map((id) => id.toString())
+                .includes(notification.sender._id.toString())
+            ) {
+              status = "accepted";
+            }
+          }
+
+          return {
+            ...baseNotification,
+            text: message,
+            user: notification.sender,
+            post: notification.post,
+            comment: notification.comment,
+            status,
+          };
+        }
+      }
+    );
 
     res.json(formattedNotifications);
   } catch (error) {

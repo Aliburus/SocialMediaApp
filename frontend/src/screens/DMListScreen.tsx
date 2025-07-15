@@ -28,6 +28,7 @@ import socketService from "../services/socketService";
 import { Swipeable } from "react-native-gesture-handler";
 import { getUnreadMessageCount } from "../services/messageApi";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { timeAgo } from "../utils/validate";
 
 const DMListScreen: React.FC<{
   setUnreadMessageCount?: (n: number) => void;
@@ -48,14 +49,22 @@ const DMListScreen: React.FC<{
   const [page, setPage] = React.useState(1);
   const [allConversations, setAllConversations] = React.useState<any[]>([]);
   const ITEMS_PER_PAGE = 10;
-  const filteredFriends = friends.filter((u) => {
-    const q = friendSearch.toLowerCase();
+  const ITEM_HEIGHT = 80; // Ortalama bir DM satırı yüksekliği
+  const [search, setSearch] = React.useState("");
+  const [activeTab, setActiveTab] = React.useState<"followers" | "following">(
+    "followers"
+  );
+  const [followers, setFollowers] = React.useState<any[]>([]);
+  const [following, setFollowing] = React.useState<any[]>([]);
+  const [followerSearch, setFollowerSearch] = React.useState("");
+  const [followingSearch, setFollowingSearch] = React.useState("");
+
+  const filteredDmList = dmList.filter((dm) => {
+    const q = search.toLowerCase();
     return (
-      (u.username && u.username.toLowerCase().includes(q)) ||
-      (u.fullName && u.fullName.toLowerCase().includes(q)) ||
-      (u.name && u.name.toLowerCase().includes(q)) ||
-      (u.firstName && u.firstName.toLowerCase().includes(q)) ||
-      (u.lastName && u.lastName.toLowerCase().includes(q))
+      (dm.user?.username && dm.user.username.toLowerCase().includes(q)) ||
+      (dm.user?.fullName && dm.user.fullName.toLowerCase().includes(q)) ||
+      (dm.user?.name && dm.user.name.toLowerCase().includes(q))
     );
   });
 
@@ -76,6 +85,7 @@ const DMListScreen: React.FC<{
 
         // Conversation'ları yükle
         const list = await getUserConversations(userId);
+        console.log("DMList gelen veri:", list);
 
         if (isInitial) {
           // İlk yüklemede 2 sayfa göster
@@ -135,17 +145,6 @@ const DMListScreen: React.FC<{
     loadConversations();
 
     // Socket event listener'ları
-    if (currentUserId) {
-      socketService.onUnreadCountUpdate((data) => {
-        if (data.userId === currentUserId) {
-          setUnreadCount(data.unreadCount);
-        }
-      });
-    }
-
-    return () => {
-      socketService.off("unread_count_update");
-    };
   }, [currentUserId]);
 
   // Ekran odaklandığında listeyi yenile ve count'ları sıfırla
@@ -159,19 +158,60 @@ const DMListScreen: React.FC<{
     }, [currentUserId])
   );
 
+  // Modal açıldığında hem followers hem following çek
   React.useEffect(() => {
     if (showFriendsModal) {
       (async () => {
         const userStr = await AsyncStorage.getItem("user");
         const userObj = userStr ? JSON.parse(userStr) : null;
         if (userObj?._id || userObj?.id) {
-          const list = await getUserFriends(userObj._id || userObj.id);
-
-          setFriends(list);
+          const userId = userObj._id || userObj.id;
+          // getProfile ile çek
+          const profileRes = await api.get(`/users/profile/${userId}`);
+          // followers ve following id dizisi geliyor, her biri için profil çek
+          const followerObjs = await Promise.all(
+            (profileRes.data.followers || []).map(async (fid: string) => {
+              try {
+                const f = await api.get(`/users/profile/${fid}`);
+                return f.data;
+              } catch {
+                return null;
+              }
+            })
+          );
+          setFollowers(followerObjs.filter(Boolean));
+          const followingObjs = await Promise.all(
+            (profileRes.data.following || []).map(async (fid: string) => {
+              try {
+                const f = await api.get(`/users/profile/${fid}`);
+                return f.data;
+              } catch {
+                return null;
+              }
+            })
+          );
+          setFollowing(followingObjs.filter(Boolean));
         }
       })();
     }
   }, [showFriendsModal]);
+
+  const filteredFollowers = followers.filter((u) => {
+    const q = followerSearch.toLowerCase();
+    return (
+      (u.username && u.username.toLowerCase().includes(q)) ||
+      (u.fullName && u.fullName.toLowerCase().includes(q)) ||
+      (u.name && u.name.toLowerCase().includes(q))
+    );
+  });
+  const filteredFollowing = following.filter((u) => {
+    const q = followingSearch.toLowerCase();
+    return (
+      (u.username && u.username.toLowerCase().includes(q)) ||
+      (u.fullName && u.fullName.toLowerCase().includes(q)) ||
+      (u.name && u.name.toLowerCase().includes(q))
+    );
+  });
 
   React.useEffect(() => {}, [friends]);
 
@@ -235,7 +275,7 @@ const DMListScreen: React.FC<{
           </View>
           <View style={styles.dmInfo}>
             <Text style={[styles.username, { color: colors.text }]}>
-              {item.user?.username || "Bilinmeyen Kullanıcı"}
+              {item.user?.username || "Unknown User"}
             </Text>
             <Text style={[styles.lastMessage, { color: colors.textSecondary }]}>
               {item.lastMessage}
@@ -248,7 +288,7 @@ const DMListScreen: React.FC<{
             )}
           </View>
           <Text style={[styles.time, { color: colors.textSecondary }]}>
-            {item.time ? new Date(item.time).toLocaleDateString() : ""}
+            {item.time ? timeAgo(item.time) : ""}
           </Text>
         </TouchableOpacity>
       </Swipeable>
@@ -267,15 +307,26 @@ const DMListScreen: React.FC<{
         flexDirection: "row",
         alignItems: "center",
         paddingVertical: 10,
+        backgroundColor: colors.background,
       }}
     >
       <Image
-        source={{ uri: item.avatar }}
+        source={{
+          uri:
+            item.avatar &&
+            typeof item.avatar === "string" &&
+            item.avatar.length > 0
+              ? item.avatar.startsWith("http")
+                ? item.avatar
+                : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.avatar}`
+              : "https://ui-avatars.com/api/?name=User",
+        }}
         style={{
           width: 40,
           height: 40,
           borderRadius: 20,
           marginRight: 12,
+          backgroundColor: "#000",
         }}
       />
       <Text style={{ color: colors.text, fontSize: 16 }}>{item.username}</Text>
@@ -328,15 +379,18 @@ const DMListScreen: React.FC<{
           <FlatList
             data={dmList}
             renderItem={renderItem}
-            keyExtractor={(item) => item.id || item._id || item.username}
-            contentContainerStyle={{
-              paddingBottom: insets.bottom + 16,
-              paddingHorizontal: 8,
-              backgroundColor: colors.background,
-            }}
-            showsVerticalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
             onEndReached={loadMoreConversations}
-            onEndReachedThreshold={0.1}
+            onEndReachedThreshold={0.2}
+            initialNumToRender={10}
+            maxToRenderPerBatch={15}
+            windowSize={20}
+            removeClippedSubviews={true}
+            getItemLayout={(data, index) => ({
+              length: ITEM_HEIGHT,
+              offset: ITEM_HEIGHT * index,
+              index,
+            })}
             ListFooterComponent={
               loadingMore ? (
                 <View
@@ -346,6 +400,8 @@ const DMListScreen: React.FC<{
                 </View>
               ) : null
             }
+            contentContainerStyle={{ paddingBottom: insets.bottom + 60 }}
+            showsVerticalScrollIndicator={false}
           />
         )}
       </View>
@@ -373,37 +429,88 @@ const DMListScreen: React.FC<{
               padding: 16,
             }}
           >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-            >
-              <TextInput
+            {/* Tabs */}
+            <View style={{ flexDirection: "row", marginBottom: 12 }}>
+              <TouchableOpacity
                 style={{
                   flex: 1,
+                  alignItems: "center",
+                  paddingVertical: 8,
+                  borderBottomWidth: activeTab === "followers" ? 2 : 0,
+                  borderBottomColor: colors.primary,
+                }}
+                onPress={() => setActiveTab("followers")}
+              >
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontWeight: activeTab === "followers" ? "bold" : "normal",
+                  }}
+                >
+                  Followers
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  paddingVertical: 8,
+                  borderBottomWidth: activeTab === "following" ? 2 : 0,
+                  borderBottomColor: colors.primary,
+                }}
+                onPress={() => setActiveTab("following")}
+              >
+                <Text
+                  style={{
+                    color: colors.text,
+                    fontWeight: activeTab === "following" ? "bold" : "normal",
+                  }}
+                >
+                  Following
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {/* Search input for tab */}
+            {activeTab === "followers" ? (
+              <TextInput
+                style={{
                   backgroundColor: colors.surface,
                   borderRadius: 20,
                   paddingHorizontal: 16,
                   color: colors.text,
                   fontSize: 16,
                   height: 40,
+                  marginBottom: 8,
                 }}
-                placeholder="Arkadaş ara..."
+                placeholder="Search followers..."
                 placeholderTextColor={colors.textSecondary}
-                value={friendSearch}
-                onChangeText={setFriendSearch}
+                value={followerSearch}
+                onChangeText={setFollowerSearch}
               />
-              <TouchableOpacity
-                onPress={() => setShowFriendsModal(false)}
-                style={{ marginLeft: 8 }}
-              >
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
+            ) : (
+              <TextInput
+                style={{
+                  backgroundColor: colors.surface,
+                  borderRadius: 20,
+                  paddingHorizontal: 16,
+                  color: colors.text,
+                  fontSize: 16,
+                  height: 40,
+                  marginBottom: 8,
+                }}
+                placeholder="Search following..."
+                placeholderTextColor={colors.textSecondary}
+                value={followingSearch}
+                onChangeText={setFollowingSearch}
+              />
+            )}
+            {/* List for tab */}
             <FlatList
-              data={filteredFriends}
+              data={
+                activeTab === "followers"
+                  ? filteredFollowers
+                  : filteredFollowing
+              }
               renderItem={renderFriendItem}
               keyExtractor={(item) => item.id || item._id || item.username}
               showsVerticalScrollIndicator={false}
@@ -415,7 +522,9 @@ const DMListScreen: React.FC<{
                     marginTop: 24,
                   }}
                 >
-                  Arkadaş bulunamadı
+                  {activeTab === "followers"
+                    ? "No followers found"
+                    : "No following found"}
                 </Text>
               }
             />

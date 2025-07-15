@@ -542,7 +542,7 @@ const StoryScreen: React.FC = () => {
               >
                 <Ionicons name="trash-outline" size={24} color="#ff3b30" />
                 <Text style={[styles.optionText, { color: "#ff3b30" }]}>
-                  Story'yi Sil
+                  Delete Story
                 </Text>
               </TouchableOpacity>
               {fromArchive && isStoryWithin24Hours(stories[current]) && (
@@ -551,7 +551,7 @@ const StoryScreen: React.FC = () => {
                   onPress={handleUnarchiveStory}
                 >
                   <Ionicons name="archive-outline" size={24} color="#fff" />
-                  <Text style={styles.optionText}>Arşivden Çıkar</Text>
+                  <Text style={styles.optionText}>Unarchive</Text>
                 </TouchableOpacity>
               )}
               {!fromArchive && (
@@ -560,7 +560,7 @@ const StoryScreen: React.FC = () => {
                   onPress={handleArchiveStory}
                 >
                   <Ionicons name="archive-outline" size={24} color="#fff" />
-                  <Text style={styles.optionText}>Arşivle</Text>
+                  <Text style={styles.optionText}>Archive</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -568,7 +568,7 @@ const StoryScreen: React.FC = () => {
                 onPress={() => setShowOptions(false)}
               >
                 <Ionicons name="close" size={24} color="#fff" />
-                <Text style={styles.optionText}>İptal</Text>
+                <Text style={styles.optionText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>

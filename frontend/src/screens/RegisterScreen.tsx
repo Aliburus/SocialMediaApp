@@ -17,6 +17,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
 import { register as registerService } from "../services/authService";
 import { useToast } from "../context/ToastContext";
+import ToastNotification from "../components/ToastNotification";
 
 const { width } = Dimensions.get("window");
 
@@ -37,11 +38,31 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
   const [success, setSuccess] = useState<string | null>(null);
   const [gender, setGender] = useState<string>("");
   const { showToast } = useToast();
+  const [toast, setToast] = React.useState<{
+    type: "success" | "error";
+    message: string;
+    visible: boolean;
+  } | null>(null);
+
+  const validatePassword = (password: string) => {
+    if (password.length < 6) return "Password must be at least 6 characters.";
+    if (!/[A-Z]/.test(password))
+      return "Password must contain at least 1 uppercase letter.";
+    if (!/[0-9]/.test(password))
+      return "Password must contain at least 1 number.";
+    return null;
+  };
 
   const handleRegister = async () => {
     setError(null);
     setSuccess(null);
     setLoading(true);
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      setToast({ type: "error", message: passwordError, visible: true });
+      setLoading(false);
+      return;
+    }
     try {
       await registerService({
         name: fullName,
@@ -51,23 +72,26 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
         gender,
       });
       setLoading(false);
-      setSuccess("Kayıt başarılı! Giriş yapabilirsiniz.");
-      showToast("🎉 Kayıt başarılı! Giriş yapabilirsiniz.", "success");
+      setSuccess("Registration successful! You can now log in.");
+      showToast("🎉 Registration successful! You can now log in.", "success");
+      setToast({
+        type: "success",
+        message: "Registration successful! Welcome.",
+        visible: true,
+      });
       setTimeout(() => {
         if (onGoToLogin) onGoToLogin();
       }, 1200);
     } catch (err: any) {
       setLoading(false);
-      const errorMessage = err?.response?.data?.message || "Kayıt başarısız";
+      const errorMessage =
+        err?.response?.data?.message || "Registration failed";
       setError(errorMessage);
       showToast(errorMessage, "error");
-      console.log("Register error:", {
-        message: err?.message,
-        code: err?.code,
-        config: err?.config,
-        response: err?.response,
-        toJSON: err?.toJSON ? err.toJSON() : undefined,
-        full: err,
+      setToast({
+        type: "error",
+        message: "Registration failed. Please check your information.",
+        visible: true,
       });
     }
   };
@@ -93,8 +117,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                 <Text
                   style={[styles.subtitle, { color: colors.textSecondary }]}
                 >
-                  Arkadaşlarının fotoğraflarını ve videolarını görmek için
-                  kaydol.
+                  Register to see your friends' photos and videos.
                 </Text>
               </View>
 
@@ -109,7 +132,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                 <Text
                   style={[styles.dividerText, { color: colors.textSecondary }]}
                 >
-                  YA DA
+                  OR
                 </Text>
                 <View
                   style={[
@@ -131,7 +154,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                         backgroundColor: colors.surface,
                       },
                     ]}
-                    placeholder="Cep telefonu numarası veya e-posta"
+                    placeholder="Phone number or email"
                     placeholderTextColor={colors.textSecondary}
                     value={email}
                     onChangeText={setEmail}
@@ -150,7 +173,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                         backgroundColor: colors.surface,
                       },
                     ]}
-                    placeholder="Ad ve soyad"
+                    placeholder="Full name"
                     placeholderTextColor={colors.textSecondary}
                     value={fullName}
                     onChangeText={setFullName}
@@ -167,7 +190,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                         backgroundColor: colors.surface,
                       },
                     ]}
-                    placeholder="Kullanıcı adı"
+                    placeholder="Username"
                     placeholderTextColor={colors.textSecondary}
                     value={username}
                     onChangeText={setUsername}
@@ -185,7 +208,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                         backgroundColor: colors.surface,
                       },
                     ]}
-                    placeholder="Şifre"
+                    placeholder="Password"
                     placeholderTextColor={colors.textSecondary}
                     value={password}
                     onChangeText={setPassword}
@@ -207,7 +230,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                   <Text
                     style={{ color: colors.textSecondary, marginBottom: 4 }}
                   >
-                    Cinsiyet
+                    Gender
                   </Text>
                   <View style={{ flexDirection: "row", gap: 16 }}>
                     <TouchableOpacity
@@ -228,7 +251,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                         color={colors.primary}
                       />
                       <Text style={{ color: colors.text, marginLeft: 6 }}>
-                        Erkek
+                        Male
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -249,7 +272,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                         color={colors.primary}
                       />
                       <Text style={{ color: colors.text, marginLeft: 6 }}>
-                        Kadın
+                        Female
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -264,7 +287,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                         color={colors.primary}
                       />
                       <Text style={{ color: colors.text, marginLeft: 6 }}>
-                        Belirtmek istemiyorum
+                        Prefer not to say
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -284,7 +307,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                       { color: colors.background },
                     ]}
                   >
-                    {loading ? "..." : "Kaydol"}
+                    {loading ? "..." : "Register"}
                   </Text>
                 </TouchableOpacity>
                 {error && (
@@ -316,19 +339,22 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                 <Text
                   style={[styles.termsText, { color: colors.textSecondary }]}
                 >
-                  Kaydolarak,{" "}
+                  By registering, you agree to our
                   <Text style={[styles.termsLink, { color: colors.primary }]}>
-                    Hizmet Şartlarımızı
+                    {" "}
+                    Terms of Service
                   </Text>
-                  ,{" "}
+                  ,
                   <Text style={[styles.termsLink, { color: colors.primary }]}>
-                    Veri İlkemizi
+                    {" "}
+                    Data Policy
                   </Text>{" "}
-                  ve{" "}
+                  and
                   <Text style={[styles.termsLink, { color: colors.primary }]}>
-                    Çerez kullanımımızı
-                  </Text>{" "}
-                  kabul etmiş olursun.
+                    {" "}
+                    Cookie Policy
+                  </Text>
+                  .
                 </Text>
               </View>
             </View>
@@ -338,7 +364,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
           <View style={styles.bottomContainer}>
             <View style={styles.loginContainer}>
               <Text style={[styles.loginText, { color: colors.textSecondary }]}>
-                Hesabın var mı?{" "}
+                Already have an account?{" "}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -350,13 +376,21 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onGoToLogin }) => {
                 }}
               >
                 <Text style={[styles.loginLink, { color: colors.primary }]}>
-                  Giriş yap.
+                  Log in.
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      {toast && (
+        <ToastNotification
+          type={toast.type}
+          message={toast.message}
+          visible={toast.visible}
+          onClose={() => setToast(null)}
+        />
+      )}
     </>
   );
 };

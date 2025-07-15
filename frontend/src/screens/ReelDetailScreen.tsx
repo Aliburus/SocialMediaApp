@@ -16,38 +16,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useTheme } from "../context/ThemeContext";
-import { getComments, toggleLike, savePost } from "../services/api";
+import { getComments, toggleLike, savePost, deletePost } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ShareModal } from "../components/ShareModal";
 import api from "../services/api";
+import LoadingOverlay from "../components/LoadingOverlay";
+import { timeAgo } from "../utils/validate";
 
 const { width, height } = Dimensions.get("window");
-
-// Tarihi güzel formatta gösteren fonksiyon
-const timeAgo = (date: string | Date) => {
-  const now = new Date();
-  const past = new Date(date);
-  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
-
-  if (diffInSeconds < 60) {
-    return "Az önce";
-  } else if (diffInSeconds < 3600) {
-    const minutes = Math.floor(diffInSeconds / 60);
-    return `${minutes} dakika önce`;
-  } else if (diffInSeconds < 86400) {
-    const hours = Math.floor(diffInSeconds / 3600);
-    return `${hours} saat önce`;
-  } else if (diffInSeconds < 2592000) {
-    const days = Math.floor(diffInSeconds / 86400);
-    return `${days} gün önce`;
-  } else if (diffInSeconds < 31536000) {
-    const months = Math.floor(diffInSeconds / 2592000);
-    return `${months} ay önce`;
-  } else {
-    const years = Math.floor(diffInSeconds / 31536000);
-    return `${years} yıl önce`;
-  }
-};
 
 const ReelDetailScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -63,6 +39,8 @@ const ReelDetailScreen: React.FC = () => {
   const [likeLocked, setLikeLocked] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [showFullCaption, setShowFullCaption] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (reel) {
@@ -71,6 +49,12 @@ const ReelDetailScreen: React.FC = () => {
       checkIfSaved();
       fetchComments();
     }
+    // Kullanıcı id'sini al
+    (async () => {
+      const userStr = await AsyncStorage.getItem("user");
+      const userObj = userStr ? JSON.parse(userStr) : null;
+      setCurrentUserId(userObj?._id || userObj?.id || null);
+    })();
   }, [reel]);
 
   const checkIfSaved = async () => {
@@ -173,6 +157,21 @@ const ReelDetailScreen: React.FC = () => {
     }
   };
 
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deletePost(reel._id || reel.id);
+      setIsDeleting(false);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Home", params: { refreshPosts: true } }],
+      });
+    } catch (err) {
+      setIsDeleting(false);
+      alert("Silme işlemi başarısız!");
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <KeyboardAvoidingView
@@ -263,6 +262,17 @@ const ReelDetailScreen: React.FC = () => {
             />
           )}
 
+          {/* Silme butonu sadece kendi reels'in ise göster */}
+          {reel.user?._id === currentUserId && (
+            <TouchableOpacity
+              style={{ marginTop: 16, alignSelf: "center" }}
+              onPress={handleDelete}
+            >
+              <Ionicons name="trash-outline" size={28} color="#FF3040" />
+              <Text style={{ color: "#FF3040", fontWeight: "bold" }}>Sil</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Reel Actions */}
           <View style={styles.actions}>
             <View style={styles.leftActions}>
@@ -309,7 +319,7 @@ const ReelDetailScreen: React.FC = () => {
           {/* Reel Info */}
           <View style={styles.reelInfo}>
             <Text style={[styles.likes, { color: colors.text }]}>
-              {likesCount} beğeni
+              {likesCount} likes
             </Text>
 
             {/* Açıklama metni varsa göster, çok uzunsa devamını gör butonu */}
@@ -338,7 +348,7 @@ const ReelDetailScreen: React.FC = () => {
                           marginTop: 2,
                         }}
                       >
-                        devamını gör
+                        see more
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -405,7 +415,7 @@ const ReelDetailScreen: React.FC = () => {
         >
           <TextInput
             style={[styles.commentInput, { color: colors.text }]}
-            placeholder="Yorum ekle..."
+            placeholder="Add a comment..."
             placeholderTextColor={colors.textSecondary}
           />
           <TouchableOpacity
@@ -419,6 +429,7 @@ const ReelDetailScreen: React.FC = () => {
         visible={showShareModal}
         onClose={() => setShowShareModal(false)}
       />
+      {isDeleting && <LoadingOverlay visible={true} message="Deleting..." />}
     </SafeAreaView>
   );
 };

@@ -23,6 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Video, ResizeMode } from "expo-av";
 import { useToast } from "../context/ToastContext";
 import LoadingOverlay from "../components/LoadingOverlay";
+import * as VideoThumbnails from "expo-video-thumbnails";
 
 const { height: screenHeight } = Dimensions.get("window");
 
@@ -37,6 +38,7 @@ const AddPostScreen: React.FC = () => {
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [thumbnail, setThumbnail] = useState<string | null>(null);
   const navigation = useNavigation<any>();
 
   useEffect(() => {
@@ -46,8 +48,8 @@ const AddPostScreen: React.FC = () => {
       const cameraStatus = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted" || cameraStatus.status !== "granted") {
         Alert.alert(
-          "İzin Gerekli",
-          "Galeriye ve kameraya erişim izni vermeniz gerekiyor."
+          "Permission Required",
+          "You need to grant permission to access the gallery and camera."
         );
       } else {
         pickMedia();
@@ -68,6 +70,19 @@ const AddPostScreen: React.FC = () => {
         uri: asset.uri,
         type: asset.type?.startsWith("video") ? "video" : "image",
       });
+      if (asset.type?.startsWith("video")) {
+        try {
+          const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(
+            asset.uri,
+            { time: 1000 }
+          );
+          setThumbnail(thumbUri);
+        } catch (e) {
+          setThumbnail(null);
+        }
+      } else {
+        setThumbnail(null);
+      }
     }
   };
 
@@ -84,6 +99,19 @@ const AddPostScreen: React.FC = () => {
         uri: asset.uri,
         type: asset.type?.startsWith("video") ? "video" : "image",
       });
+      if (asset.type?.startsWith("video")) {
+        try {
+          const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(
+            asset.uri,
+            { time: 1000 }
+          );
+          setThumbnail(thumbUri);
+        } catch (e) {
+          setThumbnail(null);
+        }
+      } else {
+        setThumbnail(null);
+      }
     }
   };
 
@@ -98,13 +126,13 @@ const AddPostScreen: React.FC = () => {
 
   const handleShare = async () => {
     if (!media) {
-      showToast("Lütfen bir fotoğraf veya video seçin", "warning");
+      showToast("Please select an image or video", "warning");
       return;
     }
     setLoading(true);
     setUploadProgress(0);
 
-    // Progress simülasyonu başlat
+    // Progress simulation
     const progressInterval = setInterval(() => {
       setUploadProgress((prev) => {
         if (prev >= 90) return prev;
@@ -117,7 +145,7 @@ const AddPostScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
       if (!userId) {
-        showToast("Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.", "error");
+        showToast("Your session has expired. Please log in again.", "error");
         await AsyncStorage.removeItem("user");
         navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
         return;
@@ -127,18 +155,27 @@ const AddPostScreen: React.FC = () => {
         name: getFileName(media.uri),
         type: getMimeType(media.uri, media.type),
       };
+      let thumbFile = null;
+      if (media.type === "video" && thumbnail) {
+        thumbFile = {
+          uri: thumbnail,
+          name: getFileName(thumbnail),
+          type: "image/jpeg",
+        };
+      }
       const newPost = await createPost({
         type: media.type === "video" ? "reel" : "post",
         description,
         user: userId,
         mediaFile,
+        thumbnail: thumbFile || undefined,
       });
 
       clearInterval(progressInterval);
       setUploadProgress(100);
 
       setTimeout(() => {
-        showToast("🎉 Post başarıyla paylaşıldı!", "success");
+        showToast("🎉 Post shared successfully!", "success");
         setMedia(null);
         setDescription("");
         setUploadProgress(0);
@@ -146,19 +183,19 @@ const AddPostScreen: React.FC = () => {
       }, 500);
     } catch (err: any) {
       if (err?.response) {
-        console.log("[POST PAYLAŞ HATA] response:", err.response);
-        console.log("[POST PAYLAŞ HATA] response.data:", err.response.data);
-        console.log("[POST PAYLAŞ HATA] response.status:", err.response.status);
+        console.log("[POST SHARE ERROR] response:", err.response);
+        console.log("[POST SHARE ERROR] response.data:", err.response.data);
+        console.log("[POST SHARE ERROR] response.status:", err.response.status);
         console.log(
-          "[POST PAYLAŞ HATA] response.headers:",
+          "[POST SHARE ERROR] response.headers:",
           err.response.headers
         );
       } else if (err?.request) {
-        console.log("[POST PAYLAŞ HATA] request:", err.request);
+        console.log("[POST SHARE ERROR] request:", err.request);
       } else {
-        console.log("[POST PAYLAŞ HATA] message:", err.message);
+        console.log("[POST SHARE ERROR] message:", err.message);
       }
-      let msg = "Post paylaşılırken hata oluştu.";
+      let msg = "An error occurred while sharing the post.";
       if (err?.response?.data?.message) {
         msg = err.response.data.message;
       } else if (err?.message) {
@@ -190,7 +227,7 @@ const AddPostScreen: React.FC = () => {
               <Ionicons name="close" size={28} color={colors.text} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: colors.text }]}>
-              Yeni Gönderi
+              New Post
             </Text>
             <TouchableOpacity
               onPress={handleShare}
@@ -204,7 +241,7 @@ const AddPostScreen: React.FC = () => {
               ]}
             >
               <Text style={[styles.shareButtonText, { color: "#fff" }]}>
-                {loading ? "..." : "Paylaş"}
+                {loading ? "..." : "Share"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -231,7 +268,7 @@ const AddPostScreen: React.FC = () => {
               <Text
                 style={[styles.progressText, { color: colors.textSecondary }]}
               >
-                {Math.round(uploadProgress)}% yükleniyor...
+                {Math.round(uploadProgress)}% uploading...
               </Text>
             </View>
           )}
@@ -263,7 +300,7 @@ const AddPostScreen: React.FC = () => {
                     { color: colors.textSecondary },
                   ]}
                 >
-                  Fotoğraf veya video seçmek için tıkla
+                  Tap to select an image or video
                 </Text>
               </View>
             )}
@@ -276,7 +313,7 @@ const AddPostScreen: React.FC = () => {
           >
             <Ionicons name="camera" size={24} color={colors.primary} />
             <Text style={[styles.cameraButtonText, { color: colors.primary }]}>
-              Kamera ile Çek
+              Take Photo/Video
             </Text>
           </TouchableOpacity>
 
@@ -286,7 +323,7 @@ const AddPostScreen: React.FC = () => {
           >
             <TextInput
               style={[styles.input, { color: colors.text }]}
-              placeholder="Açıklama ekle..."
+              placeholder="Add a description..."
               placeholderTextColor={colors.textSecondary}
               value={description}
               onChangeText={setDescription}
@@ -301,7 +338,7 @@ const AddPostScreen: React.FC = () => {
         visible={loading}
         type="upload"
         progress={uploadProgress}
-        message="Post yükleniyor..."
+        message="Uploading post..."
       />
     </>
   );

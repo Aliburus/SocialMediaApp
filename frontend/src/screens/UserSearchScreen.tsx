@@ -146,7 +146,7 @@ const UserSearchScreen: React.FC = () => {
           marginHorizontal: 16,
           marginTop: 16,
         }}
-        placeholder="Kullanıcı ara..."
+        placeholder="Search user..."
         value={searchQuery}
         onChangeText={handleSearch}
         placeholderTextColor={colors.textSecondary}
@@ -160,7 +160,7 @@ const UserSearchScreen: React.FC = () => {
           style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
         >
           <Text style={{ color: colors.textSecondary, fontSize: 16 }}>
-            Kullanıcı aramak için yukarıya yazın
+            Type above to search for users
           </Text>
         </View>
       ) : (

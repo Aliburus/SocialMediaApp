@@ -47,6 +47,8 @@ const ProfileScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [savedPosts, setSavedPosts] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const translateX = useRef(new Animated.Value(0)).current;
 
@@ -101,17 +103,14 @@ const ProfileScreen: React.FC = () => {
     setLoading(false);
   };
 
-  const fetchStories = async () => {
-    const userStr = await AsyncStorage.getItem("user");
-    const userObj = userStr ? JSON.parse(userStr) : null;
-    const userId = userObj?._id || userObj?.id;
-    if (userId) {
-      try {
-        const userStories = await getStories(userId);
-        setStories(userStories || []);
-      } catch {
-        setStories([]);
-      }
+  // fetchStories fonksiyonunu profile değiştikçe o profile ait storyleri çekecek şekilde güncelle
+  const fetchStories = async (profileId?: string) => {
+    if (!profileId) return setStories([]);
+    try {
+      const userStories = await getStories(profileId);
+      setStories(userStories || []);
+    } catch {
+      setStories([]);
     }
   };
 
@@ -119,6 +118,14 @@ const ProfileScreen: React.FC = () => {
     fetchUserData();
     fetchStories();
   }, []);
+
+  // profile değiştiğinde stories dizisini sıfırla ve sadece o profile ait storyleri getir
+  useEffect(() => {
+    setStories([]);
+    if (profile?._id || profile?.id) {
+      fetchStories(profile._id || profile.id);
+    }
+  }, [profile]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -214,23 +221,31 @@ const ProfileScreen: React.FC = () => {
       }}
     >
       {item.type === "reel" && item.video ? (
-        <Video
+        <Image
           source={{
-            uri: item.video.startsWith("http")
-              ? item.video
-              : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.video}`,
+            uri: item.thumbnail
+              ? item.thumbnail.startsWith("http")
+                ? item.thumbnail
+                : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                    item.thumbnail
+                  }`
+              : item.image && item.image.startsWith("http")
+              ? item.image
+              : item.image
+              ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`
+              : `https://picsum.photos/seed/${item._id || item.id}/300/300`,
           }}
           style={[styles.postImage, { backgroundColor: colors.background }]}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay={false}
-          isMuted={true}
         />
       ) : (
         <Image
           source={{
-            uri: item.image.startsWith("http")
-              ? item.image
-              : `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`,
+            uri:
+              item.image && item.image.startsWith("http")
+                ? item.image
+                : item.image
+                ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${item.image}`
+                : `https://picsum.photos/seed/${item._id || item.id}/300/300`,
           }}
           style={[styles.postImage, { backgroundColor: colors.background }]}
         />
@@ -268,6 +283,20 @@ const ProfileScreen: React.FC = () => {
     setRefreshing(false);
   };
 
+  const timeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diff < 60) return `just now`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+    return date.toLocaleDateString("en-US");
+  };
+
+  // FlatList optimizasyonu için getItemLayout fonksiyonu ekle
+  const ITEM_HEIGHT = 180; // Ortalama bir grid post yüksekliği
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -285,6 +314,15 @@ const ProfileScreen: React.FC = () => {
           onRefresh={onRefresh}
           onEndReached={loadMore}
           onEndReachedThreshold={0.2}
+          initialNumToRender={9}
+          maxToRenderPerBatch={12}
+          windowSize={15}
+          removeClippedSubviews={true}
+          getItemLayout={(data, index) => ({
+            length: ITEM_HEIGHT,
+            offset: ITEM_HEIGHT * index,
+            index,
+          })}
           ListHeaderComponent={
             <>
               {/* Header */}
@@ -314,25 +352,34 @@ const ProfileScreen: React.FC = () => {
                   {Array.isArray(stories) && stories.length > 0 ? (
                     <TouchableOpacity
                       onPress={() => {
-                        const sortedStories = Array.isArray(stories)
-                          ? stories.sort((a, b) => {
-                              // Görülmemiş story'ler önce gelsin
-                              if (!a.isViewed && b.isViewed) return -1;
-                              if (a.isViewed && !b.isViewed) return 1;
-                              // Aynı görülme durumundaysa tarihe göre sırala
-                              return (
-                                new Date(a.createdAt).getTime() -
-                                new Date(b.createdAt).getTime()
-                              );
-                            })
-                          : [];
-
+                        // Sadece o profile ait storyleri filtrele
+                        const filteredStories = stories.filter(
+                          (s: any) =>
+                            (s.user?._id || s.user?.id) ===
+                            (profile?._id || profile?.id)
+                        );
+                        if (filteredStories.length === 0) return;
+                        const sortedStories = filteredStories.sort((a, b) => {
+                          if (!a.isViewed && b.isViewed) return -1;
+                          if (a.isViewed && !b.isViewed) return 1;
+                          return (
+                            new Date(a.createdAt).getTime() -
+                            new Date(b.createdAt).getTime()
+                          );
+                        });
                         navigation.navigate("Story", {
                           userId: profile?._id || profile?.id,
                           stories: sortedStories,
                         });
                       }}
                       activeOpacity={0.8}
+                      disabled={
+                        stories.filter(
+                          (s: any) =>
+                            (s.user?._id || s.user?.id) ===
+                            (profile?._id || profile?.id)
+                        ).length === 0
+                      }
                     >
                       {(stories || []).some((s: any) => !s.isViewed) ? (
                         <LinearGradient
@@ -407,18 +454,34 @@ const ProfileScreen: React.FC = () => {
                       )}
                     </TouchableOpacity>
                   ) : (
-                    <Image
-                      source={{
-                        uri: profile?.avatar?.startsWith("http")
-                          ? profile.avatar
-                          : profile?.avatar
-                          ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
-                              profile.avatar
-                            }`
-                          : DEFAULT_AVATAR,
+                    <View
+                      style={{
+                        width: 90,
+                        height: 90,
+                        borderRadius: 45,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: colors.background,
                       }}
-                      style={styles.profileImage}
-                    />
+                    >
+                      <Image
+                        source={{
+                          uri: profile?.avatar?.startsWith("http")
+                            ? profile.avatar
+                            : profile?.avatar
+                            ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                                profile.avatar
+                              }`
+                            : DEFAULT_AVATAR,
+                        }}
+                        style={{
+                          width: 84,
+                          height: 84,
+                          borderRadius: 42,
+                          backgroundColor: colors.background,
+                        }}
+                      />
+                    </View>
                   )}
                   <View style={styles.statsContainer}>
                     <View style={styles.statItem}>
@@ -571,10 +634,10 @@ const ProfileScreen: React.FC = () => {
                 style={[styles.emptyStateText, { color: colors.textSecondary }]}
               >
                 {activeTab === "reels"
-                  ? "Henüz reels yok"
+                  ? "No reels yet"
                   : activeTab === "saved"
-                  ? "Henüz kayıtlı gönderi yok"
-                  : "Henüz gönderi yok"}
+                  ? "No saved posts yet"
+                  : "No posts yet"}
               </Text>
             </View>
           }
@@ -692,6 +755,15 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     fontWeight: "bold",
+    textAlign: "center",
+  },
+  privateAccountTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  privateAccountText: {
+    fontSize: 14,
     textAlign: "center",
   },
 });

@@ -76,7 +76,7 @@ function MainTabs({
   unreadNotifCount: number;
 }) {
   const { colors, isDark } = useTheme();
-  const { user } = useUser();
+  const { user, refreshUser } = useUser();
   const [unreadMessageCount, setUnreadMessageCountLocal] = useState(0);
 
   // Okunmamış mesaj sayısını getir
@@ -116,35 +116,7 @@ function MainTabs({
     }
   };
 
-  // Socket event listener'ı
-  useEffect(() => {
-    if (user?.id || user?._id) {
-      const userId = user.id || user._id;
-      socketService.onUnreadCountUpdate((data) => {
-        if (data.userId === userId) {
-          setUnreadMessageCountLocal(data.unreadCount);
-        }
-      });
-
-      // İlk yükleme - geciktirilmiş (performans için)
-      const timer1 = setTimeout(() => {
-        fetchUnreadCount();
-      }, 1000);
-      const timer2 = setTimeout(() => {
-        fetchUnreadNotifCount();
-      }, 1200);
-
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-        socketService.off("unread_count_update");
-      };
-    }
-
-    return () => {
-      socketService.off("unread_count_update");
-    };
-  }, [user]);
+  // MainTabs içinde userEventEmitter ile yapılan güncellemeleri optimize et
 
   const handleProfileLongPress = () => {
     Alert.alert(
@@ -258,10 +230,8 @@ function MainTabs({
         headerTitle: () => null,
         headerStyle: {
           backgroundColor: colors.background,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.border,
-          shadowColor: "transparent",
-          elevation: 0,
+          minHeight: 56,
+          alignItems: "center",
         },
         headerRight: () =>
           route.name === "Home" ? (
@@ -270,6 +240,7 @@ function MainTabs({
                 flexDirection: "row",
                 alignItems: "center",
                 marginRight: 16,
+                height: "100%",
               }}
             >
               {/* Bildirim (Kalp) İkonu */}
@@ -374,7 +345,7 @@ function MainTabs({
               color={color}
             />
           ),
-          tabBarLabel: "Konum",
+          tabBarLabel: "Location",
         }}
       />
       <Tab.Screen
@@ -402,7 +373,7 @@ function MainTabs({
               }}
             />
           ),
-          tabBarLabel: "Profil",
+          tabBarLabel: "Profile",
         }}
       />
     </Tab.Navigator>
@@ -437,6 +408,8 @@ function AppContent() {
     checkLogin();
   }, []);
 
+  // AppContent içinde de aynı şekilde optimize et
+
   const handleLogin = async (userData: any = null) => {
     let user = userData || {};
     // Avatarı eksikse profilden çek
@@ -447,6 +420,7 @@ function AppContent() {
       } catch {}
     }
     await AsyncStorage.setItem("user", JSON.stringify(user));
+    setUser(user); // context güncelle
     setIsLoggedIn(true);
 
     // Socket.io bağlantısı

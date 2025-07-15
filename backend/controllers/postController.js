@@ -12,6 +12,7 @@ exports.createPost = async (req, res) => {
     const { description, user, type } = req.body;
     let image = req.body.image;
     let video = req.body.video;
+    let thumbnail = req.body.thumbnail;
     if (req.file) {
       const mime = req.file.mimetype;
       if (mime.startsWith("image/")) {
@@ -21,10 +22,17 @@ exports.createPost = async (req, res) => {
       }
     }
     if (!image && !video)
-      return res.status(400).json({ message: "Görsel veya video zorunlu" });
+      return res.status(400).json({ message: "Image or video required" });
     if (!user)
-      return res.status(400).json({ message: "Kullanıcı bilgisi zorunlu" });
-    const post = await Post.create({ user, image, video, description, type });
+      return res.status(400).json({ message: "User information required" });
+    const post = await Post.create({
+      user,
+      image,
+      video,
+      description,
+      type,
+      thumbnail,
+    });
 
     // İçerik embedding'ini oluştur
     try {
@@ -37,7 +45,7 @@ exports.createPost = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Post oluşturulamadı", error: err.message });
+      .json({ message: "Post could not be created", error: err.message });
   }
 };
 
@@ -111,7 +119,7 @@ exports.getAllPosts = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Postlar getirilemedi", error: err.message });
+      .json({ message: "Posts could not be retrieved", error: err.message });
   }
 };
 
@@ -122,10 +130,12 @@ exports.getPostById = async (req, res) => {
       "user",
       "username name avatar"
     );
-    if (!post) return res.status(404).json({ message: "Post bulunamadı" });
+    if (!post) return res.status(404).json({ message: "Post not found" });
     res.json(post);
   } catch (err) {
-    res.status(500).json({ message: "Post getirilemedi", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Post could not be retrieved", error: err.message });
   }
 };
 
@@ -135,7 +145,7 @@ exports.toggleLike = async (req, res) => {
     const userId = req.body.userId;
     const postId = req.params.id;
     const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ message: "Post bulunamadı" });
+    if (!post) return res.status(404).json({ message: "Post not found" });
 
     const index = post.likes.indexOf(userId);
     if (index === -1) {
@@ -168,7 +178,7 @@ exports.toggleLike = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Like işlemi başarısız", error: err.message });
+      .json({ message: "Like operation failed", error: err.message });
   }
 };
 
@@ -177,11 +187,12 @@ exports.addComment = async (req, res) => {
   try {
     const { userId, text } = req.body;
     const postId = req.params.id;
-    if (!text) return res.status(400).json({ message: "Yorum boş olamaz" });
+    if (!text)
+      return res.status(400).json({ message: "Comment cannot be empty" });
 
     // Post'u bul
     const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ message: "Post bulunamadı" });
+    if (!post) return res.status(404).json({ message: "Post not found" });
 
     const comment = await Comment.create({ user: userId, post: postId, text });
     // Yorumu post'a ekle
@@ -200,7 +211,9 @@ exports.addComment = async (req, res) => {
     );
     res.status(201).json(populatedComment);
   } catch (err) {
-    res.status(500).json({ message: "Yorum eklenemedi", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Comment could not be added", error: err.message });
   }
 };
 
@@ -215,7 +228,7 @@ exports.getComments = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Yorumlar getirilemedi", error: err.message });
+      .json({ message: "Comments could not be retrieved", error: err.message });
   }
 };
 
@@ -228,7 +241,7 @@ exports.getUserPosts = async (req, res) => {
     // Kullanıcıyı bul
     const user = await require("../models/User").findById(userId);
     if (!user) {
-      return res.status(404).json({ message: "Kullanıcı bulunamadı" });
+      return res.status(404).json({ message: "User not found" });
     }
 
     // Gizli hesap kontrolü
@@ -254,9 +267,10 @@ exports.getUserPosts = async (req, res) => {
     }));
     res.json(postsWithCommentCount);
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Kullanıcı postları getirilemedi", error: err.message });
+    res.status(500).json({
+      message: "User posts could not be retrieved",
+      error: err.message,
+    });
   }
 };
 
@@ -265,8 +279,17 @@ exports.deletePost = async (req, res) => {
   try {
     const postId = req.params.id;
     const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ message: "Post bulunamadı" });
-
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    // Sadece kendi postunu silebilsin
+    if (!req.user || String(post.user) !== String(req.user._id)) {
+      return res
+        .status(403)
+        .json({ message: "You can only delete your own reel" });
+    }
+    // Sadece reel ise silinsin
+    if (post.type !== "reel") {
+      return res.status(400).json({ message: "Only reel can be deleted" });
+    }
     // Dosya silme işlemleri
     const deleteFile = (filePath) => {
       return new Promise((resolve) => {
@@ -277,7 +300,6 @@ exports.deletePost = async (req, res) => {
               fs.unlink(fullPath, (unlinkErr) => {
                 if (unlinkErr) {
                   console.error("Dosya silinemedi:", fullPath, unlinkErr);
-                } else {
                 }
                 resolve();
               });
@@ -290,17 +312,33 @@ exports.deletePost = async (req, res) => {
         }
       });
     };
-
-    // Image ve video dosyalarını sil
+    // Video ve görsel dosyalarını sil
     await Promise.all([deleteFile(post.image), deleteFile(post.video)]);
-
-    // Post ve ilişkili yorumları sil
+    // Kullanıcıların kaydedilenlerinden çıkar
+    const User = require("../models/User");
+    await User.updateMany({ saved: postId }, { $pull: { saved: postId } });
+    // Mesajlardan çıkar
+    const Message = require("../models/Message");
+    await Message.updateMany(
+      { post: postId },
+      { $unset: { post: "" }, $set: { text: "Content deleted" } }
+    );
+    // Embedding ve davranışları sil
+    const ContentEmbedding = require("../models/ContentEmbedding");
+    const UserBehavior = require("../models/UserBehavior");
+    await ContentEmbedding.deleteMany({ contentId: postId });
+    await UserBehavior.deleteMany({ contentId: postId });
+    if (typeof global.clearPostCache === "function") {
+      await global.clearPostCache(postId);
+    }
+    // Postu ve yorumlarını sil
     await Post.findByIdAndDelete(postId);
     await Comment.deleteMany({ post: postId });
-
-    res.json({ message: "Post ve ilişkili veriler silindi" });
+    res.json({ message: "Reel and related data deleted" });
   } catch (err) {
-    res.status(500).json({ message: "Post silinemedi", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Reel could not be deleted", error: err.message });
   }
 };
 
@@ -310,20 +348,22 @@ exports.archivePost = async (req, res) => {
     const postId = req.params.id;
     const { archived } = req.body;
     const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ message: "Post bulunamadı" });
+    if (!post) return res.status(404).json({ message: "Post not found" });
     if (archived === false) {
       post.archived = false;
       post.archivedAt = null;
       await post.save();
-      return res.json({ message: "Post arşivden çıkarıldı" });
+      return res.json({ message: "Post archived" });
     } else {
       post.archived = true;
       post.archivedAt = new Date();
       await post.save();
-      return res.json({ message: "Post arşivlendi" });
+      return res.json({ message: "Post archived" });
     }
   } catch (err) {
-    res.status(500).json({ message: "Post arşivlenemedi", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Post could not be archived", error: err.message });
   }
 };
 
@@ -333,7 +373,7 @@ exports.toggleCommentLike = async (req, res) => {
     const userId = req.body.userId;
     const commentId = req.params.commentId;
     const comment = await Comment.findById(commentId);
-    if (!comment) return res.status(404).json({ message: "Yorum bulunamadı" });
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
 
     const index = comment.likes.indexOf(userId);
     if (index === -1) {
@@ -359,6 +399,6 @@ exports.toggleCommentLike = async (req, res) => {
   } catch (err) {
     res
       .status(500)
-      .json({ message: "Yorum beğeni işlemi başarısız", error: err.message });
+      .json({ message: "Comment like operation failed", error: err.message });
   }
 };

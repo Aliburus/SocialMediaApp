@@ -21,7 +21,7 @@ interface LoadingOverlayProps {
 
 const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
   visible,
-  message = "Yükleniyor...",
+  message = "Loading...",
   type = "default",
   progress,
 }) => {
@@ -40,7 +40,7 @@ const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
 
   const getMessage = () => {
     if (type === "upload" && progress !== undefined) {
-      return `Yükleniyor... %${Math.round(progress)}`;
+      return `Uploading... %${Math.round(progress)}`;
     }
     return message;
   };

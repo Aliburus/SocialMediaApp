@@ -47,7 +47,7 @@ const AddStoryScreen: React.FC = () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        alert("Kamera izni gerekiyor");
+        alert("Camera permission is required");
         return;
       }
 
@@ -64,7 +64,7 @@ const AddStoryScreen: React.FC = () => {
       }
     } catch (error) {
       console.error("Fotoğraf çekme hatası:", error);
-      showToast("Fotoğraf çekilirken hata oluştu", "error");
+      showToast("An error occurred while taking the photo", "error");
     }
   };
 
@@ -124,7 +124,7 @@ const AddStoryScreen: React.FC = () => {
       const userObj = userStr ? JSON.parse(userStr) : null;
       const userId = userObj?._id || userObj?.id;
       if (!userId) {
-        showToast("Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.", "error");
+        showToast("Your session has expired. Please log in again.", "error");
         return;
       }
       if (!preview) return;
@@ -149,7 +149,7 @@ const AddStoryScreen: React.FC = () => {
       setUploadProgress(100);
 
       setTimeout(() => {
-        showToast("🎉 Story başarıyla paylaşıldı!", "success");
+        showToast("🎉 Story shared successfully!", "success");
         setUploading(false);
         setUploadProgress(0);
         navigation.goBack();
@@ -158,7 +158,7 @@ const AddStoryScreen: React.FC = () => {
       clearInterval(progressInterval);
       setUploading(false);
       setUploadProgress(0);
-      showToast("Story paylaşılırken hata oluştu", "error");
+      showToast("An error occurred while sharing the story", "error");
     }
   }
 
@@ -168,7 +168,7 @@ const AddStoryScreen: React.FC = () => {
         await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (status !== "granted") {
-        showToast("Galeriye erişim izni vermeniz gerekiyor", "warning");
+        showToast("You need to grant gallery access permission", "warning");
         return;
       }
       let result = await ImagePicker.launchImageLibraryAsync({
@@ -184,7 +184,7 @@ const AddStoryScreen: React.FC = () => {
       }
     } catch (err) {
       console.error("Galeri hatası:", err);
-      showToast("Galeri açılırken bir hata oluştu", "error");
+      showToast("An error occurred while opening the gallery", "error");
     }
   };
 
@@ -215,7 +215,7 @@ const AddStoryScreen: React.FC = () => {
                 fontWeight: "bold",
               }}
             >
-              Hikaye Önizlemesi
+              Story Preview
             </Text>
           </View>
           {isVideo ? (
@@ -292,7 +292,7 @@ const AddStoryScreen: React.FC = () => {
                 />
               </View>
               <Text style={styles.progressText}>
-                {Math.round(uploadProgress)}% yükleniyor...
+                {Math.round(uploadProgress)}% uploading...
               </Text>
             </View>
           )}
@@ -322,7 +322,7 @@ const AddStoryScreen: React.FC = () => {
             >
               <Ionicons name="close" size={20} color="#222" />
               <Text style={{ color: "#222", fontWeight: "bold", fontSize: 16 }}>
-                İptal
+                Cancel
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -342,7 +342,7 @@ const AddStoryScreen: React.FC = () => {
             >
               <Ionicons name="share-social" size={20} color="#fff" />
               <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 18 }}>
-                {videoReady ? "Paylaş" : "Hazırlanıyor..."}
+                {videoReady ? "Share" : "Preparing..."}
               </Text>
             </TouchableOpacity>
           </View>
@@ -355,7 +355,7 @@ const AddStoryScreen: React.FC = () => {
     <SafeAreaView style={{ flex: 1, backgroundColor: "black" }}>
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <View style={styles.header}>
-          <Text style={styles.headerText}>Story Ekle</Text>
+          <Text style={styles.headerText}>Add Story</Text>
         </View>
 
         <View style={styles.content}>
@@ -364,7 +364,7 @@ const AddStoryScreen: React.FC = () => {
             onPress={pickFromGallery}
           >
             <Ionicons name="images" size={32} color="#fff" />
-            <Text style={styles.galleryText}>Galeriden Seç</Text>
+            <Text style={styles.galleryText}>Select from Gallery</Text>
           </TouchableOpacity>
 
           <View style={styles.modeSelector}>
@@ -386,7 +386,7 @@ const AddStoryScreen: React.FC = () => {
                   mode === "photo" && styles.activeModeText,
                 ]}
               >
-                Fotoğraf
+                Photo
               </Text>
             </TouchableOpacity>
 
@@ -423,7 +423,7 @@ const AddStoryScreen: React.FC = () => {
               color="#fff"
             />
             <Text style={styles.captureText}>
-              {mode === "photo" ? "Fotoğraf Çek" : "Video Çek"}
+              {mode === "photo" ? "Take Photo" : "Take Video"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -433,7 +433,7 @@ const AddStoryScreen: React.FC = () => {
         visible={uploading}
         type="upload"
         progress={uploadProgress}
-        message="Story yükleniyor..."
+        message="Story uploading..."
       />
     </SafeAreaView>
   );

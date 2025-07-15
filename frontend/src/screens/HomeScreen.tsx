@@ -607,7 +607,7 @@ const HomeScreen: React.FC<{
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background }}
-      edges={["top", "bottom"]}
+      edges={["bottom"]}
     >
       <StatusBar
         style={isDark ? "light" : "dark"}
@@ -640,7 +640,7 @@ const HomeScreen: React.FC<{
                   textAlign: "center",
                 }}
               >
-                Gösterilecek gönderi yok
+                No posts to show
               </Text>
             </View>
           </>

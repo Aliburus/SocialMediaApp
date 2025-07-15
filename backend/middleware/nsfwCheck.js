@@ -7,7 +7,7 @@ module.exports = (req, res, next) => {
   const image = req.body?.image || "";
   const video = req.body?.video || "";
   if (checkText(description) || checkText(image) || checkText(video)) {
-    return res.status(400).json({ message: "Uygunsuz içerik tespit edildi." });
+    return res.status(400).json({ message: "Inappropriate content detected." });
   }
   next();
 };

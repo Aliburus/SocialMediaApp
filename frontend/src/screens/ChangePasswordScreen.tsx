@@ -26,11 +26,11 @@ const ChangePasswordScreen: React.FC<{ navigation: any }> = ({
 
   const handleChangePassword = async () => {
     if (!oldPassword || !newPassword || !newPasswordAgain) {
-      showToast("Tüm alanları doldurun", "warning");
+      showToast("Please fill in all fields", "warning");
       return;
     }
     if (newPassword !== newPasswordAgain) {
-      showToast("Yeni şifreler eşleşmiyor", "error");
+      showToast("New passwords do not match", "error");
       return;
     }
     setLoading(true);
@@ -41,12 +41,12 @@ const ChangePasswordScreen: React.FC<{ navigation: any }> = ({
       if (!userId) throw new Error("Kullanıcı bulunamadı");
       await changePassword(userId, oldPassword, newPassword);
       setLoading(false);
-      showToast("🔐 Şifreniz başarıyla değiştirildi!", "success");
+      showToast("🔒 Your password has been changed successfully!", "success");
       navigation.goBack();
     } catch (err: any) {
       setLoading(false);
       const errorMessage =
-        err?.response?.data?.message || err.message || "Bir hata oluştu";
+        err?.response?.data?.message || err.message || "An error occurred";
       showToast(errorMessage, "error");
     }
   };

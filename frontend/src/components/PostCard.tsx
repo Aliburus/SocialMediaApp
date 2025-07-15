@@ -38,6 +38,7 @@ import api from "../services/api";
 import { useNavigation } from "@react-navigation/native";
 import { ShareModal } from "./ShareModal";
 import { Video, ResizeMode } from "expo-av";
+import { timeAgo } from "../utils/validate";
 
 const { width } = Dimensions.get("window");
 
@@ -50,6 +51,7 @@ interface PostCardProps {
   onShare?: () => void;
   onDelete?: () => void;
   onArchive?: () => void;
+  onLikeUpdate?: (postId: string, isLiked: boolean, likesCount: number) => void;
 }
 
 // Mock arkadaş listesi
@@ -104,32 +106,6 @@ const friendsList = [
   },
 ];
 
-// Tarihi güzel formatta gösteren fonksiyon
-const timeAgo = (date: string | Date) => {
-  if (!date) return "";
-  const now = new Date();
-  const past = new Date(date);
-  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
-  if (diffInSeconds < 60) {
-    return "Az önce";
-  } else if (diffInSeconds < 3600) {
-    const minutes = Math.floor(diffInSeconds / 60);
-    return `${minutes} dakika önce`;
-  } else if (diffInSeconds < 86400) {
-    const hours = Math.floor(diffInSeconds / 3600);
-    return `${hours} saat önce`;
-  } else if (diffInSeconds < 2592000) {
-    const days = Math.floor(diffInSeconds / 86400);
-    return `${days} gün önce`;
-  } else if (diffInSeconds < 31536000) {
-    const months = Math.floor(diffInSeconds / 2592000);
-    return `${months} ay önce`;
-  } else {
-    const years = Math.floor(diffInSeconds / 31536000);
-    return `${years} yıl önce`;
-  }
-};
-
 const PostCard: React.FC<PostCardProps> = ({
   post,
   isMuted: globalMute,
@@ -139,6 +115,7 @@ const PostCard: React.FC<PostCardProps> = ({
   onShare,
   onDelete,
   onArchive,
+  onLikeUpdate,
 }) => {
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(
@@ -234,35 +211,36 @@ const PostCard: React.FC<PostCardProps> = ({
       const userStr = await AsyncStorage.getItem("user");
       const userObj = userStr ? JSON.parse(userStr) : null;
       if (!userObj?._id) {
-        alert("Lütfen giriş yapın.");
+        alert("Please login.");
         setLikeLocked(false);
         return;
       }
       const postId = post._id || post.id;
       // Optimistic UI: sadece bir kez artır/azalt, 0'ın altına düşmesin
-      if (!isLiked) setLikesCount((c: number) => c + 1);
-      else setLikesCount((c: number) => (c > 0 ? c - 1 : 0));
-      setIsLiked((prev: any) => !prev);
+      let newLiked = !isLiked;
+      let newLikesCount = newLiked
+        ? likesCount + 1
+        : Math.max(0, likesCount - 1);
+      setIsLiked(newLiked);
+      setLikesCount(newLikesCount);
+      if (onLikeUpdate) onLikeUpdate(postId, newLiked, newLikesCount);
       const updatedPost = await toggleLike(postId, userObj._id);
-      setLikesCount(
-        Array.isArray(updatedPost.likes) ? updatedPost.likes.length : 0
-      );
-      setIsLiked(
-        Array.isArray(updatedPost.likes)
-          ? updatedPost.likes.includes(userObj._id)
-          : false
-      );
-
+      const finalLikesCount = Array.isArray(updatedPost.likes)
+        ? updatedPost.likes.length
+        : 0;
+      const finalIsLiked = Array.isArray(updatedPost.likes)
+        ? updatedPost.likes.includes(userObj._id)
+        : false;
+      setLikesCount(finalLikesCount);
+      setIsLiked(finalIsLiked);
+      if (onLikeUpdate) onLikeUpdate(postId, finalIsLiked, finalLikesCount);
       // Davranış takibi
       try {
         await api.post("/explore/track", {
           contentId: postId,
           behaviorType: !prevLiked ? "like" : "view",
         });
-      } catch (trackError) {
-        console.error("Davranış takibi hatası:", trackError);
-      }
-
+      } catch (trackError) {}
       onLike?.();
     } catch (err) {
       setIsLiked(prevLiked);
@@ -308,7 +286,7 @@ const PostCard: React.FC<PostCardProps> = ({
       await deletePost(post._id || post.id);
       if (onDelete) onDelete();
     } catch (err) {
-      showToast("Silme işlemi başarısız!", "error");
+      showToast("Delete failed!", "error");
     }
   };
 
@@ -319,7 +297,7 @@ const PostCard: React.FC<PostCardProps> = ({
       if (onArchive) onArchive();
       if (onDelete) onDelete();
     } catch (err) {
-      showToast("Arşivleme işlemi başarısız!", "error");
+      showToast("Archive failed!", "error");
     }
   };
 
@@ -327,7 +305,7 @@ const PostCard: React.FC<PostCardProps> = ({
     setShowOptionsModal(false);
     // Post linkini kopyala
     const postLink = `https://instagram.com/p/${post._id || post.id}`;
-    showToast("🔗 Bağlantı kopyalandı!", "success");
+    showToast("🔗 Link copied!", "success");
   };
 
   const handleToggleVideoMute = () => {
@@ -394,8 +372,8 @@ const PostCard: React.FC<PostCardProps> = ({
       </View>
       <View style={styles.friendInfo}>
         <Text style={styles.friendUsername}>{item.username}</Text>
-        <Text style={styles.friendStatus}>
-          {item.isOnline ? "Çevrimiçi" : "Çevrimdışı"}
+        <Text style={[styles.friendStatus]}>
+          {item.isOnline ? "Online" : "Offline"}
         </Text>
       </View>
       <TouchableOpacity style={styles.sendButton}>
@@ -614,10 +592,10 @@ const PostCard: React.FC<PostCardProps> = ({
       <View style={{ paddingHorizontal: 14, paddingBottom: 8 }}>
         <Text style={{ color: colors.text, fontWeight: "bold", fontSize: 15 }}>
           {typeof likesCount === "number"
-            ? likesCount + " beğeni"
+            ? likesCount + " likes"
             : Array.isArray(likesCount as any)
-            ? (likesCount as any).length + " beğeni"
-            : "0 beğeni"}
+            ? (likesCount as any).length + " likes"
+            : "0 likes"}
         </Text>
         {(post.caption || post.description) && (
           <View style={{ marginTop: 2 }}>
@@ -640,7 +618,7 @@ const PostCard: React.FC<PostCardProps> = ({
                     marginTop: 2,
                   }}
                 >
-                  devamını gör
+                  see more
                 </Text>
               </TouchableOpacity>
             )}
@@ -668,7 +646,7 @@ const PostCard: React.FC<PostCardProps> = ({
             {comments.length > 2 && (
               <TouchableOpacity onPress={onComment}>
                 <Text style={{ color: colors.textSecondary }}>
-                  Tüm yorumları görüntüle ({comments.length})
+                  View all comments ({comments.length})
                 </Text>
               </TouchableOpacity>
             )}
@@ -704,14 +682,16 @@ const PostCard: React.FC<PostCardProps> = ({
                   onPress={handleDelete}
                   style={styles.optionButton}
                 >
-                  <Text style={[styles.optionText, { color: "red" }]}>Sil</Text>
+                  <Text style={[styles.optionText, { color: "red" }]}>
+                    Delete
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={handleArchive}
                   style={styles.optionButton}
                 >
                   <Text style={[styles.optionText, { color: "blue" }]}>
-                    Arşivle
+                    Archive
                   </Text>
                 </TouchableOpacity>
               </>
@@ -722,7 +702,7 @@ const PostCard: React.FC<PostCardProps> = ({
                 style={styles.optionButton}
               >
                 <Text style={[styles.optionText, { color: colors.text }]}>
-                  Bağlantıyı kopyala
+                  Copy Link
                 </Text>
               </TouchableOpacity>
             )}

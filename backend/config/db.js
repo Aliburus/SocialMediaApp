@@ -6,9 +6,9 @@ const connectDB = async () => {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    console.log("MongoDB bağlantısı başarılı");
+    console.log("MongoDB connection successful");
   } catch (err) {
-    console.error("MongoDB bağlantı hatası:", err);
+    console.error("MongoDB connection error:", err);
     process.exit(1);
   }
 };

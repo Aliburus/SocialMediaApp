@@ -84,10 +84,10 @@ const FollowButton: React.FC<FollowButtonProps> = ({
   };
 
   const handleUnfollow = async () => {
-    Alert.alert(`${username} takipten çıkmak istiyor musun?`, "", [
-      { text: "İptal", style: "cancel" },
+    Alert.alert(`Do you want to unfollow ${username}?`, "", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: "Evet",
+        text: "Yes",
         style: "destructive",
         onPress: async () => {
           setLoading(true);
@@ -101,10 +101,10 @@ const FollowButton: React.FC<FollowButtonProps> = ({
   };
 
   const handleCancelRequest = async () => {
-    Alert.alert("Takip isteğini iptal etmek istiyor musun?", "", [
-      { text: "İptal", style: "cancel" },
+    Alert.alert("Do you want to cancel the follow request?", "", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: "Evet",
+        text: "Yes",
         style: "destructive",
         onPress: async () => {
           setLoading(true);
@@ -125,19 +125,19 @@ const FollowButton: React.FC<FollowButtonProps> = ({
     buttonText = "";
     onPress = async () => {};
   } else if (status.isFollowing) {
-    buttonText = "Takiptesin";
+    buttonText = "Following";
     onPress = handleUnfollow;
   } else if (status.isPrivate && status.isRequestedByMe) {
-    buttonText = "İstek Gönderildi";
+    buttonText = "Requested";
     onPress = handleCancelRequest;
   } else if (status.isPrivate && status.isRequestedByOther) {
-    buttonText = "Onay Bekleniyor";
+    buttonText = "Pending";
     onPress = async () => {};
   } else if (!status.isFollowing && status.isFollowedBy) {
-    buttonText = "Geri Takip Et";
+    buttonText = "Follow Back";
     onPress = handleFollow;
   } else {
-    buttonText = "Takip Et";
+    buttonText = "Follow";
     onPress = handleFollow;
   }
 
@@ -179,14 +179,12 @@ const FollowButton: React.FC<FollowButtonProps> = ({
           paddingHorizontal: sizeConfig.paddingHorizontal,
           paddingVertical: sizeConfig.paddingVertical,
           borderRadius: sizeConfig.borderRadius,
-          opacity: loading || buttonText === "Onay Bekleniyor" ? 0.6 : 1,
+          opacity: loading || buttonText === "Pending" ? 0.6 : 1,
         },
         style,
       ]}
       onPress={onPress}
-      disabled={
-        loading || buttonText === "" || buttonText === "Onay Bekleniyor"
-      }
+      disabled={loading || buttonText === "" || buttonText === "Pending"}
       activeOpacity={0.7}
     >
       {loading || buttonText === "" ? (

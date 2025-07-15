@@ -9,29 +9,29 @@ function validatePhone(phone) {
 
 exports.validateRegisterInput = ({ name, username, email, password }) => {
   if (!name || !username || !email || !password) {
-    return "Tüm alanlar zorunlu";
+    return "All fields are required";
   }
   if (!validateEmail(email)) {
     // Email formatı değilse, telefon numarası formatı mı kontrol et
     if (!validatePhone(email)) {
-      return "Geçersiz email veya telefon numarası formatı";
+      return "Invalid email or phone number format";
     }
   }
   if (password.length < 6) {
-    return "Şifre en az 6 karakter olmalı";
+    return "Password must be at least 6 characters";
   }
   if (username.length < 3) {
-    return "Kullanıcı adı en az 3 karakter olmalı";
+    return "Username must be at least 3 characters";
   }
   return null;
 };
 
 exports.validateLoginInput = ({ emailOrUsername, password }) => {
   if (!emailOrUsername || !password) {
-    return "Tüm alanlar zorunlu";
+    return "All fields are required";
   }
   if (password.length < 6) {
-    return "Şifre en az 6 karakter olmalı";
+    return "Password must be at least 6 characters";
   }
   return null;
 };

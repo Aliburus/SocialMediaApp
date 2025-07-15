@@ -118,7 +118,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         let payload: any = { senderId, receiverId };
         if (post) payload.postId = post._id || post.id;
         if (story) payload.storyId = story._id || story.id;
-        if (!post && !story) payload.text = "Paylaşım";
+        if (!post && !story) payload.text = "Share";
         await sendMessage(payload);
       }
       setSent(true);
@@ -129,7 +129,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
       }, 1500);
     } catch (err) {
       setSending(false);
-      Alert.alert("Hata", "Mesaj gönderilemedi");
+      Alert.alert("Error", "Message could not be sent");
     }
   };
 
@@ -182,7 +182,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           </Text>
           <Text style={[styles.friendStatus, { color: colors.textSecondary }]}>
             {" "}
-            {item.isOnline ? "Çevrimiçi" : "Çevrimdışı"}{" "}
+            {item.isOnline ? "Online" : "Offline"}
           </Text>
         </View>
         {isSelected && (
@@ -217,14 +217,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           </TouchableOpacity>
           <Text style={[styles.modalTitle, { color: colors.text }]}>
             {" "}
-            Paylaş{" "}
+            Share{" "}
           </Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.friendsSection}>
           <Text style={[styles.friendsSectionTitle, { color: colors.text }]}>
             {" "}
-            Arkadaşlar{" "}
+            Friends{" "}
           </Text>
           <TextInput
             style={{
@@ -236,7 +236,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               height: 40,
               marginBottom: 12,
             }}
-            placeholder="Arkadaş ara..."
+            placeholder="Search friends..."
             placeholderTextColor={colors.textSecondary}
             value={search}
             onChangeText={setSearch}
@@ -255,7 +255,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     marginTop: 24,
                   }}
                 >
-                  Yükleniyor...
+                  Loading...
                 </Text>
               ) : (
                 <Text
@@ -265,7 +265,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     marginTop: 24,
                   }}
                 >
-                  Takip edilen bulunamadı
+                  No following found
                 </Text>
               )
             }
@@ -294,7 +294,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               fontSize: 16,
             }}
           >
-            Gönder
+            Send
           </Text>
         </TouchableOpacity>
         {sent && (
@@ -333,7 +333,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 style={{ marginRight: 12 }}
               />
               <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 18 }}>
-                Gönderildi
+                Sent
               </Text>
             </View>
           </View>

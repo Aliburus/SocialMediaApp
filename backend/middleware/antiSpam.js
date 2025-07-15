@@ -19,7 +19,7 @@ module.exports = (req, res, next) => {
   if (timestamps.length > maxActions) {
     return res
       .status(429)
-      .json({ message: "Çok fazla işlem. Lütfen daha sonra tekrar deneyin." });
+      .json({ message: "Too many actions. Please try again later." });
   }
   next();
 };

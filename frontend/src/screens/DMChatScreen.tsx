@@ -39,6 +39,13 @@ const isStoryExpired = (storyTimestamp: string | Date) => {
   return hoursDiff >= 24; // 24 saat sonra story süresi biter
 };
 
+// Avatar url'sini her zaman tam url olarak ayarla
+const getAvatarUrl = (avatar: string | undefined) => {
+  if (!avatar) return "https://ui-avatars.com/api/?name=User";
+  if (avatar.startsWith("http")) return avatar;
+  return `${api.defaults.baseURL?.replace(/\/api$/, "")}${avatar}`;
+};
+
 const DMChatScreen: React.FC = () => {
   const route = useRoute();
   const navigation = useNavigation<StackNavigationProp<any>>();
@@ -58,6 +65,7 @@ const DMChatScreen: React.FC = () => {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    let isMounted = true;
     (async () => {
       setLoading(true);
       const userStr = await AsyncStorage.getItem("user");
@@ -65,9 +73,6 @@ const DMChatScreen: React.FC = () => {
       if (userObj?._id || userObj?.id) {
         const currentUserId = userObj._id || userObj.id;
         setCurrentUserId(currentUserId);
-
-        // Socket.io bağlantısı
-        socketService.connect(currentUserId);
 
         const data = await getConversationMessages(
           currentUserId,
@@ -93,11 +98,6 @@ const DMChatScreen: React.FC = () => {
         if (data.conversationId) {
           try {
             await markMessagesAsSeen(currentUserId, data.conversationId);
-            // Socket üzerinden de bildir
-            socketService.markMessagesAsSeen(
-              currentUserId,
-              data.conversationId
-            );
             // Okunmamış mesaj sayısını anında güncelle
             if (typeof setUnreadMessageCount === "function") {
               const unreadData = await getUnreadMessageCount(currentUserId);
@@ -111,77 +111,8 @@ const DMChatScreen: React.FC = () => {
       setLoading(false);
     })();
 
-    // Socket.io event listeners
-    socketService.onNewMessage((data) => {
-      if (data.senderId === (user._id || user.id)) {
-        // Gelen mesajı veritabanından al
-        const fetchNewMessage = async () => {
-          try {
-            if (!currentUserId) return;
-            const data = await getConversationMessages(
-              currentUserId,
-              user._id || user.id
-            );
-            if (data.messages.length > 0) {
-              const latestMessage = data.messages[0]; // En son mesaj
-              setMessages((prev) => {
-                // Mesaj zaten var mı kontrol et
-                const exists = prev.find((msg) => msg.id === latestMessage._id);
-                if (!exists) {
-                  return [
-                    {
-                      id: latestMessage._id,
-                      fromMe: false,
-                      text: latestMessage.text,
-                      createdAt: latestMessage.createdAt,
-                    },
-                    ...prev,
-                  ];
-                }
-                return prev;
-              });
-            }
-          } catch (error) {
-            console.error("Yeni mesaj getirme hatası:", error);
-          }
-        };
-        fetchNewMessage();
-      }
-    });
-
-    socketService.onUserTyping((data) => {
-      if (data.senderId === (user._id || user.id)) {
-        setOtherUserTyping(true);
-      }
-    });
-
-    socketService.onUserStoppedTyping((data) => {
-      if (data.senderId === (user._id || user.id)) {
-        setOtherUserTyping(false);
-      }
-    });
-
-    // Mesajların görüldüğünü dinle
-    socketService.onMessagesSeen((data) => {
-      if (data.conversationId === conversationId) {
-        // Mesajları güncelle
-        setMessages((prev) =>
-          prev.map((msg) =>
-            !msg.fromMe && !msg.read
-              ? { ...msg, read: true, seenAt: new Date() }
-              : msg
-          )
-        );
-      }
-    });
-
     return () => {
-      // Cleanup
-      socketService.off("new_message");
-      socketService.off("message_sent");
-      socketService.off("user_typing");
-      socketService.off("user_stopped_typing");
-      socketService.off("messages_seen");
+      isMounted = false;
     };
   }, [user]);
 
@@ -194,22 +125,12 @@ const DMChatScreen: React.FC = () => {
       const messageText = newMessage.trim();
       const receiverId = user._id || user.id;
 
-      // Önce API ile mesajı veritabanına kaydet
+      // Sadece API ile mesajı gönder ve listeye ekle
       const sentMessage = await sendMessage({
         senderId: currentUserId,
         receiverId: receiverId,
         text: messageText,
       });
-
-      // Socket.io ile mesaj gönder
-      socketService.sendMessage(
-        currentUserId,
-        receiverId,
-        messageText,
-        conversationId
-      );
-
-      // Mesajı listeye ekle (gerçek ID ile)
       setMessages((prev) => [
         {
           id: sentMessage._id,
@@ -230,19 +151,8 @@ const DMChatScreen: React.FC = () => {
 
   // Yazıyor... durumu için
   const handleTyping = (text: string) => {
-    setNewMessage(text);
-
     if (!currentUserId) return;
-
-    const receiverId = user._id || user.id;
-
-    if (text.trim() && !isTyping) {
-      setIsTyping(true);
-      socketService.startTyping(currentUserId, receiverId);
-    } else if (!text.trim() && isTyping) {
-      setIsTyping(false);
-      socketService.stopTyping(currentUserId, receiverId);
-    }
+    setNewMessage(text);
   };
 
   return (
@@ -272,15 +182,7 @@ const DMChatScreen: React.FC = () => {
         >
           <View style={styles.avatarContainer}>
             <Image
-              source={{
-                uri: user?.avatar?.startsWith("http")
-                  ? user.avatar
-                  : user?.avatar
-                  ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
-                      user.avatar
-                    }`
-                  : "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-              }}
+              source={{ uri: getAvatarUrl(user?.avatar) }}
               style={styles.avatar}
             />
             <View
@@ -290,9 +192,6 @@ const DMChatScreen: React.FC = () => {
           <View style={styles.userInfo}>
             <Text style={[styles.username, { color: colors.text }]}>
               {user?.username || "kullanici"}
-            </Text>
-            <Text style={[styles.userStatus, { color: colors.textSecondary }]}>
-              Aktif
             </Text>
           </View>
         </TouchableOpacity>
@@ -334,7 +233,7 @@ const DMChatScreen: React.FC = () => {
             <Text
               style={[styles.emptyStateText, { color: colors.textSecondary }]}
             >
-              Henüz mesaj yok
+              No messages yet
             </Text>
             <Text
               style={[
@@ -342,7 +241,7 @@ const DMChatScreen: React.FC = () => {
                 { color: colors.textSecondary },
               ]}
             >
-              İlk mesajınızı gönderin
+              Send your first message
             </Text>
           </View>
         ) : (
@@ -432,7 +331,7 @@ const DMChatScreen: React.FC = () => {
                               fontStyle: "italic",
                             }}
                           >
-                            Bu gönderi silinmiş
+                            This post has been deleted
                           </Text>
                         </View>
                       </View>
@@ -455,16 +354,7 @@ const DMChatScreen: React.FC = () => {
                           style={styles.messageAvatarContainer}
                         >
                           <Image
-                            source={{
-                              uri: user?.avatar?.startsWith("http")
-                                ? user.avatar
-                                : user?.avatar
-                                ? `${api.defaults.baseURL?.replace(
-                                    /\/api$/,
-                                    ""
-                                  )}${user.avatar}`
-                                : "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-                            }}
+                            source={{ uri: getAvatarUrl(user?.avatar) }}
                             style={styles.messageAvatar}
                           />
                         </TouchableOpacity>
@@ -485,11 +375,17 @@ const DMChatScreen: React.FC = () => {
                             margin: 12,
                           },
                         ]}
-                        onPress={() =>
-                          navigation.navigate("PostDetail", {
-                            post: item.post,
-                          })
-                        }
+                        onPress={() => {
+                          if (item.post && item.post.video) {
+                            navigation.navigate("VideoDetail", {
+                              post: item.post,
+                            });
+                          } else {
+                            navigation.navigate("PostDetail", {
+                              post: item.post,
+                            });
+                          }
+                        }}
                       >
                         <View
                           style={{
@@ -547,7 +443,7 @@ const DMChatScreen: React.FC = () => {
                                 aspectRatio: 1,
                                 borderRadius: 12,
                               }}
-                              useNativeControls
+                              useNativeControls={false}
                               resizeMode={ResizeMode.COVER}
                               shouldPlay={false}
                               isLooping
@@ -605,7 +501,7 @@ const DMChatScreen: React.FC = () => {
                               fontStyle: "italic",
                             }}
                           >
-                            Bu gönderi silinmiş
+                            This story has been deleted
                           </Text>
                         </View>
                       </View>
@@ -770,11 +666,7 @@ const DMChatScreen: React.FC = () => {
                         style={styles.messageAvatarContainer}
                       >
                         <Image
-                          source={{
-                            uri:
-                              user?.avatar ||
-                              "https://images.pexels.com/photos/771742/pexels-photo-771742.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&fit=crop",
-                          }}
+                          source={{ uri: getAvatarUrl(user?.avatar) }}
                           style={styles.messageAvatar}
                         />
                       </TouchableOpacity>
@@ -819,7 +711,7 @@ const DMChatScreen: React.FC = () => {
                       >
                         {item.createdAt
                           ? new Date(item.createdAt).toLocaleTimeString(
-                              "tr-TR",
+                              "en-US",
                               {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -834,7 +726,7 @@ const DMChatScreen: React.FC = () => {
                             size={14}
                             color="rgba(255,255,255,0.8)"
                           />
-                          <Text style={styles.seenText}>Görüldü</Text>
+                          <Text style={styles.seenText}>Seen</Text>
                         </View>
                       )}
                     </View>
@@ -863,7 +755,7 @@ const DMChatScreen: React.FC = () => {
           >
             <TextInput
               style={[styles.input, { color: colors.text }]}
-              placeholder="Mesaj yaz..."
+              placeholder="Type a message..."
               placeholderTextColor={colors.textSecondary}
               value={newMessage}
               onChangeText={handleTyping}

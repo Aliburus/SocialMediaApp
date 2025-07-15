@@ -48,7 +48,7 @@ function NotificationsScreen({
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<any>();
   const [followedIds, setFollowedIds] = useState<string[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -141,7 +141,7 @@ function NotificationsScreen({
                 type: "follow",
                 text: `${
                   notif.user?.username || notif.from?.username
-                } seni takip etmeye başladı`,
+                } started following you`,
               }
             : notif
         )
@@ -221,13 +221,15 @@ function NotificationsScreen({
                 key={user._id || user.id}
                 onPress={goToProfile}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   borderWidth: 2,
                   borderColor: colors.background,
-                  marginLeft: index > 0 ? -8 : 0,
+                  marginLeft: index > 0 ? -12 : 0,
                   zIndex: 3 - index,
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 <Image
@@ -241,9 +243,9 @@ function NotificationsScreen({
                       : "https://ui-avatars.com/api/?name=User",
                   }}
                   style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
                   }}
                 />
               </TouchableOpacity>
@@ -328,21 +330,140 @@ function NotificationsScreen({
             </Text>
           </View>
           <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-            {item.timestamp}
+            {formatTimeAgo(item.createdAt)}
           </Text>
         </TouchableOpacity>
 
         <View style={styles.notificationIcon}>{getNotificationIcon()}</View>
 
-        {/* Gönderi thumbnail - tıklanabilir */}
-        {item.post && item.post.image && (
-          <TouchableOpacity onPress={goToPost}>
+        {/* Gönderi thumbnail - reel ise tıklanabilir ve VideoDetailScreen'e gider, değilse sadece gösterir */}
+        {item.post &&
+          (item.type === "like" ||
+            item.type === "comment" ||
+            item.type === "mention") &&
+          (item.post.type === "reel" ? (
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate("VideoDetail", { post: item.post })
+              }
+              style={{ marginLeft: 8 }}
+            >
+              {item.post.thumbnail ? (
+                <Image
+                  source={{
+                    uri:
+                      typeof item.post.thumbnail === "string" &&
+                      item.post.thumbnail.startsWith("http")
+                        ? item.post.thumbnail
+                        : typeof item.post.thumbnail === "string" &&
+                          item.post.thumbnail
+                        ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                            item.post.thumbnail
+                          }`
+                        : undefined,
+                  }}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 8,
+                    backgroundColor: colors.surface,
+                  }}
+                />
+              ) : item.post.image ? (
+                <Image
+                  source={{
+                    uri:
+                      typeof item.post.image === "string" &&
+                      item.post.image.startsWith("http")
+                        ? item.post.image
+                        : typeof item.post.image === "string" && item.post.image
+                        ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                            item.post.image
+                          }`
+                        : undefined,
+                  }}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 8,
+                    backgroundColor: colors.surface,
+                  }}
+                />
+              ) : (
+                <Image
+                  source={{
+                    uri: `https://picsum.photos/seed/${
+                      item.post._id || item.post.id
+                    }/80/80`,
+                  }}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 8,
+                    backgroundColor: colors.surface,
+                  }}
+                />
+              )}
+            </TouchableOpacity>
+          ) : item.post.thumbnail ? (
             <Image
-              source={{ uri: item.post.image }}
-              style={styles.postThumbnail}
+              source={{
+                uri:
+                  typeof item.post.thumbnail === "string" &&
+                  item.post.thumbnail.startsWith("http")
+                    ? item.post.thumbnail
+                    : typeof item.post.thumbnail === "string" &&
+                      item.post.thumbnail
+                    ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                        item.post.thumbnail
+                      }`
+                    : undefined,
+              }}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 8,
+                backgroundColor: colors.surface,
+                marginLeft: 8,
+              }}
             />
-          </TouchableOpacity>
-        )}
+          ) : item.post.image ? (
+            <Image
+              source={{
+                uri:
+                  typeof item.post.image === "string" &&
+                  item.post.image.startsWith("http")
+                    ? item.post.image
+                    : typeof item.post.image === "string" && item.post.image
+                    ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                        item.post.image
+                      }`
+                    : undefined,
+              }}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 8,
+                backgroundColor: colors.surface,
+                marginLeft: 8,
+              }}
+            />
+          ) : (
+            <Image
+              source={{
+                uri: `https://picsum.photos/seed/${
+                  item.post._id || item.post.id
+                }/80/80`,
+              }}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 8,
+                backgroundColor: colors.surface,
+                marginLeft: 8,
+              }}
+            />
+          ))}
 
         {/* Takip isteği için onayla/reddet butonları veya merkezi FollowButton */}
         {item.type === "follow_request" && item.status !== "accepted" ? (
@@ -359,7 +480,7 @@ function NotificationsScreen({
                 handleAccept(item.id, item.user?._id || item.from?._id)
               }
             >
-              <Text style={{ color: "#fff", fontWeight: "bold" }}>Onayla</Text>
+              <Text style={{ color: "#fff", fontWeight: "bold" }}>Accept</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={{
@@ -375,7 +496,7 @@ function NotificationsScreen({
               }
             >
               <Text style={{ color: colors.text, fontWeight: "bold" }}>
-                Reddet
+                Reject
               </Text>
             </TouchableOpacity>
           </View>
@@ -450,13 +571,15 @@ function NotificationsScreen({
                 key={user._id || user.id}
                 onPress={goToProfile}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   borderWidth: 2,
                   borderColor: colors.background,
-                  marginLeft: index > 0 ? -8 : 0,
+                  marginLeft: index > 0 ? -12 : 0,
                   zIndex: 3 - index,
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 <Image
@@ -470,9 +593,9 @@ function NotificationsScreen({
                       : "https://ui-avatars.com/api/?name=User",
                   }}
                   style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
                   }}
                 />
               </TouchableOpacity>
@@ -512,7 +635,7 @@ function NotificationsScreen({
               <Text style={{ fontWeight: "bold" }}>
                 {item.user?.username || item.from?.username}
               </Text>{" "}
-              seni takip etmek istiyor
+              wants to follow you
             </Text>
             <FollowButton
               currentUserId={userId || ""}
@@ -569,7 +692,7 @@ function NotificationsScreen({
             <Text style={{ fontWeight: "bold" }}>
               {item.user?.username || item.from?.username}
             </Text>{" "}
-            seni takip etmeye başladı
+            started following you
           </Text>
           <FollowButton
             currentUserId={userId || ""}
@@ -582,6 +705,8 @@ function NotificationsScreen({
     }
     return renderNotificationItem({ item });
   };
+
+  const ITEM_HEIGHT = 80; // Ortalama bir bildirim satırı yüksekliği
 
   return (
     <SafeAreaView
@@ -596,7 +721,7 @@ function NotificationsScreen({
         }}
       >
         <Text style={{ fontSize: 20, fontWeight: "bold", color: colors.text }}>
-          Bildirimler
+          Notifications
         </Text>
       </View>
       {loading ? (
@@ -619,7 +744,7 @@ function NotificationsScreen({
             color: colors.textSecondary,
           }}
         >
-          Hiç bildirimin yok.
+          No notifications yet.
         </Text>
       ) : (
         <FlatList
@@ -631,6 +756,15 @@ function NotificationsScreen({
           }
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={15}
+          windowSize={20}
+          removeClippedSubviews={true}
+          getItemLayout={(data, index) => ({
+            length: ITEM_HEIGHT,
+            offset: ITEM_HEIGHT * index,
+            index,
+          })}
         />
       )}
     </SafeAreaView>
@@ -663,14 +797,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: 8,
     marginBottom: 8,
+    minHeight: 60,
   },
   unreadNotification: {
     // backgroundColor will be set dynamically
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     marginRight: 12,
   },
   notificationContent: {
@@ -695,11 +830,16 @@ const styles = StyleSheet.create({
   notificationIcon: {
     marginLeft: 8,
     marginRight: 8,
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
   },
   postThumbnail: {
-    width: 40,
-    height: 40,
-    borderRadius: 4,
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    marginLeft: 8,
   },
   section: {
     padding: 20,
@@ -724,5 +864,18 @@ const styles = StyleSheet.create({
     padding: 16,
   },
 });
+
+function formatTimeAgo(dateString: string) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (diff < 60) return `${diff} seconds ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+  return date.toLocaleDateString("en-US");
+}
 
 export default NotificationsScreen;

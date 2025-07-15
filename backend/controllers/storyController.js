@@ -52,7 +52,9 @@ exports.createStory = async (req, res) => {
     res.status(201).json(story);
   } catch (err) {
     console.error("Story create error:", err);
-    res.status(500).json({ message: "Story eklenemedi", error: err.message });
+    res
+      .status(500)
+      .json({ message: "Story could not be added", error: err.message });
   }
 };
 
@@ -92,10 +94,9 @@ exports.viewStory = async (req, res) => {
   try {
     const storyId = req.params.id;
     const { userId } = req.body;
-    if (!userId)
-      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+    if (!userId) return res.status(400).json({ message: "User not found" });
     const story = await Story.findById(storyId);
-    if (!story) return res.status(404).json({ message: "Story bulunamadı" });
+    if (!story) return res.status(404).json({ message: "Story not found" });
     if (!story.viewers.includes(userId)) {
       story.viewers.push(userId);
       await story.save();
@@ -116,15 +117,16 @@ exports.deleteStory = async (req, res) => {
   try {
     const storyId = req.params.id;
     const { userId } = req.body;
-    if (!userId)
-      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+    if (!userId) return res.status(400).json({ message: "User not found" });
 
     const story = await Story.findById(storyId);
-    if (!story) return res.status(404).json({ message: "Story bulunamadı" });
+    if (!story) return res.status(404).json({ message: "Story not found" });
 
     // Sadece story sahibi silebilir
     if (story.user.toString() !== userId) {
-      return res.status(403).json({ message: "Bu işlem için yetkiniz yok" });
+      return res
+        .status(403)
+        .json({ message: "You are not authorized for this action" });
     }
 
     // Dosya silme işlemleri
@@ -158,6 +160,28 @@ exports.deleteStory = async (req, res) => {
     // Image ve video dosyalarını sil
     await Promise.all([deleteFile(story.image), deleteFile(story.video)]);
 
+    // Tüm kullanıcıların saved listesinden bu story'yi çıkar
+    const User = require("../models/User");
+    await User.updateMany({ saved: storyId }, { $pull: { saved: storyId } });
+
+    // DM mesajlarında bu story'yi referans olarak tutan mesajları güncelle
+    const Message = require("../models/Message");
+    await Message.updateMany(
+      { story: storyId },
+      { $unset: { story: "" }, $set: { text: "Content deleted" } }
+    );
+
+    // Keşfet/embedding veritabanlarından sil
+    const ContentEmbedding = require("../models/ContentEmbedding");
+    const UserBehavior = require("../models/UserBehavior");
+    await ContentEmbedding.deleteMany({ contentId: storyId });
+    await UserBehavior.deleteMany({ contentId: storyId });
+
+    // Cache temizliği (örnek fonksiyon, varsa)
+    if (typeof global.clearStoryCache === "function") {
+      await global.clearStoryCache(storyId);
+    }
+
     await Story.findByIdAndDelete(storyId);
     res.json({ message: "Story başarıyla silindi" });
   } catch (err) {
@@ -169,11 +193,10 @@ exports.archiveStory = async (req, res) => {
   try {
     const storyId = req.params.id;
     const { userId } = req.body;
-    if (!userId)
-      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+    if (!userId) return res.status(400).json({ message: "User not found" });
 
     const story = await Story.findById(storyId);
-    if (!story) return res.status(404).json({ message: "Story bulunamadı" });
+    if (!story) return res.status(404).json({ message: "Story not found" });
 
     // Sadece story sahibi arşivleyebilir
     if (story.user.toString() !== userId) {
@@ -196,8 +219,7 @@ exports.archiveStory = async (req, res) => {
 exports.getArchivedStories = async (req, res) => {
   try {
     const userId = req.params.userId;
-    if (!userId)
-      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+    if (!userId) return res.status(400).json({ message: "User not found" });
 
     const stories = await Story.find({
       user: userId,
@@ -224,11 +246,10 @@ exports.unarchiveStory = async (req, res) => {
   try {
     const storyId = req.params.id;
     const { userId } = req.body;
-    if (!userId)
-      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+    if (!userId) return res.status(400).json({ message: "User not found" });
 
     const story = await Story.findById(storyId);
-    if (!story) return res.status(404).json({ message: "Story bulunamadı" });
+    if (!story) return res.status(404).json({ message: "Story not found" });
 
     // Sadece story sahibi arşivden çıkarabilir
     if (story.user.toString() !== userId) {
@@ -260,8 +281,7 @@ exports.unarchiveStory = async (req, res) => {
 exports.getStoryStats = async (req, res) => {
   try {
     const userId = req.params.userId;
-    if (!userId)
-      return res.status(400).json({ message: "Kullanıcı bulunamadı" });
+    if (!userId) return res.status(400).json({ message: "User not found" });
 
     const stories = await Story.find({ user: userId, archived: false });
 

@@ -16,7 +16,7 @@ module.exports = (req, res, next) => {
   if (timestamps.length > maxRequests) {
     return res
       .status(429)
-      .json({ message: "Çok fazla istek. Lütfen daha sonra tekrar deneyin." });
+      .json({ message: "Too many requests. Please try again later." });
   }
   next();
 };

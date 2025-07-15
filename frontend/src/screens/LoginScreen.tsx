@@ -18,6 +18,7 @@ import { useTheme } from "../context/ThemeContext";
 import { login as loginService } from "../services/authService";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useToast } from "../context/ToastContext";
+import ToastNotification from "../components/ToastNotification";
 
 const { width } = Dimensions.get("window");
 
@@ -38,6 +39,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
+  const [toast, setToast] = React.useState<{
+    type: "success" | "error";
+    message: string;
+    visible: boolean;
+  } | null>(null);
 
   const handleLogin = async () => {
     setError(null);
@@ -46,24 +52,25 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       const user = await loginService({ emailOrUsername: email, password });
       await AsyncStorage.setItem("user", JSON.stringify(user));
       setLoading(false);
+      setToast({ type: "success", message: "Welcome!", visible: true });
       if (onLogin) {
         onLogin(user);
       } else {
         navigation.navigate("MainTabs" as never);
       }
-    } catch (err: any) {
+    } catch (e: any) {
+      let errorMsg = "Login failed. Please check your credentials.";
+      if (e?.response?.data?.message) {
+        if (e.response.data.message.includes("Şifre hatalı")) {
+          errorMsg = "Your password is incorrect, please try again.";
+        } else if (e.response.data.message.includes("Kullanıcı bulunamadı")) {
+          errorMsg = "User not found. Please check your email or username.";
+        } else {
+          errorMsg = e.response.data.message;
+        }
+      }
+      setToast({ type: "error", message: errorMsg, visible: true });
       setLoading(false);
-      const errorMessage = err?.response?.data?.message || "Giriş başarısız";
-      setError(errorMessage);
-      showToast(errorMessage, "error");
-      console.log("Login error:", {
-        message: err?.message,
-        code: err?.code,
-        config: err?.config,
-        response: err?.response,
-        toJSON: err?.toJSON ? err.toJSON() : undefined,
-        full: err,
-      });
     }
   };
 
@@ -98,7 +105,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
                       backgroundColor: colors.surface,
                     },
                   ]}
-                  placeholder="Telefon numarası, kullanıcı adı veya e-posta"
+                  placeholder="Phone number, username or email"
                   placeholderTextColor={colors.textSecondary}
                   value={email}
                   onChangeText={setEmail}
@@ -117,7 +124,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
                       backgroundColor: colors.surface,
                     },
                   ]}
-                  placeholder="Şifre"
+                  placeholder="Password"
                   placeholderTextColor={colors.textSecondary}
                   value={password}
                   onChangeText={setPassword}
@@ -146,7 +153,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
                 <Text
                   style={[styles.loginButtonText, { color: colors.background }]}
                 >
-                  {loading ? "..." : "Giriş Yap"}
+                  {loading ? "..." : "Log In"}
                 </Text>
               </TouchableOpacity>
 
@@ -166,7 +173,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
                 <Text
                   style={[styles.forgotPasswordText, { color: colors.primary }]}
                 >
-                  Şifreni mi unuttun?
+                  Forgot your password?
                 </Text>
               </TouchableOpacity>
             </View>
@@ -179,7 +186,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
               <Text
                 style={[styles.dividerText, { color: colors.textSecondary }]}
               >
-                YA DA
+                OR
               </Text>
               <View
                 style={[styles.dividerLine, { backgroundColor: colors.border }]}
@@ -193,7 +200,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
               <Text
                 style={[styles.signupText, { color: colors.textSecondary }]}
               >
-                Hesabın yok mu?{" "}
+                Don't have an account?{" "}
               </Text>
               <TouchableOpacity
                 onPress={() => {
@@ -205,13 +212,21 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
                 }}
               >
                 <Text style={[styles.signupLink, { color: colors.primary }]}>
-                  Kaydol.
+                  Sign up.
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      {toast && (
+        <ToastNotification
+          type={toast.type}
+          message={toast.message}
+          visible={toast.visible}
+          onClose={() => setToast(null)}
+        />
+      )}
     </>
   );
 };

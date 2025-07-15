@@ -11,9 +11,11 @@ import {
   PanResponder,
   Animated,
 } from "react-native";
+import { Video, ResizeMode } from "expo-av";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import api from "../services/api";
 import {
   getUserPosts,
   archivePost,
@@ -25,6 +27,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 
 const tabList = ["posts", "stories", "reels"];
+const DEFAULT_AVATAR = "https://ui-avatars.com/api/?name=User";
 
 const ArchiveScreen: React.FC = () => {
   const { colors } = useTheme();
@@ -37,6 +40,7 @@ const ArchiveScreen: React.FC = () => {
 
   const scrollViewRef = useRef<ScrollView>(null);
   const translateX = useRef(new Animated.Value(0)).current;
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const panResponder = React.useMemo(
     () =>
@@ -156,7 +160,7 @@ const ArchiveScreen: React.FC = () => {
             flex: 1,
           }}
         >
-          Arşiv
+          Archive
         </Text>
       </View>
       <View
@@ -180,7 +184,7 @@ const ArchiveScreen: React.FC = () => {
           <Text
             style={{ color: tab === "posts" ? colors.primary : colors.text }}
           >
-            Postlar
+            Posts
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -196,7 +200,7 @@ const ArchiveScreen: React.FC = () => {
           <Text
             style={{ color: tab === "stories" ? colors.primary : colors.text }}
           >
-            Hikayeler
+            Stories
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -238,15 +242,47 @@ const ArchiveScreen: React.FC = () => {
                       })
                 }
               >
-                <Image
-                  source={{ uri: item.image }}
-                  style={{
-                    width: imageSize,
-                    height: imageSize,
-                    borderRadius: 8,
-                    backgroundColor: colors.background,
-                  }}
-                />
+                {item.type === "reel" && item.video ? (
+                  <Image
+                    source={{
+                      uri: item.thumbnail
+                        ? item.thumbnail.startsWith("http")
+                          ? item.thumbnail
+                          : `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                              item.thumbnail
+                            }`
+                        : item.image && item.image.startsWith("http")
+                        ? item.image
+                        : item.image
+                        ? `${api.defaults.baseURL?.replace(/\/api$/, "")}${
+                            item.image
+                          }`
+                        : `https://picsum.photos/seed/${
+                            item._id || item.id
+                          }/300/300`,
+                    }}
+                    style={[
+                      styles.postImage,
+                      { backgroundColor: colors.background },
+                    ]}
+                  />
+                ) : (
+                  <Image
+                    source={{
+                      uri: item.image
+                        ? item.image
+                        : `https://picsum.photos/seed/${
+                            item._id || item.id
+                          }/300/300`,
+                    }}
+                    style={{
+                      width: imageSize,
+                      height: imageSize,
+                      borderRadius: 8,
+                      backgroundColor: colors.background,
+                    }}
+                  />
+                )}
               </TouchableOpacity>
               {tab !== "stories" && (
                 <TouchableOpacity
@@ -276,7 +312,7 @@ const ArchiveScreen: React.FC = () => {
                   }}
                 >
                   <Text style={{ color: "#fff", fontSize: 13 }}>
-                    Arşivden Çıkar
+                    Remove from Archive
                   </Text>
                 </TouchableOpacity>
               )}
@@ -302,7 +338,7 @@ const ArchiveScreen: React.FC = () => {
                   }}
                 >
                   <Text style={{ color: "#fff", fontSize: 13 }}>
-                    Arşivden Çıkar
+                    Remove from Archive
                   </Text>
                 </TouchableOpacity>
               )}
@@ -316,7 +352,7 @@ const ArchiveScreen: React.FC = () => {
                 marginTop: 32,
               }}
             >
-              Arşiv boş
+              Archive is empty
             </Text>
           }
         />
@@ -330,6 +366,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     paddingVertical: 12,
+  },
+  postImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 8,
   },
 });
 

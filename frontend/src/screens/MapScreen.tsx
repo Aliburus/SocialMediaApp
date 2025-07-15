@@ -283,7 +283,7 @@ const MapScreen: React.FC = () => {
           setRadiusFilter(parseInt(savedRadiusFilter, 10));
         }
       } catch (error) {
-        console.error("Filtre yükleme hatası:", error);
+        console.error("Error loading filters:", error);
       }
     };
 
@@ -308,6 +308,27 @@ const MapScreen: React.FC = () => {
             avatarUrl:
               "https://ui-avatars.com/api/?name=G&background=4F8EF7&color=fff",
             locationTimestamp: Date.now(),
+          },
+          // Avrupa Yakası'nda random kullanıcılar
+          {
+            lat: 41.0421, // Beşiktaş
+            lng: 29.0078,
+            username: "besiktas_random1",
+            gender: "male",
+            avatarUrl:
+              "https://ui-avatars.com/api/?name=B&background=E91E63&color=fff",
+            locationTimestamp: Date.now(),
+            isEuropean: true,
+          },
+          {
+            lat: 41.077, // Sarıyer
+            lng: 29.0246,
+            username: "sariyer_random2",
+            gender: "female",
+            avatarUrl:
+              "https://ui-avatars.com/api/?name=S&background=9C27B0&color=fff",
+            locationTimestamp: Date.now(),
+            isEuropean: true,
           },
         ];
         await AsyncStorage.setItem(
@@ -374,7 +395,7 @@ const MapScreen: React.FC = () => {
           // radiusFilter km çapındaki kullanıcıları filtrele
           if (coords) {
             const now = Date.now();
-            const filteredOthers = others.filter(
+            let filteredOthers = others.filter(
               (u: any) =>
                 haversine(coords.lat, coords.lng, u.lat, u.lng) <=
                   radiusFilter / 2 &&
@@ -382,6 +403,12 @@ const MapScreen: React.FC = () => {
                 now - u.locationTimestamp <= 25 * 60 * 1000 &&
                 (!genderFilter || u.gender === genderFilter)
             );
+            // Avrupa Yakası'ndaki random kullanıcılar filtrelerden bağımsız eklensin
+            const europeanRandoms = others.filter((u: any) => u.isEuropean);
+            filteredOthers = [
+              ...filteredOthers.filter((u) => !u.isEuropean),
+              ...europeanRandoms,
+            ];
             setHtml(
               getLeafletHtml(
                 coords.lat,
@@ -471,13 +498,13 @@ const MapScreen: React.FC = () => {
         setVpnBlocked(true);
         setVpnError(null);
         Alert.alert(
-          "VPN Tespit Edildi",
-          `Güvenlik nedeniyle ${
+          "VPN Detected",
+          `For security reasons, the use of ${
             vpnResult.provider || "VPN"
-          } kullanımı engellenmiştir. Lütfen VPN'i kapatıp tekrar deneyin.`,
+          } is blocked. Please turn off your VPN and try again.`,
           [
             {
-              text: "Tamam",
+              text: "OK",
               onPress: () => {
                 (navigation as any).navigate("Home");
               },
@@ -549,7 +576,7 @@ const MapScreen: React.FC = () => {
         pendingRadiusFilter.toString()
       );
     } catch (error) {
-      console.error("Filtre kaydetme hatası:", error);
+      console.error("Error saving filters:", error);
     }
 
     setFilterModalVisible(false);
@@ -606,10 +633,10 @@ const MapScreen: React.FC = () => {
               marginBottom: 16,
             }}
           >
-            Filtrele
+            Filter
           </Text>
           <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
-            Cinsiyet
+            Gender
           </Text>
           <View style={{ flexDirection: "row", marginBottom: 16 }}>
             <TouchableOpacity
@@ -629,7 +656,7 @@ const MapScreen: React.FC = () => {
                 size={20}
                 color={colors.primary}
               />
-              <Text style={{ color: colors.text, marginLeft: 6 }}>Erkek</Text>
+              <Text style={{ color: colors.text, marginLeft: 6 }}>Male</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={{
@@ -648,7 +675,7 @@ const MapScreen: React.FC = () => {
                 size={20}
                 color={colors.primary}
               />
-              <Text style={{ color: colors.text, marginLeft: 6 }}>Kadın</Text>
+              <Text style={{ color: colors.text, marginLeft: 6 }}>Female</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={{ flexDirection: "row", alignItems: "center" }}
@@ -664,12 +691,12 @@ const MapScreen: React.FC = () => {
                 color={colors.primary}
               />
               <Text style={{ color: colors.text, marginLeft: 6 }}>
-                Farketmez
+                Doesn't Matter
               </Text>
             </TouchableOpacity>
           </View>
           <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>
-            Çap (km)
+            Radius (km)
           </Text>
           <View style={{ alignItems: "center", marginBottom: 16 }}>
             <Slider
@@ -699,7 +726,7 @@ const MapScreen: React.FC = () => {
             <Text
               style={{ color: "#fff", fontWeight: "bold", textAlign: "center" }}
             >
-              Filtreyi Uygula
+              Apply Filter
             </Text>
           </TouchableOpacity>
         </View>
@@ -723,7 +750,7 @@ const MapScreen: React.FC = () => {
               fontWeight: "bold",
             }}
           >
-            VPN Tespit Edildi
+            VPN Detected
           </Text>
           <Text
             style={{
@@ -736,7 +763,7 @@ const MapScreen: React.FC = () => {
           >
             {vpnError
               ? vpnError
-              : `Güvenlik nedeniyle VPN/proxy kullanımı engellenmiştir.\nLütfen VPN'i kapatıp tekrar deneyin.`}
+              : `For security reasons, VPN/proxy usage is blocked.\nPlease turn off your VPN and try again.`}
           </Text>
           <TouchableOpacity
             style={{
@@ -752,7 +779,7 @@ const MapScreen: React.FC = () => {
             }}
           >
             <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}>
-              Tekrar Dene
+              Try Again
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -773,7 +800,7 @@ const MapScreen: React.FC = () => {
                 textAlign: "center",
               }}
             >
-              Ana Sayfaya Dön
+              Return to Home
             </Text>
           </TouchableOpacity>
         </View>
@@ -809,7 +836,7 @@ const MapScreen: React.FC = () => {
                   marginBottom: 24,
                 }}
               >
-                Konum izni vermeden haritayı görüntüleyemezsin.
+                You cannot view the map without granting location permission.
               </Text>
               <TouchableOpacity
                 style={{
@@ -822,7 +849,7 @@ const MapScreen: React.FC = () => {
                 <Text
                   style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}
                 >
-                  Konum İzni Ver
+                  Allow Location
                 </Text>
               </TouchableOpacity>
             </View>
