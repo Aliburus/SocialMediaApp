@@ -17,10 +17,10 @@ A mobile app that allows users to discover nearby locations, share photos and vi
 
 ## 📸 Screenshots
 
-| Home Screen                     | Map View                      | Explore Screen               |
-| ------------------------------- | ----------------------------- | ---------------------------- |
-| ![](screenshots/homescreen.jpg) | ![](screenshots/location.jpg) | ![](screenshots/explore.jpg) |
-| **Feed, stories, reels**        | **Nearby users on map**       | **Discover new users**       |
+| Home Screen                     | Map View                                   | Explore Screen                | Diğer Profil                       |
+| ------------------------------- | ------------------------------------------ | ----------------------------- | ---------------------------------- |
+| ![](screenshots/homescreen.jpg) | ![](screenshots/location.jpg)              | ![](screenshots/explore.jpg)  | ![](screenshots/other-profile.jpg) |
+| **Akış, hikayeler, reels**      | **Yakındaki kullanıcılar harita üzerinde** | **Yeni kullanıcıları keşfet** | **Diğer kullanıcı profili**        |
 
 | DM List                 | DM Messages                      | Comments                      |
 | ----------------------- | -------------------------------- | ----------------------------- |
